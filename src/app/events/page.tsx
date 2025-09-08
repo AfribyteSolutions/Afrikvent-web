@@ -5,7 +5,7 @@ import React from "react";
 
 
 
-export default function HomePage() {
+export default function MyEvents() {
 
   return (
     <main className="w-full">
