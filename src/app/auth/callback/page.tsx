@@ -1,7 +1,7 @@
-"use client"; // ✅ must be the first line
+"use client"; // must be the very first line
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation"; // ✅ App Router uses next/navigation
+import { useRouter } from "next/navigation"; // ✅ correct import for App Router
 import { supabase } from "@/lib/supabaseClient";
 
 export default function AuthCallback() {
@@ -9,12 +9,13 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleAuth = async () => {
-      // Exchange the code for a session
-      const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+      const { data, error } = await supabase.auth.exchangeCodeForSession(
+        window.location.href
+      );
 
       if (error) {
         console.error("Auth error:", error.message);
-        router.push("/login");
+        router.push("/login"); // redirect to login if error
         return;
       }
 
