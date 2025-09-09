@@ -1,122 +1,127 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/lib/supabaseClient";
+import type { User } from "@supabase/supabase-js";
+import AuthModal from "@/components/auth/AuthModal";
 
 const Header = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [showSignIn, setShowSignIn] = useState(false);
+  const [showSignUp, setShowSignUp] = useState(false);
 
-  const navItems = [
-    { label: "Home", href: "/" },
-    { label: "My Events", href: "/events" },
-    { label: "Organiser Space", href: "/organiser" },
-    { label: "Profile", href: "/profile" },
-  ];
+  // 🔹 Get current user on mount
+  useEffect(() => {
+    const getUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setUser(user);
+    };
+
+    getUser();
+
+    // 🔹 Listen for login/logout changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        setUser(session?.user ?? null);
+      }
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
 
   return (
-    <header className="w-full bg-white shadow-md px-6 py-4 sticky top-0 z-50">
-      <div className="flex items-center justify-center relative">
-        {/* Left Nav (desktop) */}
-        <nav className="hidden md:flex items-center space-x-6 text-black absolute left-1/4 transform -translate-x-1/2">
-          <Link href="/" className="hover:text-[#0052cc]">
-            Home
-          </Link>
-          <Link href="/events" className="hover:text-[#0052cc]">
-            My Events
-          </Link>
-        </nav>
+    <>
+      <header className="w-full bg-white shadow-md px-6 py-3 sticky top-0 z-50">
+        <div className="flex items-center justify-between relative">
+          {/* Left Nav (desktop) */}
+          <nav className="hidden md:flex items-center space-x-6 text-black">
+            <Link href="/" className="hover:text-[#0052cc]">
+              Home
+            </Link>
+            <Link href="/events" className="hover:text-[#0052cc]">
+              Events
+            </Link>
+            <Link href="/organiser" className="hover:text-[#0052cc]">
+              Organiser Space
+            </Link>
+          </nav>
 
-        {/* Logo Center */}
-        <div className="flex-shrink-0">
-          <Link href="/">
-            <Image
-              src="/images/logo.png"
-              alt="Afrikvent Logo"
-              width={120}
-              height={40}
-              className="mx-auto"
-            />
-          </Link>
-        </div>
-
-        {/* Right Nav (desktop) */}
-        <nav className="hidden md:flex items-center space-x-6 text-black absolute right-1/4 transform translate-x-1/2">
-          <Link href="/organiser" className="hover:text-[#0052cc]">
-            Organiser Space
-          </Link>
-          <Link href="/profile" className="hover:text-[#0052cc]">
-            Profile
-          </Link>
-        </nav>
-
-        {/* Mobile Menu Button */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="md:hidden absolute right-4 flex flex-col justify-center items-center space-y-1 w-8 h-8"
-        >
-          <motion.span
-            animate={isOpen ? { rotate: 45, y: 6 } : { rotate: 0, y: 0 }}
-            className="w-6 h-0.5 bg-black rounded"
-          />
-          <motion.span
-            animate={isOpen ? { rotate: -45, y: -6 } : { rotate: 0, y: 0 }}
-            className="w-6 h-0.5 bg-black rounded"
-          />
-        </button>
-      </div>
-
-      {/* Mobile Menu (animated) */}
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            initial={{ y: "-100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "-100%" }}
-            transition={{ duration: 0.3 }}
-            className="fixed top-0 left-0 w-full h-full bg-white shadow-lg p-6 flex flex-col items-center justify-center space-y-6 text-lg font-medium md:hidden"
-          >
-            {/* Close button inside menu */}
-            <button
-              onClick={() => setIsOpen(false)}
-              className="absolute top-6 right-6 flex flex-col justify-center items-center space-y-1 w-8 h-8"
-            >
-              <motion.span
-                animate={{ rotate: 45, y: 6 }}
-                className="w-6 h-0.5 bg-black rounded"
-              />
-              <motion.span
-                animate={{ rotate: -45, y: -6 }}
-                className="w-6 h-0.5 bg-black rounded"
-              />
-            </button>
-
-            {/* Logo on top */}
-            <div className="mb-6">
+          {/* Logo Center */}
+          <div className="absolute left-1/2 transform -translate-x-1/2">
+            <Link href="/">
               <Image
                 src="/images/logo.png"
                 alt="Afrikvent Logo"
-                width={130}
-                height={50}
+                width={110}
+                height={35}
+                className="mx-auto"
               />
-            </div>
+            </Link>
+          </div>
 
-            {/* Menu List */}
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsOpen(false)}
-                className="hover:text-[#0052cc]"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </header>
+          {/* Right Nav */}
+          <nav className="hidden md:flex items-center space-x-4 text-black">
+            {user ? (
+              <div className="relative group">
+                <button className="px-3 py-1.5 rounded-full bg-gray-200 text-sm">
+                  {user.email}
+                </button>
+                <div className="absolute hidden group-hover:block right-0 mt-2 w-40 bg-white shadow-lg rounded">
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => setShowSignUp(true)}
+                  className="px-3 py-1.5 bg-blue-600 text-white rounded-full text-sm hover:bg-blue-700"
+                >
+                  Sign Up
+                </button>
+                <button
+                  onClick={() => setShowSignIn(true)}
+                  className="px-3 py-1.5 text-blue-600 rounded-full border border-blue-600 text-sm hover:bg-blue-50"
+                >
+                  Sign In
+                </button>
+              </>
+            )}
+          </nav>
+        </div>
+      </header>
+
+      {/* 🔹 Sign In Modal */}
+      <AuthModal
+        type="signin"
+        isOpen={showSignIn}
+        onClose={() => setShowSignIn(false)}
+        onSuccess={(email) => console.log("Signed in:", email)}
+      />
+
+      {/* 🔹 Sign Up Modal */}
+      <AuthModal
+        type="signup"
+        isOpen={showSignUp}
+        onClose={() => setShowSignUp(false)}
+        onSuccess={(email) => console.log("Signed up:", email)}
+      />
+    </>
   );
 };
 
