@@ -141,7 +141,16 @@ const Header = () => {
           <div className="md:hidden fixed inset-0 top-16 bg-white z-40 transform transition-all duration-300 ease-in-out">
             <div className="h-full flex flex-col">
               {/* Logo at Top */}
-              
+              <div className="pt-8 pb-6 border-b border-gray-200">
+                <div className="flex justify-center">
+                  <Image
+                    src="/images/logo.png"
+                    alt="Afrikvent Logo"
+                    width={130}
+                    height={42}
+                  />
+                </div>
+              </div>
 
               {/* Navigation Links - Middle */}
               <div className="flex-1 flex flex-col justify-center px-4">
