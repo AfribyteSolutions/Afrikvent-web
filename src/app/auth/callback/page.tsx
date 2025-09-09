@@ -1,7 +1,7 @@
 "use client"; // must be the very first line
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation"; // ✅ correct import for App Router
+import { useRouter } from "next/navigation"; // ✅ App Router import
 import { supabase } from "@/lib/supabaseClient";
 
 export default function AuthCallback() {
@@ -15,17 +15,21 @@ export default function AuthCallback() {
 
       if (error) {
         console.error("Auth error:", error.message);
-        router.push("/login"); // redirect to login if error
+        router.push("/login");
         return;
       }
 
       if (data?.session) {
-        router.push("/"); // redirect to home/dashboard
+        router.push("/");
       }
     };
 
     handleAuth();
   }, [router]);
 
-  return <p>Processing login...</p>;
+  return (
+    <div className="flex items-center justify-center h-screen">
+      <p className="text-lg font-medium">Processing login...</p>
+    </div>
+  );
 }
