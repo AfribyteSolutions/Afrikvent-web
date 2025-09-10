@@ -90,7 +90,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`, // adjust redirect URL in Supabase dashboard
+          redirectTo: `${window.location.origin}/auth/callback`,
         },
       });
       if (error) throw error;
@@ -159,8 +159,31 @@ const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </div>
 
+            {/* Social Auth (Moved to the top) */}
+            <div className="p-6 pb-0">
+              <div className="flex items-center justify-center">
+                <button
+                  type="button"
+                  onClick={() => handleSocialAuth("google")}
+                  disabled={loading}
+                  className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg bg-white text-base text-gray-500 hover:bg-gray-50 font-semibold transition-colors"
+                >
+                  <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path fill="#4285F4" d="M24 9.5c3.34 0 5.86 1.13 7.82 2.92l6.53-6.53C35.86 2.37 30.14 0 24 0 14.86 0 6.91 5.09 3.01 12.33l7.07 5.46C12.89 12.39 18.06 9.5 24 9.5z" />
+                    <path fill="#34A853" d="M44 24.5c0-1.57-.14-3.07-.4-4.52H24v8.58h11.23c-1.22 4.41-5.11 7.4-9.82 7.4-5.94 0-10.9-4.04-12.72-9.6H1.2c4.08 7.91 12.01 13.52 22.8 13.52 7.15 0 13.41-2.39 17.8-6.54l-6.53-5.06z" />
+                    <path fill="#FBBC04" d="M11.28 29.43c-1.88-.51-3.6-1.29-5.04-2.29l-7.07 5.46c2.81 4.54 6.89 7.7 11.58 9.38 2.24.8 4.67 1.22 7.21 1.22 2.54 0 4.97-.42 7.21-1.22l-7.07-5.46z" />
+                    <path fill="#EA4335" d="M24 9.5c3.34 0 5.86 1.13 7.82 2.92l6.53-6.53C35.86 2.37 30.14 0 24 0 14.86 0 6.91 5.09 3.01 12.33l7.07 5.46C12.89 12.39 18.06 9.5 24 9.5z" />
+                  </svg>
+                  Sign in with Google
+                </button>
+              </div>
+              <div className="relative flex justify-center py-4">
+                  <span className="px-2 bg-white text-gray-500 text-sm">or</span>
+              </div>
+            </div>
+
             {/* Form */}
-            <div className="p-6">
+            <div className="p-6 pt-0">
               <form onSubmit={handleSubmit} className="space-y-4">
                 {type === "signup" && (
                   <>
@@ -261,31 +284,6 @@ const AuthModal: React.FC<AuthModalProps> = ({
                   {loading ? (type === "signin" ? "Signing In..." : "Creating Account...") : type === "signin" ? "Log in" : "Sign up"}
                 </button>
               </form>
-
-              {/* Social Auth */}
-              <div className="mt-6">
-                <div className="relative flex justify-center">
-                  <span className="px-2 bg-white text-gray-500 text-sm">or {type === "signin" ? "log in" : "sign up"} with</span>
-                </div>
-                <div className="mt-4 grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleSocialAuth("google")}
-                    disabled={loading}
-                    className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-500 hover:bg-gray-50"
-                  >
-                    Google
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSocialAuth("apple")}
-                    disabled={loading}
-                    className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-lg bg-white text-sm text-gray-500 hover:bg-gray-50"
-                  >
-                    Apple
-                  </button>
-                </div>
-              </div>
             </div>
           </motion.div>
         </motion.div>
