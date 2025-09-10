@@ -55,19 +55,19 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <div className="flex items-center justify-between mb-8">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900">
+          <h2 className="text-2xl md:text-4xl font-bold text-gray-900">
             {title}
           </h2>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
             {/* See More Button */}
             {onSeeMore && (
               <button
                 onClick={onSeeMore}
-                className="text-blue-600 hover:text-blue-700 font-semibold text-lg transition-colors inline-flex items-center gap-2 group"
+                className="text-sm md:text-lg text-blue-600 hover:text-blue-700 font-semibold transition-colors inline-flex items-center gap-1 md:gap-2 group"
               >
                 See More
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                <ArrowRight className="w-3 h-3 md:w-4 md:h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             )}
             
@@ -76,16 +76,16 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
               <button
                 onClick={() => scroll('left')}
                 disabled={!canScrollLeft()}
-                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 md:p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                <ChevronLeft className="w-5 h-5 text-gray-600" />
+                <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 text-gray-600" />
               </button>
               <button
                 onClick={() => scroll('right')}
                 disabled={!canScrollRight()}
-                className="p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="p-1.5 md:p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                <ChevronRight className="w-5 h-5 text-gray-600" />
+                <ChevronRight className="w-4 h-4 md:w-5 md:h-5 text-gray-600" />
               </button>
             </div>
           </div>
