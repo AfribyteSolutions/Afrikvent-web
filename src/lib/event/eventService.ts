@@ -1,4 +1,3 @@
-// lib/eventService.ts
 import { Event } from '@/types/event';
 import { MOCK_EVENTS } from '@/data/event/events';
 
@@ -62,9 +61,12 @@ export class EventService {
   }
 
   // Get sponsored events
-  static async getSponsoredEvents(): Promise<Event[]> {
+  // 💡 Added the 'limit' parameter to the function signature
+  static async getSponsoredEvents(limit?: number): Promise<Event[]> {
     await new Promise(resolve => setTimeout(resolve, 100));
-    return MOCK_EVENTS.filter(event => event.isSponsored);
+    const sponsoredEvents = MOCK_EVENTS.filter(event => event.isSponsored);
+    // 💡 Apply the limit if it exists
+    return limit ? sponsoredEvents.slice(0, limit) : sponsoredEvents;
   }
 
   // Get events by date range
