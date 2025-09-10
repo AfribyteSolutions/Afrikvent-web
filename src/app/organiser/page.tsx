@@ -13,10 +13,9 @@ export default function OrganiserPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
 
-  // Mock organiser data - replace with actual user data from backend
   const organiser = {
-    name: "John Doe Events",
-    email: "john@example.com",
+    name: "Rich Events",
+    email: "richie@example.com",
     totalEvents: 12,
     activeEvents: 8,
     totalRevenue: 45600,
@@ -57,17 +56,17 @@ export default function OrganiserPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 h-auto sm:h-16">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Organiser Dashboard</h1>
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Organiser Dashboard</h1>
               <p className="text-sm text-gray-600">Welcome back, {organiser.name}</p>
             </div>
             <button
               onClick={() => setShowCreateEvent(true)}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+              className="bg-blue-600 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm sm:text-base"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
               Create Event
@@ -76,10 +75,11 @@ export default function OrganiserPage() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-10 pb-8">
         {/* Tab Navigation */}
-        <div className="mb-8">
-          <nav className="flex space-x-8 border-b border-gray-200">
+        <div className="mb-6 sm:mb-8">
+          <nav className="flex flex-wrap gap-4 border-b border-gray-200">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
@@ -107,7 +107,6 @@ export default function OrganiserPage() {
         onClose={() => setShowCreateEvent(false)}
         onSuccess={() => {
           setShowCreateEvent(false);
-          // Refresh events list or show success message
         }}
       />
     </div>
