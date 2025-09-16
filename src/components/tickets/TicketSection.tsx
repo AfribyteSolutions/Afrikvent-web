@@ -1,9 +1,8 @@
 // src/components/tickets/TicketsSection.tsx
 "use client";
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Search, Filter, Grid, List, Layers } from 'lucide-react';
+import { Calendar, Search, Filter } from 'lucide-react';
 import { TicketCard } from './TicketCard';
-import { StackedTicketCard } from './StackedTicketCard';
 import { UserTicket, EnhancedTicket, User } from '@/types/ticket';
 import { enhanceTicket, filterTickets } from '@/utils/ticketUtils';
 import { TICKET_TEMPLATES } from '@/config/ticketTemplates';
@@ -27,15 +26,14 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<string>('all');
   const [selectedTemplate, setSelectedTemplate] = useState('classic');
-  const [viewMode, setViewMode] = useState<'grid' | 'list' | 'stacked'>('stacked');
 
-  // Enhanced tickets with QR codes and additional data
+  // Enhanced tickets
   const enhancedTickets = useMemo(() => 
     userTickets.map(enhanceTicket), 
     [userTickets]
   );
 
-  // Filtered tickets based on current filters
+  // Filtered tickets
   const filteredTickets = useMemo(() => {
     const statusFiltered = enhancedTickets.filter(ticket => 
       ticket.ticketStatus === ticketFilter
@@ -55,38 +53,27 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
     }
   }, [ticketFilter, onTabChange]);
 
-  // Handle ticket actions
+  // Ticket actions
   const handleDownload = async (ticket: EnhancedTicket) => {
     console.log('Downloading ticket:', ticket.orderId);
-    // Add your download logic here
   };
 
   const handleShare = async (ticket: EnhancedTicket) => {
     console.log('Sharing ticket:', ticket.orderId);
-    // Add your share logic here
   };
 
   const handleCopy = (ticket: EnhancedTicket) => {
     console.log('Copying ticket ID:', ticket.orderId);
-    // Add your copy logic here
   };
 
   const handleView = (ticket: EnhancedTicket) => {
     console.log('Viewing ticket details:', ticket.id);
-    // Add your view logic here (e.g., navigation)
   };
 
   // Loading state
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="bg-white rounded-lg shadow-sm p-6">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-300 rounded w-48 mb-4"></div>
-            <div className="h-4 bg-gray-300 rounded w-full mb-2"></div>
-            <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-          </div>
-        </div>
         {[1, 2, 3].map((i) => (
           <div key={i} className="bg-white rounded-lg shadow-sm p-6">
             <div className="animate-pulse">
@@ -153,7 +140,7 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Filters and Controls */}
+      {/* Filters */}
       <div className="bg-white rounded-lg shadow-sm p-6">
         {/* Sub-tab Navigation */}
         <div className="flex justify-center mb-6">
@@ -226,43 +213,6 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
               ))}
             </select>
           </div>
-
-          {/* View Mode Toggle */}
-          <div className="flex items-center bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('stacked')}
-              className={`p-2 rounded-md transition-colors ${
-                viewMode === 'stacked' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              title="Stacked View"
-            >
-              <Layers className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-md transition-colors ${
-                viewMode === 'grid' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              title="Grid View"
-            >
-              <Grid className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-md transition-colors ${
-                viewMode === 'list' 
-                  ? 'bg-white text-blue-600 shadow-sm' 
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-              title="List View"
-            >
-              <List className="w-4 h-4" />
-            </button>
-          </div>
         </div>
 
         {/* Results Count */}
@@ -286,39 +236,19 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
 
       {/* Tickets List */}
       {filteredTickets.length > 0 ? (
-        <div>
-          {viewMode === 'stacked' ? (
-            <div className="max-w-lg mx-auto">
-              <StackedTicketCard
-                tickets={filteredTickets}
-                template={selectedTemplate}
-                onDownload={handleDownload}
-                onShare={handleShare}
-                onCopy={handleCopy}
-                onView={handleView}
-                user={user}
-              />
-            </div>
-          ) : (
-            <div className={viewMode === 'grid' 
-              ? 'grid grid-cols-1 xl:grid-cols-2 gap-6' 
-              : 'space-y-6'
-            }>
-              {filteredTickets.map(ticket => (
-                <TicketCard
-                  key={ticket.id}
-                  ticket={ticket}
-                  template={selectedTemplate}
-                  onDownload={handleDownload}
-                  onShare={handleShare}
-                  onCopy={handleCopy}
-                  onView={handleView}
-                  user={user}
-                  className={viewMode === 'list' ? 'max-w-4xl mx-auto' : ''}
-                />
-              ))}
-            </div>
-          )}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {filteredTickets.map(ticket => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              template={selectedTemplate}
+              onDownload={handleDownload}
+              onShare={handleShare}
+              onCopy={handleCopy}
+              onView={handleView}
+              user={user}
+            />
+          ))}
         </div>
       ) : (
         <div className="text-center py-12">
