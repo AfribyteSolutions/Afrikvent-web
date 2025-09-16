@@ -1,8 +1,8 @@
-// src/components/tickets/TicketsSection.tsx
 "use client";
 import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Search, Filter } from 'lucide-react';
 import { TicketCard } from './TicketCard';
+import { StackedTicketCard } from './StackedTicketCard';
 import { UserTicket, EnhancedTicket, User } from '@/types/ticket';
 import { enhanceTicket, filterTickets } from '@/utils/ticketUtils';
 import { TICKET_TEMPLATES } from '@/config/ticketTemplates';
@@ -236,11 +236,11 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
 
       {/* Tickets List */}
       {filteredTickets.length > 0 ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {filteredTickets.map(ticket => (
-            <TicketCard
-              key={ticket.id}
-              ticket={ticket}
+        <>
+          {/* Small screens: stacked view */}
+          <div className="sm:hidden">
+            <StackedTicketCard
+              tickets={filteredTickets}
               template={selectedTemplate}
               onDownload={handleDownload}
               onShare={handleShare}
@@ -248,8 +248,24 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
               onView={handleView}
               user={user}
             />
-          ))}
-        </div>
+          </div>
+
+          {/* Larger screens: grid (1 col on sm, 3 on lg) */}
+          <div className="hidden sm:grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {filteredTickets.map(ticket => (
+              <TicketCard
+                key={ticket.id}
+                ticket={ticket}
+                template={selectedTemplate}
+                onDownload={handleDownload}
+                onShare={handleShare}
+                onCopy={handleCopy}
+                onView={handleView}
+                user={user}
+              />
+            ))}
+          </div>
+        </>
       ) : (
         <div className="text-center py-12">
           <div className="max-w-sm mx-auto">
