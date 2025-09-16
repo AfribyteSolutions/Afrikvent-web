@@ -5,8 +5,9 @@ import { useRouter } from "next/navigation";
 import { Event } from "@/types/event";
 import EventCard from "@/components/event/eventcard/EventCard";
 import { useRecommendedEvents } from "@/hooks/useEvents";
-import CommentsSection from "@/components/event/commentsection/Commentsection"; // ✅ import comments
-import { useUser } from "@supabase/auth-helpers-react"; // ✅ to get logged-in user
+import { useUser } from "@supabase/auth-helpers-react";
+import { TicketsSection } from "@/components/tickets/TicketSection";
+import { UserTicket } from "@/types/ticket";
 
 interface FilterState {
   search: string;
@@ -18,7 +19,7 @@ interface FilterState {
 export default function MyEvents() {
   const router = useRouter();
   const { events: allEvents, loading, error } = useRecommendedEvents();
-  const user = useUser(); // ✅ get Supabase user
+  const user = useUser();
   const [activeTab, setActiveTab] = useState<"events" | "tickets">("events");
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
   const [filters, setFilters] = useState<FilterState>({
@@ -28,31 +29,72 @@ export default function MyEvents() {
     dateRange: "",
   });
 
-  // Mock tickets data - replace with actual user tickets
-  const [userTickets] = useState([
+  // Sample tickets with varied data for testing - replace with real Supabase data
+  const [userTickets] = useState<UserTicket[]>([
     {
       id: "1",
       eventId: "event1",
-      eventTitle: "Tech Conference 2024",
-      eventDate: "2024-03-15",
-      eventLocation: "Accra Convention Center",
-      ticketType: "VIP",
+      eventTitle: "Afrobeats Summer Festival 2024",
+      eventDate: "2024-12-25T20:00:00.000Z",
+      eventLocation: "National Theatre of Ghana, Accra",
+      ticketType: "VIP Gold",
       quantity: 2,
-      totalPrice: 500,
-      purchaseDate: "2024-02-10",
+      totalPrice: 150,
+      purchaseDate: "2024-02-10T10:30:00.000Z",
       status: "confirmed",
+      userId: user?.id,
     },
     {
       id: "2",
       eventId: "event2",
-      eventTitle: "Music Festival",
-      eventDate: "2024-04-20",
-      eventLocation: "Independence Square",
-      ticketType: "General",
+      eventTitle: "Ghana Tech Summit 2024",
+      eventDate: "2024-11-15T09:00:00.000Z",
+      eventLocation: "Accra International Conference Centre",
+      ticketType: "Standard",
       quantity: 1,
-      totalPrice: 150,
-      purchaseDate: "2024-02-05",
+      totalPrice: 75,
+      purchaseDate: "2024-02-05T14:15:00.000Z",
       status: "confirmed",
+      userId: user?.id,
+    },
+    {
+      id: "3",
+      eventId: "event3",
+      eventTitle: "West African Food & Culture Expo",
+      eventDate: "2024-10-30T16:00:00.000Z",
+      eventLocation: "Labadi Beach Hotel, Accra",
+      ticketType: "Premium",
+      quantity: 3,
+      totalPrice: 225,
+      purchaseDate: "2024-01-20T09:45:00.000Z",
+      status: "confirmed",
+      userId: user?.id,
+    },
+    {
+      id: "4",
+      eventId: "event4",
+      eventTitle: "Independence Day Concert 2024",
+      eventDate: "2024-03-06T19:00:00.000Z",
+      eventLocation: "Independence Square, Accra",
+      ticketType: "General Admission",
+      quantity: 4,
+      totalPrice: 100,
+      purchaseDate: "2024-02-01T11:20:00.000Z",
+      status: "confirmed",
+      userId: user?.id,
+    },
+    {
+      id: "5",
+      eventId: "event5",
+      eventTitle: "African Fashion Week Ghana",
+      eventDate: "2024-08-15T18:30:00.000Z",
+      eventLocation: "Movenpick Ambassador Hotel, Accra",
+      ticketType: "VIP Silver",
+      quantity: 2,
+      totalPrice: 200,
+      purchaseDate: "2024-01-15T16:00:00.000Z",
+      status: "confirmed",
+      userId: user?.id,
     },
   ]);
 
@@ -149,14 +191,9 @@ export default function MyEvents() {
     router.push(`/events/${event.id}`);
   };
 
-  const formatTicketDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
+  const handleTicketTabChange = (tab: 'active' | 'expired') => {
+    // You can add analytics or other logic here
+    console.log(`User switched to ${tab} tickets`);
   };
 
   if (loading) {
@@ -202,7 +239,7 @@ export default function MyEvents() {
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab("events")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === "events"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -212,7 +249,7 @@ export default function MyEvents() {
               </button>
               <button
                 onClick={() => setActiveTab("tickets")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === "tickets"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
@@ -228,15 +265,62 @@ export default function MyEvents() {
           <>
             {/* Filters Section */}
             <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-              {/* ...filters UI unchanged... */}
+              {/* Search Filter */}
+              <div className="mb-4">
+                <input
+                  type="text"
+                  placeholder="Search events..."
+                  value={filters.search}
+                  onChange={(e) => handleFilterChange("search", e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Other Filters */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <select
+                  value={filters.location}
+                  onChange={(e) => handleFilterChange("location", e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Locations</option>
+                  <option value="accra">Accra</option>
+                  <option value="kumasi">Kumasi</option>
+                  <option value="tamale">Tamale</option>
+                </select>
+
+                <select
+                  value={filters.priceRange}
+                  onChange={(e) => handleFilterChange("priceRange", e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Prices</option>
+                  <option value="free">Free</option>
+                  <option value="0-50">$0 - $50</option>
+                  <option value="50-200">$50 - $200</option>
+                  <option value="200+">$200+</option>
+                </select>
+
+                <select
+                  value={filters.dateRange}
+                  onChange={(e) => handleFilterChange("dateRange", e.target.value)}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">All Dates</option>
+                  <option value="today">Today</option>
+                  <option value="week">This Week</option>
+                  <option value="month">This Month</option>
+                  <option value="future">Future Events</option>
+                </select>
+              </div>
+
               <div className="flex justify-between items-center">
                 <p className="text-sm text-gray-600">
-                  Showing {filteredEvents.length} of {allEvents?.length || 0}{" "}
-                  events
+                  Showing {filteredEvents.length} of {allEvents?.length || 0} events
                 </p>
                 <button
                   onClick={clearFilters}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                  className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
                 >
                   Clear all filters
                 </button>
@@ -273,62 +357,14 @@ export default function MyEvents() {
             )}
           </>
         ) : (
-          /* My Tickets Section */
-          <div className="space-y-6">
-            {userTickets.length > 0 ? (
-              userTickets.map((ticket) => (
-                <div
-                  key={ticket.id}
-                  className="bg-white rounded-lg shadow-sm p-6 border border-gray-200"
-                >
-                  <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                        {ticket.eventTitle}
-                      </h3>
-                      {/* Ticket details */}
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                        <div>
-                          <span className="font-medium">Date:</span>{" "}
-                          {formatTicketDate(ticket.eventDate)}
-                        </div>
-                        <div>
-                          <span className="font-medium">Location:</span>{" "}
-                          {ticket.eventLocation}
-                        </div>
-                        <div>
-                          <span className="font-medium">Ticket Type:</span>{" "}
-                          {ticket.ticketType}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ✅ Comments Section per event */}
-                  <CommentsSection
-                    eventId={ticket.eventId}
-                    user={user}
-                  />
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-16">
-                <h3 className="text-xl font-medium text-gray-900 mb-2">
-                  No tickets yet
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  You have not purchased any tickets yet. Start exploring
-                  events!
-                </p>
-                <button
-                  onClick={() => setActiveTab("events")}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Browse Events
-                </button>
-              </div>
-            )}
-          </div>
+          /* Tickets Section */
+          <TicketsSection
+            userTickets={userTickets}
+            user={user}
+            onTabChange={handleTicketTabChange}
+            isLoading={false}
+            error={null}
+          />
         )}
       </div>
     </main>
