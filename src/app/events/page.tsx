@@ -8,6 +8,7 @@ import { useRecommendedEvents } from "@/hooks/useEvents";
 import { useUser } from "@supabase/auth-helpers-react";
 import { TicketsSection } from "@/components/tickets/TicketSection";
 import { UserTicket } from "@/types/ticket";
+import { transformSupabaseUser } from "@/utils/userUtils";
 
 interface FilterState {
   search: string;
@@ -19,7 +20,8 @@ interface FilterState {
 export default function MyEvents() {
   const router = useRouter();
   const { events: allEvents, loading, error } = useRecommendedEvents();
-  const user = useUser();
+  const supabaseUser = useUser();
+  const user = transformSupabaseUser(supabaseUser);
   const [activeTab, setActiveTab] = useState<"events" | "tickets">("events");
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
   const [filters, setFilters] = useState<FilterState>({
@@ -42,7 +44,7 @@ export default function MyEvents() {
       totalPrice: 150,
       purchaseDate: "2024-02-10T10:30:00.000Z",
       status: "confirmed",
-      userId: user?.id,
+      userId: supabaseUser?.id,
     },
     {
       id: "2",
@@ -55,7 +57,7 @@ export default function MyEvents() {
       totalPrice: 75,
       purchaseDate: "2024-02-05T14:15:00.000Z",
       status: "confirmed",
-      userId: user?.id,
+      userId: supabaseUser?.id,
     },
     {
       id: "3",
@@ -68,7 +70,7 @@ export default function MyEvents() {
       totalPrice: 225,
       purchaseDate: "2024-01-20T09:45:00.000Z",
       status: "confirmed",
-      userId: user?.id,
+      userId: supabaseUser?.id,
     },
     {
       id: "4",
@@ -81,7 +83,7 @@ export default function MyEvents() {
       totalPrice: 100,
       purchaseDate: "2024-02-01T11:20:00.000Z",
       status: "confirmed",
-      userId: user?.id,
+      userId: supabaseUser?.id,
     },
     {
       id: "5",
@@ -94,7 +96,7 @@ export default function MyEvents() {
       totalPrice: 200,
       purchaseDate: "2024-01-15T16:00:00.000Z",
       status: "confirmed",
-      userId: user?.id,
+      userId: supabaseUser?.id,
     },
   ]);
 
@@ -357,7 +359,7 @@ export default function MyEvents() {
             )}
           </>
         ) : (
-          /* Tickets Section */
+          /* Tickets Section - Now using transformed user */
           <TicketsSection
             userTickets={userTickets}
             user={user}
