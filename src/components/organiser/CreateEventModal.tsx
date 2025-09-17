@@ -70,7 +70,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
   const currencies: Currency[] = [
     // Central African currencies (primary for Cameroon)
-    { code: 'XAF', symbol: 'FCFA', name: 'Central African CFA Franc', flag: '🇨🇲' },
+    { code: 'XAF', symbol: 'FC', name: 'Cameroon Franc', flag: '🇨🇲' },
     { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc', flag: '🇸🇳' },
     
     // Major African currencies
