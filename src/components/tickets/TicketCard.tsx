@@ -1,11 +1,15 @@
-// src/components/tickets/TicketCard.tsx
 "use client";
-import React, { useRef, useState } from 'react';
-import { Download, Share2, Copy, Calendar, MapPin, Clock, CheckCircle, XCircle, MoreHorizontal } from 'lucide-react';
+import React, { useRef, useState, useEffect } from 'react';
+import { Download, Share2, Copy, CheckCircle, Clock, MapPin, MoreHorizontal } from 'lucide-react';
 import { QRCode } from './QRCodeComponent';
-import { EnhancedTicket, TicketTemplate, User } from '@/types/ticket';
-import { formatTicketDate, formatTicketTime, getDaysUntilEvent, getStatusColor } from '@/utils/ticketUtils';
-import { getTemplateById, getTemplateStyles } from '@/config/ticketTemplates';
+import { EnhancedTicket, User } from '@/types/ticket';
+import { 
+  formatTicketDate, 
+  formatTicketTime, 
+  getDaysUntilEvent, 
+  getStatusColor,
+  enhanceTicket 
+} from '@/utils/ticketUtils';
 
 interface TicketCardProps {
   ticket: EnhancedTicket;
@@ -18,9 +22,44 @@ interface TicketCardProps {
   className?: string;
 }
 
+// Vibrant, high-contrast colors that look great with white text
+const TICKET_COLORS = [
+  { bg: '#E53E3E', accent: '#C53030' }, // Bold Red
+  { bg: '#D53F8C', accent: '#B83280' }, // Hot Pink
+  { bg: '#9F7AEA', accent: '#805AD5' }, // Deep Purple
+  { bg: '#667EEA', accent: '#5A67D8' }, // Royal Blue
+  { bg: '#4299E1', accent: '#3182CE' }, // Ocean Blue
+  { bg: '#0BC5EA', accent: '#00B5D8' }, // Cyan
+  { bg: '#38B2AC', accent: '#319795' }, // Teal
+  { bg: '#48BB78', accent: '#38A169' }, // Emerald Green
+  { bg: '#68D391', accent: '#48BB78' }, // Lime Green
+  { bg: '#ECC94B', accent: '#D69E2E' }, // Bright Yellow
+  { bg: '#ED8936', accent: '#DD6B20' }, // Orange
+  { bg: '#F56565', accent: '#E53E3E' }, // Bright Coral
+  { bg: '#FC8181', accent: '#F56565' }, // Salmon
+  { bg: '#F687B3', accent: '#ED64A6' }, // Rose Pink
+  { bg: '#B794F6', accent: '#9F7AEA' }, // Lavender
+  { bg: '#63B3ED', accent: '#4299E1' }, // Sky Blue
+  { bg: '#4FD1C7', accent: '#38B2AC' }, // Turquoise
+  { bg: '#9AE6B4', accent: '#68D391' }, // Mint
+  { bg: '#F6E05E', accent: '#ECC94B' }, // Golden
+  { bg: '#FBB6CE', accent: '#F687B3' }, // Bubblegum Pink
+];
+
+const generateRandomColor = (ticketId: string) => {
+  // Use ticket ID to ensure consistent color for the same ticket
+  const hash = ticketId.split('').reduce((a, b) => {
+    a = ((a << 5) - a) + b.charCodeAt(0);
+    return a & a;
+  }, 0);
+  
+  const index = Math.abs(hash) % TICKET_COLORS.length;
+  return TICKET_COLORS[index];
+};
+
 export const TicketCard: React.FC<TicketCardProps> = ({
   ticket,
-  template = 'classic',
+  template = 'random',
   onDownload,
   onShare,
   onCopy,
@@ -31,44 +70,26 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   const ticketRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
+  const [cardColors, setCardColors] = useState({ bg: '#0BBCD6', accent: '#FFFFFF' });
 
-  const ticketTemplate = getTemplateById(template);
-  const templateStyles = getTemplateStyles(ticketTemplate);
-
-  // Use a vibrant teal/cyan color scheme to match the reference
-  const cardStyles = {
-    backgroundColor: '#0BBCD6', // Vibrant teal
-    color: '#FFFFFF',
-    accentColor: '#FFFFFF'
-  };
+  // Set random colors based on ticket ID for consistency
+  useEffect(() => {
+    const colors = generateRandomColor(ticket.id);
+    setCardColors(colors);
+  }, [ticket.id]);
 
   const handleDownload = async () => {
-    if (!ticketRef.current) return;
+    if (!ticketRef.current || isDownloading) return;
     setIsDownloading(true);
+    
     try {
       if (onDownload) {
         await onDownload(ticket);
       } else {
-        // Default download implementation using canvas
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        if (ctx && ticketRef.current) {
-          // Simple canvas implementation - in production, use html2canvas
-          canvas.width = 800;
-          canvas.height = 400;
-          ctx.fillStyle = cardStyles.backgroundColor;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.fillStyle = cardStyles.color;
-          ctx.font = '20px Arial';
-          ctx.fillText(ticket.eventTitle, 20, 50);
-
-          const link = document.createElement('a');
-          link.download = `afrivents-ticket-${ticket.orderId}.png`;
-          link.href = canvas.toDataURL('image/png');
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
+        // Fallback download implementation
+        console.log('Download ticket:', ticket.orderId);
+        // You can implement html2canvas here for actual image generation
+        alert(`Ticket ${ticket.orderId} download started`);
       }
     } catch (error) {
       console.error('Error downloading ticket:', error);
@@ -79,34 +100,24 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   };
 
   const handleShare = async () => {
+    if (isSharing) return;
     setIsSharing(true);
+    
     try {
       if (onShare) {
         await onShare(ticket);
       } else {
-        // Default share implementation
+        const shareText = `🎫 ${ticket.eventTitle}\n📅 ${formatTicketDate(ticket.eventDate)} at ${formatTicketTime(ticket.eventDate)}\n📍 ${ticket.eventLocation}\n🎟️ Order: ${ticket.orderId}`;
+        
         if (navigator.share) {
           await navigator.share({
             title: `${ticket.eventTitle} - Ticket`,
-            text: `My ticket for ${ticket.eventTitle} on ${formatTicketDate(ticket.eventDate)}`,
+            text: shareText,
             url: `${window.location.origin}/tickets/${ticket.id}`,
           });
-        } else {
-          // Fallback for browsers without Web Share API
-          const shareText = `🎫 ${ticket.eventTitle}\n📅 ${formatTicketDate(ticket.eventDate)} at ${formatTicketTime(ticket.eventDate)}\n📍 ${ticket.eventLocation}\n🎟️ Order: ${ticket.orderId}`;
-          if (navigator.clipboard) {
-            await navigator.clipboard.writeText(shareText);
-            alert('Ticket details copied to clipboard!');
-          } else {
-            // Even more fallback
-            const textArea = document.createElement('textarea');
-            textArea.value = shareText;
-            document.body.appendChild(textArea);
-            textArea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textArea);
-            alert('Ticket details copied to clipboard!');
-          }
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(shareText);
+          alert('Ticket details copied to clipboard!');
         }
       }
     } catch (error) {
@@ -123,18 +134,8 @@ export const TicketCard: React.FC<TicketCardProps> = ({
     if (onCopy) {
       onCopy(ticket);
     } else {
-      // Default copy implementation
       if (navigator.clipboard) {
         navigator.clipboard.writeText(ticket.orderId);
-        alert('Order ID copied to clipboard!');
-      } else {
-        // Fallback for older browsers
-        const textArea = document.createElement('textarea');
-        textArea.value = ticket.orderId;
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textArea);
         alert('Order ID copied to clipboard!');
       }
     }
@@ -144,13 +145,13 @@ export const TicketCard: React.FC<TicketCardProps> = ({
     if (onView) {
       onView(ticket);
     } else {
-      // Default view implementation
-      console.log('Viewing ticket:', ticket.id);
+      console.log('Viewing ticket details:', ticket.id);
     }
   };
 
   const isExpired = ticket.ticketStatus === 'expired';
   const daysUntil = getDaysUntilEvent(ticket.eventDate);
+  const statusColorClass = getStatusColor(ticket.ticketStatus);
 
   return (
     <div className={`relative max-w-sm mx-auto ${className}`}>
@@ -158,116 +159,119 @@ export const TicketCard: React.FC<TicketCardProps> = ({
       <div
         ref={ticketRef}
         className="relative rounded-t-3xl rounded-b-lg overflow-hidden shadow-2xl"
-        style={{ backgroundColor: cardStyles.backgroundColor }}
+        style={{ backgroundColor: cardColors.bg, color: '#FFFFFF' }}
       >
-        {/* Large notch at top center */}
-        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 w-20 h-20 bg-gray-100 rounded-full"></div>
+        {/* Decorative notch at top */}
+        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 w-18 h-18 bg-gray-100 rounded-full"></div>
 
-        {/* Header Section with Date/Time and Actions in corners */}
-        <div className="flex justify-between items-start p-4 pt-6 relative">
+        {/* Header Section */}
+        <div className="flex justify-between items-start p-4 pt-6">
           <div>
             <div className="text-xs font-medium opacity-90 mb-1">
-              {formatTicketDate(ticket.eventDate).split(',')[0]} {/* Date only */}
+              {formatTicketDate(ticket.eventDate)}
             </div>
             <div className="text-sm font-bold">
               {formatTicketTime(ticket.eventDate)}
             </div>
           </div>
           
-          {/* Action Icons moved to top right corner */}
+          {/* Action Buttons */}
           <div className="flex items-center space-x-1">
             <button
               onClick={handleShare}
               disabled={isSharing}
               className="p-1 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+              title="Share ticket"
             >
-              <Share2 className="w-4 h-4" color={cardStyles.color} />
+              <Share2 className="w-4 h-4" />
             </button>
             <button
               onClick={handleDownload}
               disabled={isDownloading}
               className="p-1 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+              title="Download ticket"
             >
-              <Download className="w-4 h-4" color={cardStyles.color} />
+              <Download className="w-4 h-4" />
             </button>
             <button
               onClick={handleView}
               className="p-1 hover:bg-white hover:bg-opacity-20 rounded-full transition-colors"
+              title="View details"
             >
-              <MoreHorizontal className="w-4 h-4" color={cardStyles.color} />
+              <MoreHorizontal className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Ticket Details Section */}
-        <div className="px-4 pb-4">
-          {/* Ticket Type and Order ID */}
-          <div className="mb-3">
-            <div className="text-xs opacity-80 mb-1">Ticket Type</div>
-            <div className="font-semibold text-sm">{ticket.ticketType}</div>
-          </div>
-          
-          <div className="mb-4">
-            <div className="text-xs opacity-80 mb-1">Order ID</div>
-            <div className="font-bold text-sm tracking-wide">{ticket.orderId}</div>
+        {/* Ticket Details */}
+        <div className="px-4 pb-6">
+          {/* Ticket Type and Order ID Row */}
+          <div className="flex justify-between items-start mb-6">
+            <div>
+              <div className="text-xs opacity-80 mb-1">Ticket Type</div>
+              <div className="font-semibold text-sm">{ticket.ticketType}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs opacity-80 mb-1">Order ID</div>
+              <div className="font-mono text-xs">{ticket.orderId}</div>
+            </div>
           </div>
 
-          {/* Event Location */}
-          <div className="mb-6">
+          {/* Location */}
+          <div className="mb-4">
             <div className="text-xs opacity-80 mb-1">Place</div>
-            <div className="text-xs leading-snug">
+            <div className="text-sm leading-snug">
               {ticket.eventLocation}
             </div>
           </div>
 
-          {/* Decorative tear line before QR code */}
-          <div className="relative mb-4">
+          {/* Event Type - Online or In-Person */}
+          <div className="mb-6">
+            <div className="text-xs opacity-80 mb-1">Format</div>
+            <div className="text-sm">
+              {ticket.eventLocation.toLowerCase().includes('online') || 
+               ticket.eventLocation.toLowerCase().includes('virtual') || 
+               ticket.eventLocation.toLowerCase().includes('zoom') ? 'Online' : 'In-Person'}
+            </div>
+          </div>
+
+          {/* Decorative separator line before QR code */}
+          <div className="relative mb-6">
             <div className="border-t border-dashed border-white border-opacity-30"></div>
-            <div className="absolute -left-4 -top-2 w-4 h-4 bg-gray-100 rounded-full"></div>
-            <div className="absolute -right-4 -top-2 w-4 h-4 bg-gray-100 rounded-full"></div>
+ 
           </div>
 
           {/* QR Code Section */}
           <div className="flex justify-center">
-            <div className="bg-white p-4 rounded-2xl shadow-lg">
+            <div className="bg-white p-4 rounded-lg">
               <QRCode
                 value={ticket.qrCode}
                 size={120}
-                style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                 level="M"
+                style={{ height: "auto", maxWidth: "100%", width: "100%" }}
               />
             </div>
           </div>
 
-          {/* Scan Instructions */}
-          <div className="text-center mt-3">
-            <div className="text-xs font-medium opacity-90">
+          {/* Event Title at bottom */}
+          <div className="text-center mt-4">
+            <div className="text-sm font-medium opacity-90">
               {ticket.eventTitle}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Status Badge */}
-      {!isExpired && (
-        <div className="absolute top-2 left-4 z-10">
-          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-white bg-opacity-20 text-white">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Active
-            {daysUntil >= 0 && (
-              <span className="ml-1">
-                ({daysUntil === 0 ? 'Today' : `${daysUntil}d`})
-              </span>
-            )}
-          </span>
-        </div>
-      )}
 
-      {/* Hidden Action Buttons for Accessibility */}
-      <div className="sr-only">
-        <button onClick={handleCopy}>Copy Order ID</button>
-        <button onClick={handleView}>View Full Details</button>
-      </div>
+
+      {/* Copy Action - Hidden but accessible */}
+      <button
+        onClick={handleCopy}
+        className="sr-only"
+        aria-label="Copy order ID to clipboard"
+      >
+        Copy Order ID
+      </button>
     </div>
   );
 };

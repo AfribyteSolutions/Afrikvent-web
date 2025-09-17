@@ -1,4 +1,5 @@
 // src/types/ticket.ts
+
 export interface User {
     id: string;
     name: string;
@@ -74,3 +75,47 @@ export interface User {
     error?: string | null;
   }
   
+  // Updated PaidTicket interface - more comprehensive
+  export interface PaidTicket {
+    ticket_id: number;
+    quantity: number;
+    template: string;
+    qrString?: string;
+    transactionId?: string;
+    orderId?: string;
+    eventId?: string;
+    eventTitle?: string;
+    eventDate?: string;
+    eventLocation?: string;
+    ticketType?: string;
+    totalPrice?: number;
+    purchaseDate?: string;
+  }
+  
+  // Alternative: Payment result interface
+  export interface PaymentResult {
+    success: boolean;
+    transaction_id: string;
+    qr_string?: string;
+    orderId?: string;
+    tickets: {
+      ticket_id: number;
+      quantity: number;
+      template: string;
+      ticketType?: string;
+      price?: number;
+    }[];
+    eventData?: {
+      id: string;
+      title: string;
+      date: string;
+      location: string;
+    };
+  }
+  export interface User {
+    id: string;
+    name: string;
+    email: string;
+    avatar?: string;
+    phone?: string; // Add this line
+  }

@@ -15,6 +15,7 @@ interface EventFormData {
   location: string;
   venue: string;
   category: string;
+  currency: string;
   image: File | null;
   ticketTypes: TicketType[];
 }
@@ -25,6 +26,14 @@ interface TicketType {
   price: number;
   quantity: number;
   description: string;
+  format: 'in-person' | 'online';
+}
+
+interface Currency {
+  code: string;
+  symbol: string;
+  name: string;
+  flag: string;
 }
 
 const CreateEventModal: React.FC<CreateEventModalProps> = ({ 
@@ -42,6 +51,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     location: '',
     venue: '',
     category: '',
+    currency: 'XAF', // Default to Central African CFA franc for Cameroon
     image: null,
     ticketTypes: []
   });
@@ -58,6 +68,31 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     'Other'
   ];
 
+  const currencies: Currency[] = [
+    // Central African currencies (primary for Cameroon)
+    { code: 'XAF', symbol: 'FCFA', name: 'Central African CFA Franc', flag: '🇨🇲' },
+    { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc', flag: '🇸🇳' },
+    
+    // Major African currencies
+    { code: 'NGN', symbol: '₦', name: 'Nigerian Naira', flag: '🇳🇬' },
+    { code: 'GHS', symbol: '₵', name: 'Ghanaian Cedi', flag: '🇬🇭' },
+    { code: 'ZAR', symbol: 'R', name: 'South African Rand', flag: '🇿🇦' },
+    { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling', flag: '🇰🇪' },
+    { code: 'UGX', symbol: 'USh', name: 'Ugandan Shilling', flag: '🇺🇬' },
+    { code: 'TZS', symbol: 'TSh', name: 'Tanzanian Shilling', flag: '🇹🇿' },
+    { code: 'ETB', symbol: 'Br', name: 'Ethiopian Birr', flag: '🇪🇹' },
+    { code: 'EGP', symbol: '£', name: 'Egyptian Pound', flag: '🇪🇬' },
+    { code: 'MAD', symbol: 'DH', name: 'Moroccan Dirham', flag: '🇲🇦' },
+    { code: 'BWP', symbol: 'P', name: 'Botswanan Pula', flag: '🇧🇼' },
+    
+    // International currencies
+    { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
+    { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
+    { code: 'GBP', symbol: '£', name: 'British Pound', flag: '🇬🇧' }
+  ];
+
+  const selectedCurrency = currencies.find(c => c.code === formData.currency) || currencies[0];
+
   const handleInputChange = (field: keyof EventFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -73,7 +108,8 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
       name: '',
       price: 0,
       quantity: 0,
-      description: ''
+      description: '',
+      format: 'in-person'
     };
     setFormData(prev => ({
       ...prev,
@@ -133,7 +169,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
       case 2:
         return formData.date && formData.time && formData.location;
       case 3:
-        return formData.ticketTypes.length > 0;
+        return formData.ticketTypes.length > 0 && formData.ticketTypes.every(ticket => 
+          ticket.name && ticket.price >= 0 && ticket.quantity > 0 && ticket.format
+        );
       default:
         return false;
     }
@@ -207,20 +245,58 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Category *
-                  </label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => handleInputChange('category', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  >
-                    <option value="">Select a category</option>
-                    {categories.map((category) => (
-                      <option key={category} value={category}>{category}</option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Category *
+                    </label>
+                    <select
+                      value={formData.category}
+                      onChange={(e) => handleInputChange('category', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select a category</option>
+                      {categories.map((category) => (
+                        <option key={category} value={category}>{category}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Currency *
+                    </label>
+                    <select
+                      value={formData.currency}
+                      onChange={(e) => handleInputChange('currency', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <optgroup label="Central African Currencies">
+                        {currencies.filter(c => c.code === 'XAF' || c.code === 'XOF').map((currency) => (
+                          <option key={currency.code} value={currency.code}>
+                            {currency.flag} {currency.symbol} - {currency.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="African Currencies">
+                        {currencies.filter(c => !['XAF', 'XOF', 'USD', 'EUR', 'GBP'].includes(c.code)).map((currency) => (
+                          <option key={currency.code} value={currency.code}>
+                            {currency.flag} {currency.symbol} - {currency.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="International Currencies">
+                        {currencies.filter(c => ['USD', 'EUR', 'GBP'].includes(c.code)).map((currency) => (
+                          <option key={currency.code} value={currency.code}>
+                            {currency.flag} {currency.symbol} - {currency.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Selected: {selectedCurrency.flag} {selectedCurrency.name}
+                    </p>
+                  </div>
                 </div>
 
                 <div>
@@ -290,7 +366,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                     value={formData.location}
                     onChange={(e) => handleInputChange('location', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., Accra, Kumasi, Cape Coast"
+                    placeholder="e.g., Yaoundé, Douala, Bamenda, Garoua"
                   />
                 </div>
 
@@ -303,7 +379,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                     value={formData.venue}
                     onChange={(e) => handleInputChange('venue', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., National Theatre, Accra International Conference Centre"
+                    placeholder="e.g., Palais des Congrès, Yaoundé Conference Centre"
                   />
                 </div>
               </div>
@@ -312,7 +388,12 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
             {currentStep === 3 && (
               <div className="space-y-6">
                 <div className="flex justify-between items-center">
-                  <h3 className="text-lg font-semibold text-gray-900">Ticket Types</h3>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Ticket Types</h3>
+                    <p className="text-sm text-gray-600">
+                      Prices in {selectedCurrency.flag} {selectedCurrency.name} ({selectedCurrency.symbol})
+                    </p>
+                  </div>
                   <button
                     onClick={addTicketType}
                     className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
@@ -349,7 +430,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                           </button>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
                               Ticket Name *
@@ -365,7 +446,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                           
                           <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
-                              Price (₵) *
+                              Price ({selectedCurrency.symbol}) *
                             </label>
                             <input
                               type="number"
@@ -390,6 +471,24 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                               placeholder="100"
                             />
+                          </div>
+
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Format *
+                            </label>
+                            <select
+                              value={ticket.format}
+                              onChange={(e) => updateTicketType(ticket.id, 'format', e.target.value as 'in-person' | 'online')}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                            >
+                              <option value="in-person">
+                                🏢 In-Person
+                              </option>
+                              <option value="online">
+                                💻 Online
+                              </option>
+                            </select>
                           </div>
                         </div>
 

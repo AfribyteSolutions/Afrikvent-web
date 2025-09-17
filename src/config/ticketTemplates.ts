@@ -37,10 +37,12 @@ export const TICKET_TEMPLATES: TicketTemplate[] = [
   },
 ];
 
+// ✅ Get template by ID
 export const getTemplateById = (id: string): TicketTemplate => {
   return TICKET_TEMPLATES.find(template => template.id === id) || TICKET_TEMPLATES[0];
 };
 
+// ✅ Extract styles
 export const getTemplateStyles = (template: TicketTemplate) => ({
   backgroundColor: template.backgroundColor,
   color: template.textColor,
@@ -52,3 +54,9 @@ export const getAccentStyles = (template: TicketTemplate) => ({
   color: template.accentColor,
   borderColor: template.accentColor,
 });
+
+// ✅ New helper: pick a random template
+export const getRandomTemplateId = (): string => {
+  const randomIndex = Math.floor(Math.random() * TICKET_TEMPLATES.length);
+  return TICKET_TEMPLATES[randomIndex].id;
+};
