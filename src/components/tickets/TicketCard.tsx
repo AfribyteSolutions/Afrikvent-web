@@ -162,7 +162,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
         style={{ backgroundColor: cardColors.bg, color: '#FFFFFF' }}
       >
         {/* Decorative notch at top */}
-        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 w-18 h-18 bg-gray-100 rounded-full"></div>
+        <div className="absolute -top-12 left-1/2 transform -translate-x-1/2 w-20 h-20 bg-gray-100 rounded-full"></div>
 
         {/* Header Section */}
         <div className="flex justify-between items-start p-4 pt-6">
@@ -226,19 +226,13 @@ export const TicketCard: React.FC<TicketCardProps> = ({
           </div>
 
           {/* Event Type - Online or In-Person */}
-          <div className="mb-6">
+          <div className="mb-8">
             <div className="text-xs opacity-80 mb-1">Format</div>
             <div className="text-sm">
               {ticket.eventLocation.toLowerCase().includes('online') || 
                ticket.eventLocation.toLowerCase().includes('virtual') || 
                ticket.eventLocation.toLowerCase().includes('zoom') ? 'Online' : 'In-Person'}
             </div>
-          </div>
-
-          {/* Decorative separator line before QR code */}
-          <div className="relative mb-6">
-            <div className="border-t border-dashed border-white border-opacity-30"></div>
- 
           </div>
 
           {/* QR Code Section */}

@@ -1,10 +1,14 @@
 // src/components/organiser/CreateEventModal.tsx
+'use client';
 import React, { useState } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import type { User } from '@supabase/supabase-js';
 
 interface CreateEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
+  user: User | null;
 }
 
 interface EventFormData {
@@ -39,10 +43,12 @@ interface Currency {
 const CreateEventModal: React.FC<CreateEventModalProps> = ({ 
   isOpen, 
   onClose, 
-  onSuccess 
+  onSuccess,
+  user
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState<EventFormData>({
     title: '',
     description: '',
@@ -51,7 +57,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     location: '',
     venue: '',
     category: '',
-    currency: 'XAF', // Default to Central African CFA franc for Cameroon
+    currency: 'GHS', // Default to Ghanaian Cedi
     image: null,
     ticketTypes: []
   });
@@ -69,13 +75,13 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
   ];
 
   const currencies: Currency[] = [
-    // Central African currencies (primary for Cameroon)
-    { code: 'XAF', symbol: 'FC', name: 'Cameroon Franc', flag: '🇨🇲' },
-    { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc', flag: '🇸🇳' },
+    // Ghanaian currency (primary)
+    { code: 'GHS', symbol: '₵', name: 'Ghanaian Cedi', flag: '🇬🇭' },
     
     // Major African currencies
     { code: 'NGN', symbol: '₦', name: 'Nigerian Naira', flag: '🇳🇬' },
-    { code: 'GHS', symbol: '₵', name: 'Ghanaian Cedi', flag: '🇬🇭' },
+    { code: 'XAF', symbol: 'FC', name: 'Central African CFA Franc', flag: '🇨🇲' },
+    { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc', flag: '🇸🇳' },
     { code: 'ZAR', symbol: 'R', name: 'South African Rand', flag: '🇿🇦' },
     { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling', flag: '🇰🇪' },
     { code: 'UGX', symbol: 'USh', name: 'Ugandan Shilling', flag: '🇺🇬' },
@@ -95,6 +101,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
   const handleInputChange = (field: keyof EventFormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+    setError(''); // Clear errors when user starts typing
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -133,18 +140,129 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     }));
   };
 
-  const handleSubmit = async () => {
-    setIsLoading(true);
+  const uploadEventImage = async (eventId: number): Promise<string | null> => {
+    if (!formData.image || !user) return null;
+
     try {
-      // Here you would make the API call to create the event
-      console.log('Creating event:', formData);
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      const fileExt = formData.image.name.split('.').pop();
+      const fileName = `event-${eventId}-${Math.random()}.${fileExt}`;
+      const filePath = `${user.id}/${fileName}`;
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('event-images')
+        .upload(filePath, formData.image, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (uploadError) {
+        console.error('Image upload error:', uploadError);
+        return null;
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from('event-images')
+        .getPublicUrl(filePath);
+
+      return publicUrlData.publicUrl;
+
+    } catch (error) {
+      console.error('Error uploading image:', error);
+      return null;
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!user) {
+      setError('User not authenticated');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // Combine date and time
+      const eventDateTime = `${formData.date}T${formData.time}:00.000Z`;
+
+      // Create the event first
+      const { data: eventData, error: eventError } = await supabase
+        .from('EVENTS')
+        .insert([{
+          title: formData.title,
+          description: formData.description,
+          event_date: eventDateTime,
+          location_name: formData.location,
+          address: formData.venue,
+          organizer_id: user.id,
+          event_status: 'draft',
+          is_featured: false,
+          is_sponsored: false
+        }])
+        .select()
+        .single();
+
+      if (eventError) {
+        throw new Error(eventError.message);
+      }
+
+      const eventId = eventData.id;
+
+      // Upload image if provided
+      let imageUrl: string | null = null;
+      if (formData.image) {
+        imageUrl = await uploadEventImage(eventId);
+      }
+
+      // Update event with image URL if uploaded
+      if (imageUrl) {
+        const { error: updateError } = await supabase
+          .from('EVENTS')
+          .update({ images: [imageUrl] })
+          .eq('id', eventId);
+
+        if (updateError) {
+          console.warn('Error updating event with image:', updateError);
+        }
+      }
+
+      // Create ticket types
+      for (const ticketType of formData.ticketTypes) {
+        const { error: ticketError } = await supabase
+          .from('TICKET_TYPES')
+          .insert([{
+            event_id: eventId,
+            name: ticketType.name,
+            description: ticketType.description,
+            price: ticketType.price,
+            max_quatity: ticketType.quantity
+          }]);
+
+        if (ticketError) {
+          console.error('Error creating ticket type:', ticketError);
+        }
+      }
+
+      // Reset form
+      setFormData({
+        title: '',
+        description: '',
+        date: '',
+        time: '',
+        location: '',
+        venue: '',
+        category: '',
+        currency: 'GHS',
+        image: null,
+        ticketTypes: []
+      });
+
+      setCurrentStep(1);
       onSuccess();
+
     } catch (error) {
       console.error('Error creating event:', error);
+      setError(error instanceof Error ? error.message : 'Failed to create event');
     } finally {
       setIsLoading(false);
     }
@@ -226,6 +344,13 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
             </div>
           </div>
 
+          {/* Error Display */}
+          {error && (
+            <div className="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-700 text-sm">{error}</p>
+            </div>
+          )}
+
           {/* Form Content */}
           <div className="p-6">
             {currentStep === 1 && (
@@ -271,15 +396,15 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                       onChange={(e) => handleInputChange('currency', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <optgroup label="Central African Currencies">
-                        {currencies.filter(c => c.code === 'XAF' || c.code === 'XOF').map((currency) => (
+                      <optgroup label="Ghanaian Currency">
+                        {currencies.filter(c => c.code === 'GHS').map((currency) => (
                           <option key={currency.code} value={currency.code}>
                             {currency.flag} {currency.symbol} - {currency.name}
                           </option>
                         ))}
                       </optgroup>
                       <optgroup label="African Currencies">
-                        {currencies.filter(c => !['XAF', 'XOF', 'USD', 'EUR', 'GBP'].includes(c.code)).map((currency) => (
+                        {currencies.filter(c => !['GHS', 'USD', 'EUR', 'GBP'].includes(c.code)).map((currency) => (
                           <option key={currency.code} value={currency.code}>
                             {currency.flag} {currency.symbol} - {currency.name}
                           </option>
@@ -340,6 +465,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                       type="date"
                       value={formData.date}
                       onChange={(e) => handleInputChange('date', e.target.value)}
+                      min={new Date().toISOString().split('T')[0]}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
@@ -366,7 +492,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                     value={formData.location}
                     onChange={(e) => handleInputChange('location', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., Yaoundé, Douala, Bamenda, Garoua"
+                    placeholder="e.g., Accra, Kumasi, Cape Coast"
                   />
                 </div>
 
@@ -379,7 +505,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                     value={formData.venue}
                     onChange={(e) => handleInputChange('venue', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="e.g., Palais des Congrès, Yaoundé Conference Centre"
+                    placeholder="e.g., National Theatre, Accra International Conference Centre"
                   />
                 </div>
               </div>
@@ -453,7 +579,17 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                               min="0"
                               step="0.01"
                               value={ticket.price}
-                              onChange={(e) => updateTicketType(ticket.id, 'price', parseFloat(e.target.value) || 0)}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                // Check if the input value is an empty string
+                                if (value === '') {
+                                    // If it is, set the price to an empty string to make the field empty
+                                    updateTicketType(ticket.id, 'price', ''); 
+                                } else {
+                                    // Otherwise, parse the number and update the state
+                                    updateTicketType(ticket.id, 'price', parseFloat(value));
+                                }
+                            }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                               placeholder="0.00"
                             />
@@ -482,12 +618,8 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                               onChange={(e) => updateTicketType(ticket.id, 'format', e.target.value as 'in-person' | 'online')}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                             >
-                              <option value="in-person">
-                                🏢 In-Person
-                              </option>
-                              <option value="online">
-                                💻 Online
-                              </option>
+                              <option value="in-person">In-Person</option>
+                              <option value="online">Online</option>
                             </select>
                           </div>
                         </div>
@@ -518,7 +650,8 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
               {currentStep > 1 && (
                 <button
                   onClick={prevStep}
-                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                  disabled={isLoading}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium disabled:opacity-50"
                 >
                   ← Previous
                 </button>
@@ -528,7 +661,8 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
             <div className="flex gap-3">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                disabled={isLoading}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -536,7 +670,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
               {currentStep < 3 ? (
                 <button
                   onClick={nextStep}
-                  disabled={!isStepValid()}
+                  disabled={!isStepValid() || isLoading}
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
                 >
                   Next →

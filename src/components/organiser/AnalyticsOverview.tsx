@@ -1,44 +1,195 @@
 // src/components/organiser/AnalyticsOverview.tsx
-import React from 'react';
+'use client';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import type { User } from '@supabase/supabase-js';
+import type { Database } from '@/types/database.types'; // Adjust path to your database types
+
+// Use your actual database types
+type EventRow = Database['public']['Tables']['EVENTS']['Row'];
+type UserRow = Database['public']['Tables']['USERS']['Row'];
+type TicketRow = Database['public']['Tables']['TICKETS']['Row'];
 
 interface AnalyticsOverviewProps {
+  user: User | null;
   detailed?: boolean;
 }
 
-const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ detailed = false }) => {
-  // Mock analytics data - replace with actual API calls
-  const analyticsData = {
-    totalRevenue: 45600,
-    totalTicketsSold: 1234,
-    totalEvents: 12,
-    averageTicketPrice: 37,
-    conversionRate: 3.2,
-    topSellingEvents: [
-      { name: 'Music Festival Summer', sales: 800, revenue: 40000 },
-      { name: 'Tech Conference 2024', sales: 150, revenue: 15000 },
-      { name: 'Business Workshop', sales: 75, revenue: 3750 },
-    ],
-    salesByMonth: [
-      { month: 'Jan', sales: 120, revenue: 6000 },
-      { month: 'Feb', sales: 180, revenue: 9000 },
-      { month: 'Mar', sales: 250, revenue: 12500 },
-      { month: 'Apr', sales: 320, revenue: 16000 },
-      { month: 'May', sales: 280, revenue: 14000 },
-      { month: 'Jun', sales: 200, revenue: 10000 },
-    ],
-    eventCategories: [
-      { category: 'Music', count: 4, percentage: 33 },
-      { category: 'Business', count: 3, percentage: 25 },
-      { category: 'Technology', count: 2, percentage: 17 },
-      { category: 'Arts', count: 2, percentage: 17 },
-      { category: 'Sports', count: 1, percentage: 8 },
-    ],
-    recentActivity: [
-      { type: 'sale', event: 'Tech Conference 2024', amount: 100, time: '2 hours ago' },
-      { type: 'sale', event: 'Music Festival Summer', amount: 50, time: '4 hours ago' },
-      { type: 'refund', event: 'Business Workshop', amount: -40, time: '1 day ago' },
-      { type: 'sale', event: 'Art Exhibition', amount: 25, time: '2 days ago' },
-    ]
+// Type for the joined query result
+interface SupabaseTicketWithJoins {
+  total: number | null;
+  unit_price: number | null;
+  quantity: string | null;
+  ticket_status: string | null;
+  created_at: string;
+  EVENTS: EventRow[];
+  USERS: UserRow[];
+}
+
+interface AnalyticsData {
+  totalRevenue: number;
+  totalTicketsSold: number;
+  totalEvents: number;
+  averageTicketPrice: number;
+  conversionRate: number;
+  topSellingEvents: Array<{
+    name: string;
+    sales: number;
+    revenue: number;
+  }>;
+  salesByMonth: Array<{
+    month: string;
+    sales: number;
+    revenue: number;
+  }>;
+  recentActivity: Array<{
+    type: 'sale' | 'refund';
+    event: string;
+    amount: number;
+    time: string;
+    buyer_name?: string | null;
+  }>;
+  loading: boolean;
+}
+
+const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = false }) => {
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData>({
+    totalRevenue: 0,
+    totalTicketsSold: 0,
+    totalEvents: 0,
+    averageTicketPrice: 0,
+    conversionRate: 0,
+    topSellingEvents: [],
+    salesByMonth: [],
+    recentActivity: [],
+    loading: true
+  });
+
+  useEffect(() => {
+    if (user) {
+      fetchAnalyticsData();
+    }
+  }, [user]);
+
+  const fetchAnalyticsData = async () => {
+    if (!user) return;
+
+    try {
+      setAnalyticsData(prev => ({ ...prev, loading: true }));
+
+      // Fetch events data
+      const { data: eventsData } = await supabase
+        .from('EVENTS')
+        .select('id, title')
+        .eq('organizer_id', user.id);
+
+      const totalEvents = eventsData?.length || 0;
+
+      // Fetch tickets data with payments and events
+      const { data: ticketsData } = await supabase
+        .from('TICKETS')
+        .select(`
+          total,
+          unit_price,
+          quantity,
+          ticket_status,
+          created_at,
+          EVENTS!inner(title, organizer_id),
+          USERS!inner(name)
+        `)
+        .eq('EVENTS.organizer_id', user.id);
+
+      const confirmedTickets = (ticketsData as SupabaseTicketWithJoins[])?.filter(ticket => 
+        ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
+      ) || [];
+
+      const totalRevenue = confirmedTickets.reduce((sum, ticket) => 
+        sum + (ticket.total || 0), 0
+      );
+
+      const totalTicketsSold = confirmedTickets.reduce((sum, ticket) => 
+        sum + parseInt(ticket.quantity || '0'), 0
+      );
+
+      const averageTicketPrice = totalTicketsSold > 0 ? totalRevenue / totalTicketsSold : 0;
+
+      // Calculate top selling events
+      const eventSales = confirmedTickets.reduce((acc, ticket) => {
+        const eventTitle = ticket.EVENTS?.[0]?.title || 'Unknown Event';
+        if (!acc[eventTitle]) {
+          acc[eventTitle] = { sales: 0, revenue: 0 };
+        }
+        acc[eventTitle].sales += parseInt(ticket.quantity || '0');
+        acc[eventTitle].revenue += ticket.total || 0;
+        return acc;
+      }, {} as Record<string, { sales: number; revenue: number }>);
+
+      const topSellingEvents = Object.entries(eventSales)
+        .map(([name, data]) => ({ name, ...data }))
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 3);
+
+      // Calculate sales by month (last 6 months)
+      const salesByMonth = [];
+      const now = new Date();
+      for (let i = 5; i >= 0; i--) {
+        const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
+        
+        const monthTickets = confirmedTickets.filter(ticket => {
+          const ticketDate = new Date(ticket.created_at);
+          return ticketDate.getMonth() === monthDate.getMonth() && 
+                 ticketDate.getFullYear() === monthDate.getFullYear();
+        });
+
+        const monthRevenue = monthTickets.reduce((sum, ticket) => sum + (ticket.total || 0), 0);
+        const monthSales = monthTickets.reduce((sum, ticket) => sum + parseInt(ticket.quantity || '0'), 0);
+
+        salesByMonth.push({
+          month: monthName,
+          sales: monthSales,
+          revenue: monthRevenue
+        });
+      }
+
+      // Recent activity (last 4 transactions)
+      const recentActivity = confirmedTickets
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 4)
+        .map(ticket => ({
+          type: 'sale' as const,
+          event: ticket.EVENTS?.[0]?.title || 'Unknown Event',
+          amount: ticket.total || 0,
+          time: formatTimeAgo(ticket.created_at),
+          buyer_name: ticket.USERS?.[0]?.name || undefined
+        }));
+
+      setAnalyticsData({
+        totalRevenue,
+        totalTicketsSold,
+        totalEvents,
+        averageTicketPrice: Math.round(averageTicketPrice),
+        conversionRate: 3.2, // This would need more complex calculation
+        topSellingEvents,
+        salesByMonth,
+        recentActivity,
+        loading: false
+      });
+
+    } catch (error) {
+      console.error('Error fetching analytics data:', error);
+      setAnalyticsData(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 60) return `${diffInMinutes} minutes ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)} hours ago`;
+    return `${Math.floor(diffInMinutes / 1440)} days ago`;
   };
 
   const getActivityIcon = (type: string) => {
@@ -70,6 +221,23 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ detailed = false 
     }
   };
 
+  if (analyticsData.loading) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="grid grid-cols-2 gap-4">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {detailed && (
@@ -84,7 +252,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ detailed = false 
                     <div 
                       className="w-full bg-blue-500 rounded-t-sm"
                       style={{ 
-                        height: `${(data.revenue / Math.max(...analyticsData.salesByMonth.map(d => d.revenue))) * 100}%`,
+                        height: `${Math.max(...analyticsData.salesByMonth.map(d => d.revenue)) > 0 ? (data.revenue / Math.max(...analyticsData.salesByMonth.map(d => d.revenue))) * 100 : 10}%`,
                         minHeight: '20px'
                       }}
                     ></div>
@@ -93,30 +261,6 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ detailed = false 
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-
-          {/* Event Categories */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Event Categories</h3>
-            <div className="space-y-4">
-              {analyticsData.eventCategories.map((category, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-4 h-4 bg-blue-500 rounded-full"></div>
-                    <span className="text-sm font-medium text-gray-700">{category.category}</span>
-                  </div>
-                  <div className="flex items-center space-x-3">
-                    <div className="w-32 bg-gray-200 rounded-full h-2">
-                      <div 
-                        className="bg-blue-500 h-2 rounded-full"
-                        style={{ width: `${category.percentage}%` }}
-                      ></div>
-                    </div>
-                    <span className="text-sm text-gray-600 w-12">{category.percentage}%</span>
-                  </div>
-                </div>
-              ))}
             </div>
           </div>
         </>
@@ -130,18 +274,22 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ detailed = false 
         
         {detailed ? (
           <div className="space-y-4">
-            {analyticsData.topSellingEvents.map((event, index) => (
-              <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <h4 className="font-medium text-gray-900">{event.name}</h4>
-                  <p className="text-sm text-gray-600">{event.sales} tickets sold</p>
+            {analyticsData.topSellingEvents.length > 0 ? (
+              analyticsData.topSellingEvents.map((event, index) => (
+                <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                  <div>
+                    <h4 className="font-medium text-gray-900">{event.name}</h4>
+                    <p className="text-sm text-gray-600">{event.sales} tickets sold</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold text-gray-900">₵{event.revenue.toLocaleString()}</p>
+                    <p className="text-sm text-gray-600">Revenue</p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-semibold text-gray-900">₵{event.revenue.toLocaleString()}</p>
-                  <p className="text-sm text-gray-600">Revenue</p>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-gray-500 text-center py-4">No sales data available</p>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
@@ -169,25 +317,29 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ detailed = false 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Recent Activity</h3>
         <div className="space-y-4">
-          {analyticsData.recentActivity.map((activity, index) => (
-            <div key={index} className="flex items-center space-x-4">
-              {getActivityIcon(activity.type)}
-              <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">
-                  {activity.type === 'sale' ? 'New ticket sale' : 'Refund processed'}
-                </p>
-                <p className="text-sm text-gray-600">{activity.event}</p>
+          {analyticsData.recentActivity.length > 0 ? (
+            analyticsData.recentActivity.map((activity, index) => (
+              <div key={index} className="flex items-center space-x-4">
+                {getActivityIcon(activity.type)}
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-gray-900">
+                    {activity.type === 'sale' ? 'New ticket sale' : 'Refund processed'}
+                  </p>
+                  <p className="text-sm text-gray-600">{activity.event}</p>
+                </div>
+                <div className="text-right">
+                  <p className={`text-sm font-medium ${
+                    activity.amount > 0 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {activity.amount > 0 ? '+' : ''}₵{Math.abs(activity.amount)}
+                  </p>
+                  <p className="text-xs text-gray-500">{activity.time}</p>
+                </div>
               </div>
-              <div className="text-right">
-                <p className={`text-sm font-medium ${
-                  activity.amount > 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {activity.amount > 0 ? '+' : ''}₵{Math.abs(activity.amount)}
-                </p>
-                <p className="text-xs text-gray-500">{activity.time}</p>
-              </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            <p className="text-gray-500 text-center py-4">No recent activity</p>
+          )}
         </div>
       </div>
 

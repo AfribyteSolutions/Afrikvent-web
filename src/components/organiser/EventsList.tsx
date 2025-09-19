@@ -1,97 +1,131 @@
 // src/components/organiser/EventsList.tsx
-import React, { useState } from 'react';
+'use client';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { supabase } from '@/lib/supabaseClient';
+import type { User } from '@supabase/supabase-js';
 import CreateEventModal from './CreateEventModal';
 
 interface Event {
-  id: string;
+  id: number;
   title: string;
-  date: string;
-  location: string;
-  image: string;
-  status: 'draft' | 'published' | 'ended' | 'cancelled';
+  event_date: string | null;
+  location_name: string | null;
+  images: string[] | null;
+  event_status: string;
   ticketsSold: number;
   totalTickets: number;
   revenue: number;
-  price: number;
+  description: string | null;
 }
 
 interface EventsListProps {
   limit?: number;
   showCreateButton?: boolean;
+  user: User | null;
 }
 
 const EventsList: React.FC<EventsListProps> = ({ 
   limit, 
-  showCreateButton = true 
+  showCreateButton = true,
+  user
 }) => {
   const router = useRouter();
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock events data - replace with actual API call
-  const mockEvents: Event[] = [
-    {
-      id: '1',
-      title: 'Tech Conference 2024',
-      date: '2024-03-15',
-      location: 'Yaoundé Convention Center',
-      image: '/images/event1.jpg',
-      status: 'published',
-      ticketsSold: 150,
-      totalTickets: 500,
-      revenue: 150000,
-      price: 1000
-    },
-    {
-      id: '2',
-      title: 'Music Festival Summer',
-      date: '2024-04-20',
-      location: 'Douala Stadium',
-      image: '/images/event2.jpg',
-      status: 'published',
-      ticketsSold: 800,
-      totalTickets: 1000,
-      revenue: 400000,
-      price: 500
-    },
-    {
-      id: '3',
-      title: 'Business Workshop',
-      date: '2024-02-10',
-      location: 'Online',
-      image: '/images/event3.jpg',
-      status: 'ended',
-      ticketsSold: 75,
-      totalTickets: 100,
-      revenue: 37500,
-      price: 500
-    },
-    {
-      id: '4',
-      title: 'Art Exhibition',
-      date: '2024-05-01',
-      location: 'National Museum Bamenda',
-      image: '/images/event4.jpg',
-      status: 'draft',
-      ticketsSold: 0,
-      totalTickets: 200,
-      revenue: 0,
-      price: 250
+  useEffect(() => {
+    if (user) {
+      fetchEvents();
     }
-  ];
+  }, [user]);
 
-  const filteredEvents = limit 
-    ? mockEvents.slice(0, limit)
-    : mockEvents.filter(event => 
-        filterStatus === 'all' || event.status === filterStatus
+  const fetchEvents = async () => {
+    if (!user) return;
+
+    try {
+      setLoading(true);
+
+      // Fetch events with ticket statistics
+      const { data: eventsData, error: eventsError } = await supabase
+        .from('EVENTS')
+        .select(`
+          id,
+          title,
+          event_date,
+          location_name,
+          images,
+          event_status,
+          description
+        `)
+        .eq('organizer_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (eventsError) {
+        console.error('Error fetching events:', eventsError);
+        return;
+      }
+
+      // For each event, get ticket statistics
+      const eventsWithStats = await Promise.all(
+        (eventsData || []).map(async (event) => {
+          // Get total tickets available
+          const { data: ticketTypes } = await supabase
+            .from('TICKET_TYPES')
+            .select('max_quatity')
+            .eq('event_id', event.id);
+
+          const totalTickets = ticketTypes?.reduce((sum, type) => 
+            sum + (type.max_quatity || 0), 0
+          ) || 0;
+
+          // Get tickets sold and revenue
+          const { data: soldTickets } = await supabase
+            .from('TICKETS')
+            .select('quantity, total, ticket_status')
+            .eq('event_id', event.id)
+            .in('ticket_status', ['paid', 'used']);
+
+          const ticketsSold = soldTickets?.reduce((sum, ticket) => 
+            sum + parseInt(ticket.quantity || '0'), 0
+          ) || 0;
+
+          const revenue = soldTickets?.reduce((sum, ticket) => 
+            sum + (ticket.total || 0), 0
+          ) || 0;
+
+          return {
+            ...event,
+            ticketsSold,
+            totalTickets,
+            revenue
+          };
+        })
       );
 
-  const getStatusColor = (status: Event['status']) => {
+      setEvents(eventsWithStats);
+
+    } catch (error) {
+      console.error('Error fetching events:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredEvents = limit 
+    ? events.slice(0, limit)
+    : events.filter(event => 
+        filterStatus === 'all' || event.event_status === filterStatus
+      );
+
+  const getStatusColor = (status: string) => {
     switch (status) {
       case 'draft':
         return 'bg-gray-100 text-gray-800';
+      case 'active':
       case 'published':
         return 'bg-green-100 text-green-800';
       case 'ended':
@@ -103,10 +137,11 @@ const EventsList: React.FC<EventsListProps> = ({
     }
   };
 
-  const getStatusText = (status: Event['status']) => {
+  const getStatusText = (status: string) => {
     switch (status) {
       case 'draft':
         return 'Draft';
+      case 'active':
       case 'published':
         return 'Live';
       case 'ended':
@@ -118,7 +153,8 @@ const EventsList: React.FC<EventsListProps> = ({
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'No date set';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       day: 'numeric',
@@ -127,7 +163,7 @@ const EventsList: React.FC<EventsListProps> = ({
     });
   };
 
-  const handleEventClick = (eventId: string) => {
+  const handleEventClick = (eventId: number) => {
     router.push(`/organiser/events/${eventId}`);
   };
 
@@ -141,11 +177,68 @@ const EventsList: React.FC<EventsListProps> = ({
 
   const handleEventCreated = () => {
     setIsCreateModalOpen(false);
-    // You can add logic here to refresh the events list
-    // For example, refetch events from API
-    console.log('Event created successfully!');
-    // Optional: Show success message or refresh data
+    // Refresh events list
+    fetchEvents();
   };
+
+  const handleDeleteEvent = async (eventId: number, eventTitle: string) => {
+    if (!confirm(`Are you sure you want to delete "${eventTitle}"? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('EVENTS')
+        .delete()
+        .eq('id', eventId)
+        .eq('organizer_id', user?.id); // Extra security check
+
+      if (error) {
+        console.error('Error deleting event:', error);
+        alert('Failed to delete event. Please try again.');
+        return;
+      }
+
+      // Refresh events list
+      fetchEvents();
+      alert('Event deleted successfully.');
+
+    } catch (error) {
+      console.error('Error deleting event:', error);
+      alert('Failed to delete event. Please try again.');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <div className="animate-pulse">
+            <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/3"></div>
+          </div>
+        </div>
+        <div className="divide-y divide-gray-200">
+          {[1, 2, 3].map(i => (
+            <div key={i} className="p-6 animate-pulse">
+              <div className="flex items-start gap-4">
+                <div className="w-16 h-16 bg-gray-200 rounded-lg"></div>
+                <div className="flex-1">
+                  <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-1/2 mb-4"></div>
+                  <div className="grid grid-cols-3 gap-4">
+                    {[1, 2, 3].map(j => (
+                      <div key={j} className="h-8 bg-gray-200 rounded"></div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -170,7 +263,7 @@ const EventsList: React.FC<EventsListProps> = ({
 
           {!limit && (
             <div className="flex gap-2">
-              {['all', 'draft', 'published', 'ended'].map((status) => (
+              {['all', 'draft', 'active', 'ended'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setFilterStatus(status)}
@@ -180,7 +273,7 @@ const EventsList: React.FC<EventsListProps> = ({
                       : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  {status}
+                  {status === 'active' ? 'live' : status}
                 </button>
               ))}
             </div>
@@ -197,17 +290,18 @@ const EventsList: React.FC<EventsListProps> = ({
               >
                 <div className="flex items-start gap-4">
                   <div className="relative w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 bg-gray-200">
-                    <Image
-                      src={event.image}
-                      alt={event.title}
-                      fill
-                      className="object-cover"
-                      onError={(e) => {
-                        // Fallback for missing images
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                      }}
-                    />
+                    {event.images && event.images.length > 0 ? (
+                      <Image
+                        src={event.images[0]}
+                        alt={event.title}
+                        fill
+                        className="object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement;
+                          target.style.display = 'none';
+                        }}
+                      />
+                    ) : null}
                     <div className="absolute inset-0 flex items-center justify-center text-gray-400">
                       <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -218,15 +312,14 @@ const EventsList: React.FC<EventsListProps> = ({
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-semibold text-gray-900 truncate">{event.title}</h3>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.status)}`}>
-                        {getStatusText(event.status)}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(event.event_status)}`}>
+                        {getStatusText(event.event_status)}
                       </span>
                     </div>
                     
                     <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                      <span>📅 {formatDate(event.date)}</span>
-                      <span>📍 {event.location}</span>
-                      <span>💰 FCFA {event.price.toLocaleString()}</span>
+                      <span>📅 {formatDate(event.event_date)}</span>
+                      <span>📍 {event.location_name || 'Location TBD'}</span>
                     </div>
 
                     <div className="grid grid-cols-3 gap-4 text-sm">
@@ -236,14 +329,14 @@ const EventsList: React.FC<EventsListProps> = ({
                       </div>
                       <div>
                         <span className="text-gray-500">Revenue</span>
-                        <p className="font-medium">FCFA {event.revenue.toLocaleString()}</p>
+                        <p className="font-medium">₵{event.revenue.toLocaleString()}</p>
                       </div>
                       <div>
                         <span className="text-gray-500">Progress</span>
                         <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
                           <div 
                             className="bg-blue-500 h-2 rounded-full" 
-                            style={{ width: `${(event.ticketsSold / event.totalTickets) * 100}%` }}
+                            style={{ width: `${event.totalTickets > 0 ? (event.ticketsSold / event.totalTickets) * 100 : 0}%` }}
                           ></div>
                         </div>
                       </div>
@@ -266,11 +359,7 @@ const EventsList: React.FC<EventsListProps> = ({
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        // Handle delete - show confirmation dialog
-                        if (confirm('Are you sure you want to delete this event?')) {
-                          console.log('Delete event:', event.id);
-                          // Add delete logic here
-                        }
+                        handleDeleteEvent(event.id, event.title);
                       }}
                       className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       title="Delete Event"
@@ -319,6 +408,7 @@ const EventsList: React.FC<EventsListProps> = ({
         isOpen={isCreateModalOpen}
         onClose={handleModalClose}
         onSuccess={handleEventCreated}
+        user={user}
       />
     </>
   );

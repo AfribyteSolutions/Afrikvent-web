@@ -5,8 +5,45 @@ import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { supabase } from '@/lib/supabaseClient';
-import { MOCK_EVENTS } from '@/data/event/events';
+import CheckoutButton from '@/components/CheckOutButton';
+import { EnhancedTicket } from '@/types/ticket';
 import { Comment } from '@/types/comments';
+
+// Database types matching your schema
+interface Event {
+  id: string;
+  title: string;
+  description: string;
+  event_date: string;
+  start_time: string;
+  end_time: string;
+  location_name: string;
+  latitude: number;
+  longitude: number;
+  address: string;
+  is_sponsored: boolean;
+  sponsor_name: string | null;
+  sponsor_logo_url: string | null;
+  event_status: string;
+  is_featured: boolean;
+  created_at: string;
+  updated_at: string;
+  images: string | null;
+  organizer?: {
+    username: string;
+  };
+}
+
+interface TicketType {
+  id: string;
+  event_id: string;
+  name: string;
+  price: number;
+  max_quantity: number;
+  description: string | null;
+  ticket_image_url: string | null;
+  created_at: string;
+}
 
 // Raw shape returned from Supabase query (before mapping)
 interface CommentRow {
@@ -19,24 +56,81 @@ interface CommentRow {
   profiles: { username: string }[] | null;
 }
 
-// Helper to fetch event by ID
-const getEventById = (id: string) => {
-  return MOCK_EVENTS.find((e) => e.id.toString() === id);
-};
-
 export default function EventDetailPage() {
   const params = useParams();
   const id = params?.id as string;
 
-  const event = getEventById(id);
-
+  const [event, setEvent] = useState<Event | null>(null);
+  const [ticketTypes, setTicketTypes] = useState<TicketType[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [commentLoading, setCommentLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<{
+    id: string;
+    email?: string;
+    phone?: string;
+  } | null>(null);
 
-  // Fetch comments for this event
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUser(user);
+    };
+    getCurrentUser();
+  }, []);
+
+  // Fetch event and ticket types
   useEffect(() => {
     if (!id) return;
+
+    const fetchEventData = async () => {
+      try {
+        // Fetch event details with organizer info
+        const { data: eventData, error: eventError } = await supabase
+          .from('events')
+          .select(`
+            *,
+            organizer:profiles!events_user_id_fkey(username)
+          `)
+          .eq('id', id)
+          .single();
+
+        if (eventError) {
+          console.error('Error fetching event:', eventError);
+          return;
+        }
+
+        setEvent(eventData);
+
+        // Fetch ticket types for this event
+        const { data: ticketData, error: ticketError } = await supabase
+          .from('ticket_types')
+          .select('*')
+          .eq('event_id', id)
+          .order('price', { ascending: true });
+
+        if (ticketError) {
+          console.error('Error fetching tickets:', ticketError);
+        } else {
+          setTicketTypes(ticketData || []);
+        }
+
+      } catch (error) {
+        console.error('Error fetching event data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEventData();
+  }, [id]);
+
+  // Fetch comments
+  useEffect(() => {
+    if (!id) return;
+    
     const fetchComments = async () => {
       const { data, error } = await supabase
         .from('comments')
@@ -69,21 +163,16 @@ export default function EventDetailPage() {
   // Post new comment
   const handlePostComment = async () => {
     if (!newComment.trim()) return;
-    setLoading(true);
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
+    if (!currentUser) {
       alert('You must be logged in to comment.');
-      setLoading(false);
       return;
     }
 
+    setCommentLoading(true);
+
     const { data, error } = await supabase
       .from('comments')
-      .insert([{ content: newComment, event_id: id, user_id: user.id }])
+      .insert([{ content: newComment, event_id: id, user_id: currentUser.id }])
       .select(
         'id, content, created_at, user_id, event_id, parent_id, profiles(username)'
       )
@@ -101,12 +190,51 @@ export default function EventDetailPage() {
           : null,
       };
 
-      setComments([mapped, ...comments]); // prepend new comment
+      setComments([mapped, ...comments]);
       setNewComment('');
     }
 
-    setLoading(false);
+    setCommentLoading(false);
   };
+
+  // Handle successful ticket purchase
+  const handleTicketPurchaseSuccess = (tickets: EnhancedTicket[]) => {
+    alert(`Successfully purchased ${tickets.length} ticket(s)!`);
+    // You could redirect to a success page or show the tickets
+    // router.push('/my-tickets');
+  };
+
+  // Handle ticket purchase error
+  const handleTicketPurchaseError = (error: string) => {
+    alert(`Purchase failed: ${error}`);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  const formatTime = (timeString: string) => {
+    const [hours, minutes] = timeString.split(':');
+    const time = new Date();
+    time.setHours(parseInt(hours), parseInt(minutes));
+    return time.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+  };
+
+  const formatCurrency = (amount: number) => {
+    return `FCFA ${amount.toLocaleString()}`;
+  };
+
+
 
   if (!event) {
     return (
@@ -130,27 +258,35 @@ export default function EventDetailPage() {
     );
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-  };
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
       <div className="relative h-96 w-full">
-        <Image src={event.image} alt={event.title} fill className="object-cover" />
+        <Image 
+          src={event.images || '/images/event-placeholder.jpg'} 
+          alt={event.title} 
+          fill 
+          className="object-cover"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement;
+            target.src = '/images/event-placeholder.jpg';
+          }}
+        />
         <div className="absolute inset-0 bg-black bg-opacity-40 flex items-end">
           <div className="container mx-auto px-4 py-8">
             <h1 className="text-4xl md:text-6xl font-bold text-white mb-2">
               {event.title}
             </h1>
-            <p className="text-xl text-gray-200">{event.category}</p>
+            <div className="flex items-center gap-4">
+              <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-sm font-medium">
+                {event.event_status}
+              </span>
+              {event.is_featured && (
+                <span className="px-3 py-1 bg-yellow-500 text-white rounded-full text-sm font-medium">
+                  Featured
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -175,24 +311,36 @@ export default function EventDetailPage() {
                 <div className="space-y-3">
                   <div className="flex items-center">
                     <span className="text-gray-700">
-                      {formatDate(event.date)} at {event.time}
+                      {formatDate(event.event_date)} from {formatTime(event.start_time)} to {formatTime(event.end_time)}
                     </span>
                   </div>
                   <div className="flex items-center">
                     <span className="text-gray-700">
-                      {event.venue}, {event.location}
+                      {event.location_name}
                     </span>
                   </div>
                   <div className="flex items-center">
                     <span className="text-gray-700">
-                      Organized by {event.organizer}
+                      {event.address}
                     </span>
                   </div>
+                  <div className="flex items-center">
+                    <span className="text-gray-700">
+                      Organized by {event.organizer?.username || 'Unknown'}
+                    </span>
+                  </div>
+                  {event.is_sponsored && event.sponsor_name && (
+                    <div className="flex items-center">
+                      <span className="text-gray-700">
+                        Sponsored by {event.sponsor_name}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
-            {/* 💬 Comments Section */}
+            {/* Comments Section */}
             <div className="mt-8 bg-white rounded-xl p-8 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">Comments</h3>
 
@@ -207,11 +355,16 @@ export default function EventDetailPage() {
                 ></textarea>
                 <button
                   onClick={handlePostComment}
-                  disabled={loading}
+                  disabled={commentLoading || !currentUser}
                   className="mt-3 bg-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                 >
-                  {loading ? 'Posting...' : 'Post Comment'}
+                  {commentLoading ? 'Posting...' : 'Post Comment'}
                 </button>
+                {!currentUser && (
+                  <p className="text-sm text-gray-500 mt-2">
+                    Please log in to post comments.
+                  </p>
+                )}
               </div>
 
               {/* Comment List */}
@@ -239,42 +392,117 @@ export default function EventDetailPage() {
 
           {/* Sidebar */}
           <div className="space-y-6">
+            {/* Ticket Types */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                Get Tickets
+                Tickets Available
               </h3>
-              <div className="text-3xl font-bold text-blue-500 mb-4">
-                {event.price}
-              </div>
-              <div className="space-y-3">
-                <button className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-colors">
-                  Buy Tickets
-                </button>
-                <div className="text-center">
-                  <p className="text-sm text-gray-600">Or dial:</p>
-                  <p className="font-mono text-lg font-semibold text-gray-900">
-                    {event.phone}
+              
+              {ticketTypes.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500 mb-4">No tickets available</p>
+                  <p className="text-sm text-gray-400">
+                    Contact the organizer for more information
                   </p>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-4">
+                  {ticketTypes.map((ticket) => (
+                    <div key={ticket.id} className="border border-gray-200 rounded-lg p-4">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-semibold text-gray-900">{ticket.name}</h4>
+                          {ticket.description && (
+                            <p className="text-sm text-gray-600 mt-1">{ticket.description}</p>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xl font-bold text-blue-600">
+                            {formatCurrency(ticket.price)}
+                          </div>
+                          <p className="text-xs text-gray-500">
+                            {ticket.max_quantity} available
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {currentUser ? (
+                        <CheckoutButton
+                          ticketId={parseInt(ticket.id)}
+                          userId={currentUser.id}
+                          phone={currentUser.phone || ''}
+                          quantity={1}
+                          onSuccess={handleTicketPurchaseSuccess}
+                          onError={handleTicketPurchaseError}
+                          className="w-full"
+                          disabled={ticket.max_quantity === 0}
+                        />
+                      ) : (
+                        <div className="w-full bg-gray-100 text-gray-500 py-3 px-4 rounded-lg text-center">
+                          Please log in to purchase tickets
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
+            {/* Share Event */}
             <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
               <h3 className="text-lg font-semibold text-gray-900 mb-4">
                 Share Event
               </h3>
               <div className="flex gap-2">
-                <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm transition-colors">
+                <button 
+                  onClick={() => {
+                    const url = window.location.href;
+                    const text = `Check out this event: ${event.title}`;
+                    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
+                    window.open(facebookUrl, '_blank');
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm transition-colors"
+                >
                   Facebook
                 </button>
-                <button className="flex-1 bg-blue-400 hover:bg-blue-500 text-white py-2 px-3 rounded text-sm transition-colors">
+                <button 
+                  onClick={() => {
+                    const url = window.location.href;
+                    const text = `Check out this event: ${event.title}`;
+                    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+                    window.open(twitterUrl, '_blank');
+                  }}
+                  className="flex-1 bg-blue-400 hover:bg-blue-500 text-white py-2 px-3 rounded text-sm transition-colors"
+                >
                   Twitter
                 </button>
-                <button className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded text-sm transition-colors">
+                <button 
+                  onClick={() => {
+                    const url = window.location.href;
+                    const text = `Check out this event: ${event.title} - ${url}`;
+                    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                    window.open(whatsappUrl, '_blank');
+                  }}
+                  className="flex-1 bg-green-500 hover:bg-green-600 text-white py-2 px-3 rounded text-sm transition-colors"
+                >
                   WhatsApp
                 </button>
               </div>
             </div>
+
+            {/* Event Map (if coordinates available) */}
+            {event.latitude && event.longitude && (
+              <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  Location
+                </h3>
+                <div className="aspect-video bg-gray-200 rounded-lg flex items-center justify-center">
+                  <p className="text-gray-500 text-sm">Map placeholder</p>
+                  {/* You can integrate Google Maps or another map service here */}
+                </div>
+                <p className="text-sm text-gray-600 mt-2">{event.address}</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

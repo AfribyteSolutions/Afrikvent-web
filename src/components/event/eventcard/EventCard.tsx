@@ -2,8 +2,8 @@
 
 import React from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";  // ✅ import router
-import { Event } from "@/types/event";
+import { useRouter } from "next/navigation";
+import { Event } from "@/types/index"; // ✅ Use the correct Event type that matches your database
 
 interface EventCardProps {
   event: Event;
@@ -16,9 +16,10 @@ const EventCard: React.FC<EventCardProps> = ({
   onClick,
   className = "",
 }) => {
-  const router = useRouter(); // ✅ get router instance
+  const router = useRouter();
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return "TBA"; // Handle null dates
     const date = new Date(dateString);
     return date.toLocaleDateString("en-US", {
       weekday: "short",
@@ -32,11 +33,30 @@ const EventCard: React.FC<EventCardProps> = ({
     return price > 0 ? `₵${price}+` : "Free";
   };
 
+  // Handle nullable properties safely
+  const eventDate = event.date;
+  const eventImage = (() => {
+    if (event.image) {
+      // Handle both string and string array
+      if (Array.isArray(event.image)) {
+        return event.image[0] || "/images/event-placeholder.jpg";
+      }
+      return event.image;
+    }
+    if (event.images && Array.isArray(event.images)) {
+      return event.images[0] || "/images/event-placeholder.jpg";
+    }
+    return "/images/event-placeholder.jpg";
+  })();
+  const eventLocation = event.location || "Location TBA";
+  const eventVenue = event.venue || "";
+  const eventPrice = event.price || 0;
+
   const handleClick = () => {
     if (onClick) {
-      onClick(event); // ✅ If parent passed custom handler, use it
+      onClick(event); // If parent passed custom handler, use it
     } else {
-      router.push(`/${event.id}`); // ✅ Navigate to detail page
+      router.push(`/events/${event.id}`); // ✅ Navigate to events detail page (using number id)
     }
   };
 
@@ -48,7 +68,7 @@ const EventCard: React.FC<EventCardProps> = ({
       {/* Event Image */}
       <div className="relative h-32 w-full mb-3 rounded-lg overflow-hidden border border-transparent group-hover:border-blue-500 transition-all duration-300 border-4">
         <Image
-          src={event.image}
+          src={eventImage}
           alt={event.title}
           fill
           className="object-cover rounded-lg"
@@ -62,18 +82,18 @@ const EventCard: React.FC<EventCardProps> = ({
         </h3>
 
         <div className="text-xs text-blue-400 font-medium">
-          {formatDate(event.date)}
+          {formatDate(eventDate)}
         </div>
 
         <div className="text-xs text-gray-400">
-          {event.venue && event.location
-            ? `${event.venue} / ${event.location}`
-            : event.location}
+          {eventVenue && eventLocation
+            ? `${eventVenue} / ${eventLocation}`
+            : eventLocation}
         </div>
 
         <div className="pt-2 flex justify-start">
           <span className="inline-block bg-blue-500 text-white text-xs font-semibold px-2 py-1 rounded-full shadow-md">
-            {formatPrice(event.price || "Free")}
+            {formatPrice(eventPrice)}
           </span>
         </div>
       </div>

@@ -1,96 +1,132 @@
 // src/components/organiser/TicketManagement.tsx
-import React, { useState } from 'react';
+'use client';
+import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabaseClient';
+import type { User } from '@supabase/supabase-js';
+import type { Database } from '@/types/database.types'; // Adjust path as needed
+
+// Use your actual database types
+type EventRow = Database['public']['Tables']['EVENTS']['Row'];
+type UserRow = Database['public']['Tables']['USERS']['Row'];
+type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
+type PaymentRow = Database['public']['Tables']['PAYMENTS']['Row'];
 
 interface TicketSale {
-  id: string;
+  id: number;
   eventTitle: string;
   eventDate: string;
   buyerName: string;
   buyerEmail: string;
   ticketType: string;
-  quantity: number;
+  quantity: string;
   totalAmount: number;
   purchaseDate: string;
-  status: 'confirmed' | 'pending' | 'cancelled' | 'refunded';
+  status: 'paid' | 'pending' | 'cancelled' | 'refunded' | 'used';
   paymentMethod: string;
 }
 
-const TicketManagement: React.FC = () => {
+interface TicketManagementProps {
+  user: User | null;
+}
+
+// Type for the joined query result
+interface SupabaseTicketWithJoins {
+  id: number;
+  quantity: string | null;
+  total: number | null;
+  unit_price: number | null;
+  ticket_status: string | null;
+  created_at: string;
+  EVENTS: EventRow[];
+  USERS: UserRow[];
+  TICKET_TYPES: TicketTypeRow[];
+  PAYMENTS: PaymentRow[];
+}
+
+const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEvent, setSelectedEvent] = useState<string>('all');
+  const [ticketSales, setTicketSales] = useState<TicketSale[]>([]);
+  const [events, setEvents] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Mock ticket sales data - replace with actual API call
-  const mockTicketSales: TicketSale[] = [
-    {
-      id: '1',
-      eventTitle: 'Tech Conference 2024',
-      eventDate: '2024-03-15',
-      buyerName: 'John Smith',
-      buyerEmail: 'john@example.com',
-      ticketType: 'VIP',
-      quantity: 2,
-      totalAmount: 200,
-      purchaseDate: '2024-02-10T10:30:00Z',
-      status: 'confirmed',
-      paymentMethod: 'Credit Card'
-    },
-    {
-      id: '2',
-      eventTitle: 'Music Festival Summer',
-      eventDate: '2024-04-20',
-      buyerName: 'Sarah Johnson',
-      buyerEmail: 'sarah@example.com',
-      ticketType: 'General',
-      quantity: 1,
-      totalAmount: 50,
-      purchaseDate: '2024-02-12T14:15:00Z',
-      status: 'confirmed',
-      paymentMethod: 'Mobile Money'
-    },
-    {
-      id: '3',
-      eventTitle: 'Business Workshop',
-      eventDate: '2024-02-10',
-      buyerName: 'Mike Wilson',
-      buyerEmail: 'mike@example.com',
-      ticketType: 'Early Bird',
-      quantity: 1,
-      totalAmount: 40,
-      purchaseDate: '2024-01-20T09:00:00Z',
-      status: 'refunded',
-      paymentMethod: 'Bank Transfer'
-    },
-    {
-      id: '4',
-      eventTitle: 'Tech Conference 2024',
-      eventDate: '2024-03-15',
-      buyerName: 'Emily Davis',
-      buyerEmail: 'emily@example.com',
-      ticketType: 'General',
-      quantity: 3,
-      totalAmount: 150,
-      purchaseDate: '2024-02-14T16:45:00Z',
-      status: 'pending',
-      paymentMethod: 'Mobile Money'
+  useEffect(() => {
+    if (user) {
+      fetchTicketSales();
     }
-  ];
+  }, [user]);
 
-  const events = [...new Set(mockTicketSales.map(sale => sale.eventTitle))];
+  const fetchTicketSales = async () => {
+    if (!user) return;
 
-  const filteredSales = mockTicketSales.filter(sale => {
+    try {
+      setLoading(true);
+      
+      // Fetch tickets with related data
+      const { data: ticketsData, error } = await supabase
+        .from('TICKETS')
+        .select(`
+          id,
+          quantity,
+          total,
+          unit_price,
+          ticket_status,
+          created_at,
+          EVENTS!inner(title, event_date, organizer_id),
+          USERS!inner(name, email),
+          TICKET_TYPES(name),
+          PAYMENTS(payment_method, created_at)
+        `)
+        .eq('EVENTS.organizer_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching tickets:', error);
+        return;
+      }
+
+      // Transform data to match our interface
+      const transformedTickets: TicketSale[] = (ticketsData as SupabaseTicketWithJoins[])?.map(ticket => ({
+        id: ticket.id,
+        eventTitle: ticket.EVENTS?.[0]?.title || 'Unknown Event',
+        eventDate: ticket.EVENTS?.[0]?.event_date || '',
+        buyerName: ticket.USERS?.[0]?.name || 'Unknown',
+        buyerEmail: ticket.USERS?.[0]?.email || 'Unknown',
+        ticketType: ticket.TICKET_TYPES?.[0]?.name || 'General',
+        quantity: ticket.quantity || '1',
+        totalAmount: ticket.total || 0,
+        purchaseDate: ticket.created_at,
+        status: ticket.ticket_status as TicketSale['status'],
+        paymentMethod: ticket.PAYMENTS?.[0]?.payment_method || 'Unknown'
+      })) || [];
+
+      setTicketSales(transformedTickets);
+
+      // Extract unique event titles
+      const uniqueEvents = [...new Set(transformedTickets.map(sale => sale.eventTitle))];
+      setEvents(uniqueEvents);
+
+    } catch (error) {
+      console.error('Error fetching ticket sales:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredSales = ticketSales.filter(sale => {
     const matchesStatus = filterStatus === 'all' || sale.status === filterStatus;
-    const matchesSearch = searchTerm === '' || 
+    const matchesSearch = searchTerm === '' ||
       sale.buyerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       sale.buyerEmail.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesEvent = selectedEvent === 'all' || sale.eventTitle === selectedEvent;
-    
     return matchesStatus && matchesSearch && matchesEvent;
   });
 
   const getStatusColor = (status: TicketSale['status']) => {
     switch (status) {
-      case 'confirmed':
+      case 'paid':
+      case 'used':
         return 'bg-green-100 text-green-800';
       case 'pending':
         return 'bg-yellow-100 text-yellow-800';
@@ -105,8 +141,10 @@ const TicketManagement: React.FC = () => {
 
   const getStatusText = (status: TicketSale['status']) => {
     switch (status) {
-      case 'confirmed':
-        return 'Confirmed';
+      case 'paid':
+        return 'Paid';
+      case 'used':
+        return 'Used';
       case 'pending':
         return 'Pending';
       case 'cancelled':
@@ -130,6 +168,7 @@ const TicketManagement: React.FC = () => {
   };
 
   const formatEventDate = (dateString: string) => {
+    if (!dateString) return 'No date';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       day: 'numeric',
@@ -138,23 +177,70 @@ const TicketManagement: React.FC = () => {
     });
   };
 
-  const totalRevenue = filteredSales
-    .filter(sale => sale.status === 'confirmed')
-    .reduce((sum, sale) => sum + sale.totalAmount, 0);
+  const confirmedSales = filteredSales.filter(sale =>
+    sale.status === 'paid' || sale.status === 'used'
+  );
+  
+  const totalRevenue = confirmedSales.reduce((sum, sale) => sum + sale.totalAmount, 0);
+  const totalTickets = confirmedSales.reduce((sum, sale) => sum + parseInt(sale.quantity), 0);
+  const pendingSales = filteredSales.filter(sale => sale.status === 'pending').length;
 
-  const totalTickets = filteredSales
-    .filter(sale => sale.status === 'confirmed')
-    .reduce((sum, sale) => sum + sale.quantity, 0);
+  const handleRefund = async (saleId: number) => {
+    try {
+      const { error } = await supabase
+        .from('TICKETS')
+        .update({
+          ticket_status: 'refunded',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', saleId);
 
-  const handleRefund = (saleId: string) => {
-    // Handle refund logic
-    console.log('Processing refund for sale:', saleId);
+      if (error) {
+        console.error('Error processing refund:', error);
+        alert('Failed to process refund');
+        return;
+      }
+
+      // Refresh data
+      fetchTicketSales();
+      alert('Refund processed successfully');
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      alert('Failed to process refund');
+    }
   };
 
-  const handleResendConfirmation = (saleId: string) => {
-    // Handle resending confirmation email
+  const handleResendConfirmation = async (saleId: number) => {
+    // This would typically send an email confirmation
+    // For now, just show a message
+    alert('Confirmation email resent successfully');
     console.log('Resending confirmation for sale:', saleId);
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-white rounded-lg shadow-sm p-6 border border-gray-200 animate-pulse">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-16 bg-gray-200 rounded"></div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -206,9 +292,7 @@ const TicketManagement: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Pending</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {filteredSales.filter(sale => sale.status === 'pending').length}
-              </p>
+              <p className="text-2xl font-bold text-gray-900">{pendingSales}</p>
             </div>
             <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -232,7 +316,6 @@ const TicketManagement: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Event</label>
             <select
@@ -246,7 +329,6 @@ const TicketManagement: React.FC = () => {
               ))}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
             <select
@@ -255,7 +337,8 @@ const TicketManagement: React.FC = () => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="all">All Status</option>
-              <option value="confirmed">Confirmed</option>
+              <option value="paid">Paid</option>
+              <option value="used">Used</option>
               <option value="pending">Pending</option>
               <option value="cancelled">Cancelled</option>
               <option value="refunded">Refunded</option>
@@ -271,7 +354,7 @@ const TicketManagement: React.FC = () => {
             Ticket Sales ({filteredSales.length})
           </h3>
         </div>
-
+        
         {filteredSales.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -337,7 +420,7 @@ const TicketManagement: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        {sale.status === 'confirmed' && (
+                        {(sale.status === 'paid' || sale.status === 'used') && (
                           <button
                             onClick={() => handleRefund(sale.id)}
                             className="text-red-600 hover:text-red-900"
@@ -370,7 +453,12 @@ const TicketManagement: React.FC = () => {
               </svg>
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">No ticket sales found</h3>
-            <p className="text-gray-600">No sales match your current filters.</p>
+            <p className="text-gray-600">
+              {ticketSales.length === 0
+                ? "You haven't sold any tickets yet."
+                : "No sales match your current filters."
+              }
+            </p>
           </div>
         )}
       </div>

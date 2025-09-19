@@ -1,19 +1,19 @@
-// src/utils/userUtils.ts
-import { User as SupabaseUser } from '@supabase/auth-helpers-react';
-import { User as TicketUser } from '@/types/ticket';
+// utils/userUtils.ts
+import { User } from "@/types";
 
-export const transformSupabaseUser = (supabaseUser: SupabaseUser | null): TicketUser | undefined => {
-  if (!supabaseUser || !supabaseUser.email) return undefined;
+export function transformSupabaseUser(user: User | null) {
+  if (!user) return null;
   
   return {
-    id: supabaseUser.id,
-    email: supabaseUser.email, // Now guaranteed to be string
-    // Extract name from user_metadata or use email as fallback
-    name: supabaseUser.user_metadata?.name || 
-          supabaseUser.user_metadata?.full_name || 
-          supabaseUser.user_metadata?.display_name ||
-          supabaseUser.email.split('@')[0] || 
-          'User',
-    // Removed user_metadata and app_metadata since they're not in your User type
+    id: user.id,
+    email: user.email,
+    phone: user.phone,
+    name: user.name || user.email?.split('@')[0] || 'User',
+    image_url: user.image_url,
+    role: user.role || 'user',
+    is_active: user.is_active ?? true,
+    created_at: user.created_at,
+    updated_at: user.updated_at,
+    last_login_at: user.last_login_at,
   };
-};
+}

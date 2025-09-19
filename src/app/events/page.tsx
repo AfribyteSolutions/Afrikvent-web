@@ -1,29 +1,29 @@
-// src/app/myevents/page.tsx
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Event } from "@/types/event";
+import { supabase } from "@/lib/supabaseClient";
 import EventCard from "@/components/event/eventcard/EventCard";
-import { useRecommendedEvents } from "@/hooks/useEvents";
-import { useUser } from "@supabase/auth-helpers-react";
 import { TicketsSection } from "@/components/tickets/TicketSection";
-import { UserTicket } from "@/types/ticket";
-import { transformSupabaseUser } from "@/utils/userUtils";
 
-interface FilterState {
-  search: string;
-  location: string;
-  priceRange: string;
-  dateRange: string;
-}
+// Import your generated DB types
+import { Database } from "@/types/database.types";
+import { Event, UserTicket, User, FilterState } from "@/types/index";
+
+// Correct table row types using UPPERCASE table names from your schema
+type EventRow = Database["public"]["Tables"]["EVENTS"]["Row"];
+type TicketTypeRow = Database["public"]["Tables"]["TICKET_TYPES"]["Row"];
+type PaymentTicketRow = Database["public"]["Tables"]["PAYMENT_TICKETS"]["Row"];
+type TicketRow = Database["public"]["Tables"]["TICKETS"]["Row"];
 
 export default function MyEvents() {
   const router = useRouter();
-  const { events: allEvents, loading, error } = useRecommendedEvents();
-  const supabaseUser = useUser();
-  const user = transformSupabaseUser(supabaseUser);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<"events" | "tickets">("events");
+  const [allEvents, setAllEvents] = useState<Event[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
+  const [userTickets, setUserTickets] = useState<UserTicket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     location: "",
@@ -31,199 +31,217 @@ export default function MyEvents() {
     dateRange: "",
   });
 
-  // Sample tickets with varied data for testing - replace with real Supabase data
-  const [userTickets] = useState<UserTicket[]>([
-    {
-      id: "1",
-      eventId: "event1",
-      eventTitle: "Afrobeats Summer Festival 2024",
-      eventDate: "2024-12-25T20:00:00.000Z",
-      eventLocation: "National Theatre of Ghana, Accra",
-      ticketType: "VIP Gold",
-      quantity: 2,
-      totalPrice: 150,
-      purchaseDate: "2024-02-10T10:30:00.000Z",
-      status: "confirmed",
-      userId: supabaseUser?.id,
-    },
-    {
-      id: "2",
-      eventId: "event2",
-      eventTitle: "Ghana Tech Summit 2024",
-      eventDate: "2024-11-15T09:00:00.000Z",
-      eventLocation: "Accra International Conference Centre",
-      ticketType: "Standard",
-      quantity: 1,
-      totalPrice: 75,
-      purchaseDate: "2024-02-05T14:15:00.000Z",
-      status: "confirmed",
-      userId: supabaseUser?.id,
-    },
-    {
-      id: "3",
-      eventId: "event3",
-      eventTitle: "West African Food & Culture Expo",
-      eventDate: "2024-10-30T16:00:00.000Z",
-      eventLocation: "Labadi Beach Hotel, Accra",
-      ticketType: "Premium",
-      quantity: 3,
-      totalPrice: 225,
-      purchaseDate: "2024-01-20T09:45:00.000Z",
-      status: "confirmed",
-      userId: supabaseUser?.id,
-    },
-    {
-      id: "4",
-      eventId: "event4",
-      eventTitle: "Independence Day Concert 2024",
-      eventDate: "2024-03-06T19:00:00.000Z",
-      eventLocation: "Independence Square, Accra",
-      ticketType: "General Admission",
-      quantity: 4,
-      totalPrice: 100,
-      purchaseDate: "2024-02-01T11:20:00.000Z",
-      status: "confirmed",
-      userId: supabaseUser?.id,
-    },
-    {
-      id: "5",
-      eventId: "event5",
-      eventTitle: "African Fashion Week Ghana",
-      eventDate: "2024-08-15T18:30:00.000Z",
-      eventLocation: "Movenpick Ambassador Hotel, Accra",
-      ticketType: "VIP Silver",
-      quantity: 2,
-      totalPrice: 200,
-      purchaseDate: "2024-01-15T16:00:00.000Z",
-      status: "confirmed",
-      userId: supabaseUser?.id,
-    },
-  ]);
-
+  // Get current user
   useEffect(() => {
-    if (allEvents) {
-      applyFilters(allEvents, filters);
-    }
-  }, [allEvents, filters]);
+    const getCurrentUser = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.error("Error getting user:", error);
+        return;
+      }
+      if (data?.user) {
+        setCurrentUser({
+          id: data.user.id,
+          email: data.user.email ?? undefined,
+          phone: (data.user.user_metadata?.phone as string) ?? undefined,
+          name: (data.user.user_metadata?.name as string) ?? undefined,
+        });
+      }
+    };
+    getCurrentUser();
+  }, []);
 
-  const applyFilters = (events: Event[], currentFilters: FilterState) => {
-    let filtered = [...events];
+  // Fetch events - using correct table name
+  useEffect(() => {
+    const fetchEvents = async () => {
+      try {
+        setLoading(true);
 
-    // Search by name
-    if (currentFilters.search) {
-      filtered = filtered.filter((event) =>
-        event.title.toLowerCase().includes(currentFilters.search.toLowerCase())
-      );
-    }
+        const { data: eventsData, error: eventsError } = await supabase
+          .from("EVENTS") // Correct table name
+          .select(
+            `
+            *,
+            TICKET_TYPES(*)
+          `
+          )
+          .eq("event_status", "active")
+          .order("event_date", { ascending: true });
 
-    // Filter by location
-    if (currentFilters.location) {
-      filtered = filtered.filter((event) =>
-        event.location
-          ?.toLowerCase()
-          .includes(currentFilters.location.toLowerCase())
-      );
-    }
-
-    // Filter by price range
-    if (currentFilters.priceRange) {
-      filtered = filtered.filter((event) => {
-        const price = typeof event.price === "number" ? event.price : 0;
-        switch (currentFilters.priceRange) {
-          case "free":
-            return price === 0;
-          case "0-50":
-            return price > 0 && price <= 50;
-          case "50-200":
-            return price > 50 && price <= 200;
-          case "200+":
-            return price > 200;
-          default:
-            return true;
+        if (eventsError) {
+          console.error("Events error:", eventsError);
+          throw eventsError;
         }
-      });
-    }
 
-    // Filter by date range
-    if (currentFilters.dateRange) {
-      const now = new Date();
-      filtered = filtered.filter((event) => {
-        const eventDate = new Date(event.date);
-        switch (currentFilters.dateRange) {
-          case "today":
-            return eventDate.toDateString() === now.toDateString();
-          case "week":
-            const weekFromNow = new Date(
-              now.getTime() + 7 * 24 * 60 * 60 * 1000
-            );
-            return eventDate >= now && eventDate <= weekFromNow;
-          case "month":
-            const monthFromNow = new Date(
-              now.getFullYear(),
-              now.getMonth() + 1,
-              now.getDate()
-            );
-            return eventDate >= now && eventDate <= monthFromNow;
-          case "future":
-            return eventDate >= now;
-          default:
-            return true;
+        // Define the nested structure type for better type safety
+        interface EventWithTicketTypes extends EventRow {
+          TICKET_TYPES: TicketTypeRow[];
         }
-      });
-    }
 
-    setFilteredEvents(filtered);
-  };
+        const transformedEvents: Event[] = (eventsData || []).map(
+          (event: EventWithTicketTypes) => {
+            const ticketTypes = event.TICKET_TYPES || [];
+            const minPrice = ticketTypes.length > 0
+              ? Math.min(...ticketTypes.map((t) => t.price || 0))
+              : 0;
 
-  const handleFilterChange = (key: keyof FilterState, value: string) => {
-    const newFilters = { ...filters, [key]: value };
-    setFilters(newFilters);
-  };
+            return {
+              id: event.id,
+              title: event.title,
+              date: event.event_date,
+              time: event.start_time,
+              location: event.location_name || "",
+              image: event.images || "/images/event-placeholder.jpg",
+              price: minPrice,
+              category: event.event_status,
+              venue: event.address || "",
+              organizer: event.sponsor_name || "Unknown Organizer",
+              description: event.description || "",
+              ticketOptions: ticketTypes.map(tt => ({
+                id: tt.id,
+                name: tt.name,
+                description: tt.description,
+                price: tt.price,
+                max_quatity: tt.max_quatity,
+                ticket_image_url: tt.ticket_image_url,
+                event_id: tt.event_id,
+                created_at: tt.created_at,
+              })),
+              // Additional fields
+              address: event.address,
+              end_time: event.end_time,
+              event_status: event.event_status,
+              images: event.images,
+              is_featured: event.is_featured,
+              is_sponsored: event.is_sponsored,
+              latitude: event.latitude,
+              longitude: event.longitude,
+              organizer_id: event.organizer_id,
+              sponsor_logo_url: event.sponsor_logo_url,
+              sponsor_name: event.sponsor_name,
+              created_at: event.created_at,
+              updated_at: event.updated_at,
+            };
+          }
+        );
 
-  const clearFilters = () => {
-    setFilters({
-      search: "",
-      location: "",
-      priceRange: "",
-      dateRange: "",
-    });
-  };
+        setAllEvents(transformedEvents);
+        setFilteredEvents(transformedEvents);
+      } catch (err) {
+        console.error("Error fetching events:", err);
+        setError("Failed to load events");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchEvents();
+  }, []);
+
+  // Fetch user tickets when switching to tickets tab
+  useEffect(() => {
+    const fetchUserTickets = async () => {
+      if (!currentUser || activeTab !== "tickets") return;
+
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Fetch tickets for the user
+        const { data: ticketsData, error: ticketsError } = await supabase
+          .from("TICKETS")
+          .select(
+            `
+            *,
+            TICKET_TYPES(
+              *,
+              EVENTS(*)
+            )
+          `
+          )
+          .eq("user_id", currentUser.id)
+          .order("created_at", { ascending: false });
+
+        if (ticketsError) {
+          console.error("Tickets error:", ticketsError);
+          throw ticketsError;
+        }
+
+        // Define the nested structure type for better type safety
+        interface TicketWithRelations extends TicketRow {
+          TICKET_TYPES: TicketTypeRow & { 
+            EVENTS: EventRow 
+          };
+        }
+
+        const transformedTickets: UserTicket[] = (ticketsData || []).map(
+          (ticket: TicketWithRelations) => {
+            const ticketType = ticket.TICKET_TYPES;
+            const event = ticketType?.EVENTS;
+
+            return {
+              id: ticket.id,
+              eventId: event?.id || 0,
+              eventTitle: event?.title || "Unknown Event",
+              eventDate: event?.event_date || "",
+              eventLocation: event?.location_name || "",
+              ticketType: ticketType?.name || "General",
+              quantity: parseInt(ticket.quantity || "1"),
+              totalPrice: ticket.total || 0,
+              purchaseDate: ticket.created_at,
+              status: (ticket.ticket_status as UserTicket["status"]) || "confirmed",
+              userId: ticket.user_id || "",
+              // Convert null to undefined to match UserTicket interface
+              qr_code_data: ticket.qr_code_data || undefined,
+              unit_price: ticket.unit_price || undefined,
+              used_at: ticket.used_at || undefined,
+              scanned_by: ticket.scanned_by || undefined,
+              ticket_status: ticket.ticket_status || undefined,
+            } as UserTicket; // Type assertion to ensure compatibility
+          }
+        );
+
+        setUserTickets(transformedTickets);
+      } catch (err) {
+        console.error("Error fetching user tickets:", err);
+        setError("Failed to load tickets");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchUserTickets();
+  }, [currentUser, activeTab]);
 
   const handleEventClick = (event: Event) => {
     router.push(`/events/${event.id}`);
   };
 
-  const handleTicketTabChange = (tab: 'active' | 'expired') => {
-    // You can add analytics or other logic here
-    console.log(`User switched to ${tab} tickets`);
+  // Tab switching function
+  const handleTabChange = (tab: "events" | "tickets") => {
+    setActiveTab(tab);
+    // Reset error when switching tabs
+    setError(null);
   };
 
-  if (loading) {
-    return (
-      <main className="w-full min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 py-16">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-300 rounded w-48 mb-8"></div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-white rounded-lg p-4">
-                  <div className="bg-gray-300 rounded h-32 mb-4"></div>
-                  <div className="h-4 bg-gray-300 rounded mb-2"></div>
-                  <div className="h-4 bg-gray-300 rounded w-3/4"></div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </main>
-    );
-  }
+  // Handle ticket sub-tab changes
+  const handleTicketSubTabChange = (subTab: 'active' | 'expired') => {
+    console.log('Ticket sub-tab changed to:', subTab);
+    // You can add additional logic here if needed
+  };
 
-  if (error) {
+  
+  if (error && activeTab === "events") {
     return (
-      <main className="w-full min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 py-16 text-center">
-          <p className="text-red-600 text-lg">{error}</p>
+      <main className="w-full min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
         </div>
       </main>
     );
@@ -232,141 +250,94 @@ export default function MyEvents() {
   return (
     <main className="w-full min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Page Header with Tabs */}
+        {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-6">My Events</h1>
+          <h1 className="text-3xl font-bold text-gray-900">My Events</h1>
+          <p className="text-gray-600 mt-2">Manage your events and tickets</p>
+        </div>
 
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
-              <button
-                onClick={() => setActiveTab("events")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === "events"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                All Events
-              </button>
-              <button
-                onClick={() => setActiveTab("tickets")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                  activeTab === "tickets"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                My Tickets ({userTickets.length})
-              </button>
-            </nav>
+        {/* Tab Navigation */}
+        <div className="mb-6">
+          <div className="flex space-x-4 border-b border-gray-200">
+            <button
+              onClick={() => handleTabChange("events")}
+              className={`py-2 px-4 font-medium text-sm relative ${
+                activeTab === "events"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              Events 
+              <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+                {allEvents.length}
+              </span>
+            </button>
+            <button
+              onClick={() => handleTabChange("tickets")}
+              className={`py-2 px-4 font-medium text-sm relative ${
+                activeTab === "tickets"
+                  ? "text-blue-600 border-b-2 border-blue-600"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              My Tickets
+              <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
+                {userTickets.length}
+              </span>
+            </button>
           </div>
         </div>
 
+        {/* Content */}
         {activeTab === "events" ? (
-          <>
-            {/* Filters Section */}
-            <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
-              {/* Search Filter */}
-              <div className="mb-4">
-                <input
-                  type="text"
-                  placeholder="Search events..."
-                  value={filters.search}
-                  onChange={(e) => handleFilterChange("search", e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
+          <div>
+            {/* Events Section */}
+            {filteredEvents.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="max-w-sm mx-auto">
+                  <div className="w-24 h-24 mx-auto mb-6 bg-gray-200 rounded-full flex items-center justify-center">
+                    <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-medium text-gray-900 mb-2">
+                    No events available
+                  </h3>
+                  <p className="text-gray-600 mb-6">
+                    There are currently no events to display. Check back later!
+                  </p>
+                  <button 
+                    onClick={() => router.push('/events')}
+                    className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    Browse All Events
+                  </button>
+                </div>
               </div>
-
-              {/* Other Filters */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                <select
-                  value={filters.location}
-                  onChange={(e) => handleFilterChange("location", e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Locations</option>
-                  <option value="accra">Accra</option>
-                  <option value="kumasi">Kumasi</option>
-                  <option value="tamale">Tamale</option>
-                </select>
-
-                <select
-                  value={filters.priceRange}
-                  onChange={(e) => handleFilterChange("priceRange", e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Prices</option>
-                  <option value="free">Free</option>
-                  <option value="0-50">$0 - $50</option>
-                  <option value="50-200">$50 - $200</option>
-                  <option value="200+">$200+</option>
-                </select>
-
-                <select
-                  value={filters.dateRange}
-                  onChange={(e) => handleFilterChange("dateRange", e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">All Dates</option>
-                  <option value="today">Today</option>
-                  <option value="week">This Week</option>
-                  <option value="month">This Month</option>
-                  <option value="future">Future Events</option>
-                </select>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <p className="text-sm text-gray-600">
-                  Showing {filteredEvents.length} of {allEvents?.length || 0} events
-                </p>
-                <button
-                  onClick={clearFilters}
-                  className="text-blue-600 hover:text-blue-800 text-sm font-medium transition-colors"
-                >
-                  Clear all filters
-                </button>
-              </div>
-            </div>
-
-            {/* Events Grid */}
-            {filteredEvents.length > 0 ? (
+            ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
                 {filteredEvents.map((event) => (
                   <EventCard
                     key={event.id}
                     event={event}
-                    onClick={handleEventClick}
-                    className="h-full bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow"
+                    onClick={() => handleEventClick(event)}
                   />
                 ))}
               </div>
-            ) : (
-              <div className="text-center py-16">
-                <h3 className="text-xl font-medium text-gray-900 mb-2">
-                  No events found
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  Try adjusting your filters to see more events.
-                </p>
-                <button
-                  onClick={clearFilters}
-                  className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Clear Filters
-                </button>
-              </div>
             )}
-          </>
+          </div>
         ) : (
-          /* Tickets Section - Now using transformed user */
-          <TicketsSection
-            userTickets={userTickets}
-            user={user}
-            onTabChange={handleTicketTabChange}
-            isLoading={false}
-            error={null}
-          />
+          <div>
+            {/* Tickets Section */}
+            <TicketsSection
+              userTickets={userTickets}
+              user={currentUser || undefined}
+              onTabChange={handleTicketSubTabChange}
+              isLoading={loading}
+              error={error}
+              userId={currentUser?.id}
+            />
+          </div>
         )}
       </div>
     </main>

@@ -1,83 +1,308 @@
+// lib/event/eventService.ts
+import { supabase } from '@/lib/supabaseClient';
 import { Event } from '@/types/event';
-import { MOCK_EVENTS } from '@/data/event/events';
+import type { Database } from '@/types/database.types';
+
+// Use your database types
+type EventRow = Database['public']['Tables']['EVENTS']['Row'];
+type UserRow = Database['public']['Tables']['USERS']['Row'];
+type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
+
+// Interface for the actual joined query response
+interface EventQueryResult extends EventRow {
+  USERS: UserRow[];
+  TICKET_TYPES: TicketTypeRow[];
+}
+
+// Transform database event to your Event interface
+const transformEventRow = (row: EventQueryResult): Event => {
+  // Get organizer name from joined USERS data
+  const organizerName = row.USERS && row.USERS.length > 0 
+    ? row.USERS[0].name 
+    : 'Event Organizer';
+
+  // Get minimum ticket price from joined TICKET_TYPES data
+  const minPrice = row.TICKET_TYPES && row.TICKET_TYPES.length > 0
+    ? Math.min(...row.TICKET_TYPES.map(ticket => ticket.price || 0))
+    : 0;
+
+  // Get primary image
+  const primaryImage = row.images && row.images.length > 0 ? row.images[0] : '/placeholder-event.jpg';
+
+  // Transform ticket types to match your TicketOption interface
+  const ticketOptions = row.TICKET_TYPES?.map(ticket => ({
+    type: 'Regular' as const, // You might want to map this based on ticket.name
+    price: ticket.price || 0,
+    currency: 'GHS', // Adjust based on your currency
+    availability: 'Available' // You might want to calculate this based on max_quantity
+  })) || [];
+
+  return {
+    id: row.id.toString(),
+    title: row.title,
+    date: row.event_date || 'TBD',
+    time: row.start_time || 'TBD',
+    venue: row.location_name || 'TBD',
+    location: row.address || row.location_name || 'Location TBD',
+    image: primaryImage,
+    organizer: organizerName || 'Event Organizer',
+    description: row.description || 'No description available',
+    ticketOptions: ticketOptions,
+    tags: [], // You might want to add tags to your database
+    isSponsored: row.is_sponsored || false,
+    price: minPrice > 0 ? `GHS ${minPrice}` : 'Free',
+    category: 'General', // You might want to add category field to your database
+    phone: undefined, // You might want to get this from organizer data
+  };
+};
 
 export class EventService {
-  // Get all events
-  static async getAllEvents(): Promise<Event[]> {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 100));
-    return MOCK_EVENTS;
+  /**
+   * Get recommended events (featured or recently created)
+   */
+  static async getRecommendedEvents(limit: number = 10): Promise<Event[]> {
+    try {
+      const { data, error } = await supabase
+        .from('EVENTS')
+        .select(`
+          *,
+          USERS!inner(name, email),
+          TICKET_TYPES(price, name)
+        `)
+        .eq('event_status', 'published')
+        .gte('event_date', new Date().toISOString().split('T')[0]) // Only future events
+        .order('is_featured', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error fetching recommended events:', error);
+        throw new Error('Failed to fetch recommended events');
+      }
+
+      return data ? data.map(row => transformEventRow(row as EventQueryResult)) : [];
+    } catch (error) {
+      console.error('EventService.getRecommendedEvents error:', error);
+      throw error;
+    }
   }
 
-  // Get recommended events (first 6)
-  static async getRecommendedEvents(limit: number = 6): Promise<Event[]> {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    return MOCK_EVENTS.slice(0, limit);
+  /**
+   * Get upcoming events (within next 30 days)
+   */
+  static async getUpcomingEvents(limit: number = 12): Promise<Event[]> {
+    try {
+      const today = new Date();
+      const futureDate = new Date();
+      futureDate.setDate(today.getDate() + 30);
+
+      const { data, error } = await supabase
+        .from('EVENTS')
+        .select(`
+          *,
+          USERS!inner(name, email),
+          TICKET_TYPES(price, name)
+        `)
+        .eq('event_status', 'published')
+        .gte('event_date', today.toISOString().split('T')[0])
+        .lte('event_date', futureDate.toISOString().split('T')[0])
+        .order('event_date', { ascending: true })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error fetching upcoming events:', error);
+        throw new Error('Failed to fetch upcoming events');
+      }
+
+      return data ? data.map(row => transformEventRow(row as EventQueryResult)) : [];
+    } catch (error) {
+      console.error('EventService.getUpcomingEvents error:', error);
+      throw error;
+    }
   }
 
-  // Get upcoming events (sorted by date)
-  static async getUpcomingEvents(limit?: number): Promise<Event[]> {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const sortedEvents = [...MOCK_EVENTS].sort((a, b) => 
-      new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-    return limit ? sortedEvents.slice(0, limit) : sortedEvents;
+  /**
+   * Get sponsored events
+   */
+  static async getSponsoredEvents(limit: number = 8): Promise<Event[]> {
+    try {
+      const { data, error } = await supabase
+        .from('EVENTS')
+        .select(`
+          *,
+          USERS!inner(name, email),
+          TICKET_TYPES(price, name)
+        `)
+        .eq('event_status', 'published')
+        .eq('is_sponsored', true)
+        .gte('event_date', new Date().toISOString().split('T')[0])
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error fetching sponsored events:', error);
+        throw new Error('Failed to fetch sponsored events');
+      }
+
+      return data ? data.map(row => transformEventRow(row as EventQueryResult)) : [];
+    } catch (error) {
+      console.error('EventService.getSponsoredEvents error:', error);
+      throw error;
+    }
   }
 
-  // Get nearby events (mock - in real app would use location)
-  static async getNearbyEvents(location: string = 'Buea', limit?: number): Promise<Event[]> {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const nearbyEvents = MOCK_EVENTS.filter(event => 
-      event.location.toLowerCase().includes(location.toLowerCase())
-    );
-    return limit ? nearbyEvents.slice(0, limit) : nearbyEvents;
-  }
-
-  // Get event by ID
+  /**
+   * Get a single event by ID
+   */
   static async getEventById(id: string): Promise<Event | null> {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    return MOCK_EVENTS.find(event => event.id === id) || null;
+    try {
+      const { data, error } = await supabase
+        .from('EVENTS')
+        .select(`
+          *,
+          USERS!inner(name, email),
+          TICKET_TYPES(id, name, description, price, max_quatity)
+        `)
+        .eq('id', parseInt(id))
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No rows returned
+          return null;
+        }
+        console.error('Error fetching event by ID:', error);
+        throw new Error('Failed to fetch event');
+      }
+
+      return data ? transformEventRow(data as EventQueryResult) : null;
+    } catch (error) {
+      console.error('EventService.getEventById error:', error);
+      throw error;
+    }
   }
 
-  // Search events
+  /**
+   * Search events by title or description
+   */
   static async searchEvents(query: string): Promise<Event[]> {
-    await new Promise(resolve => setTimeout(resolve, 200));
-    const lowerQuery = query.toLowerCase();
-    return MOCK_EVENTS.filter(event =>
-      event.title.toLowerCase().includes(lowerQuery) ||
-      event.description.toLowerCase().includes(lowerQuery) ||
-      event.venue.toLowerCase().includes(lowerQuery) ||
-      event.organizer.toLowerCase().includes(lowerQuery) ||
-      event.tags?.some(tag => tag.toLowerCase().includes(lowerQuery))
-    );
+    try {
+      if (!query.trim()) {
+        return [];
+      }
+
+      const { data, error } = await supabase
+        .from('EVENTS')
+        .select(`
+          *,
+          USERS!inner(name, email),
+          TICKET_TYPES(price, name)
+        `)
+        .eq('event_status', 'published')
+        .gte('event_date', new Date().toISOString().split('T')[0])
+        .or(`title.ilike.%${query}%,description.ilike.%${query}%,location_name.ilike.%${query}%`)
+        .order('event_date', { ascending: true })
+        .limit(50);
+
+      if (error) {
+        console.error('Error searching events:', error);
+        throw new Error('Failed to search events');
+      }
+
+      return data ? data.map(row => transformEventRow(row as EventQueryResult)) : [];
+    } catch (error) {
+      console.error('EventService.searchEvents error:', error);
+      throw error;
+    }
   }
 
-  // Filter events by category/tag
-  static async getEventsByCategory(category: string): Promise<Event[]> {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    return MOCK_EVENTS.filter(event =>
-      event.tags?.some(tag => tag.toLowerCase() === category.toLowerCase())
-    );
+  /**
+   * Get all events with optional filtering
+   */
+  static async getAllEvents(options?: {
+    search?: string;
+    location?: string;
+    dateRange?: { start: string; end: string };
+    category?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<Event[]> {
+    try {
+      let query = supabase
+        .from('EVENTS')
+        .select(`
+          *,
+          USERS!inner(name, email),
+          TICKET_TYPES(price, name)
+        `)
+        .eq('event_status', 'published')
+        .gte('event_date', new Date().toISOString().split('T')[0]);
+
+      // Apply search filter
+      if (options?.search) {
+        query = query.or(`title.ilike.%${options.search}%,description.ilike.%${options.search}%`);
+      }
+
+      // Apply location filter
+      if (options?.location) {
+        query = query.ilike('location_name', `%${options.location}%`);
+      }
+
+      // Apply date range filter
+      if (options?.dateRange) {
+        query = query
+          .gte('event_date', options.dateRange.start)
+          .lte('event_date', options.dateRange.end);
+      }
+
+      // Apply pagination
+      if (options?.offset) {
+        query = query.range(options.offset, (options.offset + (options?.limit || 20)) - 1);
+      } else if (options?.limit) {
+        query = query.limit(options.limit);
+      }
+
+      query = query.order('event_date', { ascending: true });
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error fetching all events:', error);
+        throw new Error('Failed to fetch events');
+      }
+
+      return data ? data.map(row => transformEventRow(row as EventQueryResult)) : [];
+    } catch (error) {
+      console.error('EventService.getAllEvents error:', error);
+      throw error;
+    }
   }
 
-  // Get sponsored events
-  // 💡 Added the 'limit' parameter to the function signature
-  static async getSponsoredEvents(limit?: number): Promise<Event[]> {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const sponsoredEvents = MOCK_EVENTS.filter(event => event.isSponsored);
-    // 💡 Apply the limit if it exists
-    return limit ? sponsoredEvents.slice(0, limit) : sponsoredEvents;
-  }
+  /**
+   * Get events by organizer ID
+   */
+  static async getEventsByOrganizer(organizerId: string, limit?: number): Promise<Event[]> {
+    try {
+      const { data, error } = await supabase
+        .from('EVENTS')
+        .select(`
+          *,
+          USERS!inner(name, email),
+          TICKET_TYPES(price, name)
+        `)
+        .eq('organizer_id', organizerId)
+        .order('created_at', { ascending: false })
+        .limit(limit || 50);
 
-  // Get events by date range
-  static async getEventsByDateRange(startDate: string, endDate: string): Promise<Event[]> {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    
-    return MOCK_EVENTS.filter(event => {
-      const eventDate = new Date(event.date);
-      return eventDate >= start && eventDate <= end;
-    });
+      if (error) {
+        console.error('Error fetching events by organizer:', error);
+        throw new Error('Failed to fetch organizer events');
+      }
+
+      return data ? data.map(row => transformEventRow(row as EventQueryResult)) : [];
+    } catch (error) {
+      console.error('EventService.getEventsByOrganizer error:', error);
+      throw error;
+    }
   }
 }

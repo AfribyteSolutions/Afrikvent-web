@@ -7,7 +7,35 @@ import RecommendedEvents from '@/components/event/recommendedevents/RecommendedE
 import SponsoredEvents from '@/components/event/sponsoredevents/SponsoredEvents';
 import UpcomingEvents from '@/components/event/upcomingevents/UpcomingEvents';
 import PromotionalBannerSection from '@/components/promotionbanner/PromotionBannerSection';
-import { Event } from "@/types/event";
+
+// Event type from your database
+interface Event {
+  id: number;
+  title: string;
+  date: string | null;
+  time: string | null;
+  location: string | null;
+  image: string | string[] | null;
+  price: number;
+  category: string;
+  venue: string;
+  organizer: string;
+  description: string;
+  // Additional fields from database
+  address?: string | null;
+  end_time?: string | null;
+  event_status: string;
+  images?: string[] | null;
+  is_featured?: boolean | null;
+  is_sponsored?: boolean | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  organizer_id?: string | null;
+  sponsor_logo_url?: string | null;
+  sponsor_name?: string | null;
+  created_at?: string;
+  updated_at?: string | null;
+}
 
 const slides = [
   { src: "/videos/video1.mp4" },
@@ -35,7 +63,6 @@ const examplePromotionalBanners = [
     height: 250,
     isActive: true,
     priority: 10,
-    // 💡 Updated the dates to the current year to ensure the banner is active.
     startDate: "2025-01-01",
     endDate: "2025-12-31"
   }
@@ -43,6 +70,8 @@ const examplePromotionalBanners = [
 
 export default function HomePage() {
   const router = useRouter();
+  
+  // Now these hooks will fetch from your database
   const { events: recommendedEvents, loading: recommendedLoading, error: recommendedError } = useRecommendedEvents(10);
   const { events: sponsoredEvents, loading: sponsoredLoading, error: sponsoredError } = useSponsoredEvents(8);
   const { events: upcomingEvents, loading: upcomingLoading, error: upcomingError } = useUpcomingEvents(12);
@@ -85,7 +114,16 @@ export default function HomePage() {
   const CarouselError = ({ error }: { error: string }) => (
     <section className="py-16 bg-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <p className="text-red-600">{error}</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <h3 className="text-lg font-medium text-red-800 mb-2">Unable to load events</h3>
+          <p className="text-red-600">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
       </div>
     </section>
   );
@@ -102,12 +140,19 @@ export default function HomePage() {
         <CarouselSkeleton title="Recommended Events" />
       ) : recommendedError ? (
         <CarouselError error={recommendedError} />
-      ) : (
+      ) : recommendedEvents.length > 0 ? (
         <RecommendedEvents
           events={recommendedEvents}
           onEventClick={handleEventClick}
           onSeeMore={handleSeeMore}
         />
+      ) : (
+        <section className="py-16 bg-white">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Recommended Events</h2>
+            <p className="text-gray-600">No recommended events available at the moment.</p>
+          </div>
+        </section>
       )}
 
       {/* Sponsored Events Section */}
@@ -189,12 +234,10 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Promotional Banner Section - This is the new addition */}
+      {/* Promotional Banner Section */}
       <PromotionalBannerSection
         maxBanners={1}
         className="bg-white"
-        // You can either use the API endpoint or static banners
-        // apiEndpoint="/api/promotional-banners"
         banners={examplePromotionalBanners}
       />
 

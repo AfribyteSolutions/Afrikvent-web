@@ -1,6 +1,8 @@
 // src/app/organiser/page.tsx
 'use client';
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import type { User } from "@supabase/supabase-js";
 import DashboardStats from "@/components/organiser/DashboardStats";
 import EventsList from "@/components/organiser/EventsList";
 import CreateEventModal from "@/components/organiser/CreateEventModal";
@@ -12,15 +14,46 @@ type TabType = 'overview' | 'events' | 'tickets' | 'analytics';
 export default function OrganiserPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<{ name: string; email: string } | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const organiser = {
-    name: "Rich Events",
-    email: "richie@example.com",
-    totalEvents: 12,
-    activeEvents: 8,
-    totalRevenue: 45600,
-    totalTicketsSold: 1234
-  };
+  useEffect(() => {
+    // Get current user
+    const getCurrentUser = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+        
+        // Fetch user profile from USERS table
+        const { data: profile } = await supabase
+          .from('USERS')
+          .select('name, email')
+          .eq('user_id', session.user.id)
+          .single();
+        
+        setUserProfile({
+          name: profile?.name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Organiser',
+          email: profile?.email || session.user.email || ''
+        });
+      }
+      setLoading(false);
+    };
+
+    getCurrentUser();
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setUser(session.user);
+      } else {
+        setUser(null);
+        setUserProfile(null);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const tabs = [
     { id: 'overview' as TabType, name: 'Overview', icon: '📊' },
@@ -34,23 +67,33 @@ export default function OrganiserPage() {
       case 'overview':
         return (
           <div className="space-y-8">
-            <DashboardStats organiser={organiser} />
+            <DashboardStats user={user} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <EventsList limit={5} showCreateButton={false} />
-              <AnalyticsOverview />
+              <EventsList limit={5} showCreateButton={false} user={user} />
+              <AnalyticsOverview user={user} />
             </div>
           </div>
         );
       case 'events':
-        return <EventsList />;
+        return <EventsList user={user} />;
       case 'tickets':
-        return <TicketManagement />;
+        return <TicketManagement user={user} />;
       case 'analytics':
-        return <AnalyticsOverview detailed={true} />;
+        return <AnalyticsOverview user={user} detailed={true} />;
       default:
         return null;
     }
   };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Please log in to access the organiser dashboard.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -60,7 +103,9 @@ export default function OrganiserPage() {
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 h-auto sm:h-16">
             <div>
               <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Organiser Dashboard</h1>
-              <p className="text-sm text-gray-600">Welcome back, {organiser.name}</p>
+              <p className="text-sm text-gray-600">
+                Welcome back, {userProfile?.name || 'Organiser'}
+              </p>
             </div>
             <button
               onClick={() => setShowCreateEvent(true)}
@@ -108,6 +153,7 @@ export default function OrganiserPage() {
         onSuccess={() => {
           setShowCreateEvent(false);
         }}
+        user={user}
       />
     </div>
   );
