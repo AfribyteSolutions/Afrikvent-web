@@ -5,14 +5,49 @@ import { supabase } from "@/lib/supabaseClient";
 import EventCard from "@/components/event/eventcard/EventCard";
 import { TicketsSection } from "@/components/tickets/TicketSection";
 
-// Import your generated DB types
-import { Database } from "@/types/database.types";
-import { Event, UserTicket, User, FilterState } from "@/types/index";
+// Use the consistent Event type from your hooks
+import { Event } from "@/hooks/useEvents";
 
-// Correct table row types using UPPERCASE table names from your schema
+// Import your generated DB types for database operations
+import { Database } from "@/types/database.types";
+
+// Types for other data
+interface User {
+  id: string;
+  email?: string;
+  phone?: string;
+  name?: string;
+}
+
+interface UserTicket {
+  id: number;
+  eventId: number;
+  eventTitle: string;
+  eventDate: string;
+  eventLocation: string;
+  ticketType: string;
+  quantity: number;
+  totalPrice: number;
+  purchaseDate: string;
+  status: "confirmed" | "pending" | "cancelled" | "used";
+  userId: string;
+  qr_code_data?: string;
+  unit_price?: number;
+  used_at?: string;
+  scanned_by?: string;
+  ticket_status?: string;
+}
+
+interface FilterState {
+  search: string;
+  location: string;
+  priceRange: string;
+  dateRange: string;
+}
+
+// Database table row types using UPPERCASE table names
 type EventRow = Database["public"]["Tables"]["EVENTS"]["Row"];
 type TicketTypeRow = Database["public"]["Tables"]["TICKET_TYPES"]["Row"];
-type PaymentTicketRow = Database["public"]["Tables"]["PAYMENT_TICKETS"]["Row"];
 type TicketRow = Database["public"]["Tables"]["TICKETS"]["Row"];
 
 export default function MyEvents() {
@@ -51,21 +86,21 @@ export default function MyEvents() {
     getCurrentUser();
   }, []);
 
-  // Fetch events - using correct table name
+  // Fetch events - Transform to match the consistent Event type
   useEffect(() => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
 
         const { data: eventsData, error: eventsError } = await supabase
-          .from("EVENTS") // Correct table name
-          .select(
-            `
+          .from("EVENTS")
+          .select(`
             *,
-            TICKET_TYPES(*)
-          `
-          )
-          .eq("event_status", "active")
+            TICKET_TYPES(*),
+            USERS!inner(name, email)
+          `)
+          .eq("event_status", "published")
+          .gte("event_date", new Date().toISOString().split('T')[0])
           .order("event_date", { ascending: true });
 
         if (eventsError) {
@@ -74,53 +109,51 @@ export default function MyEvents() {
         }
 
         // Define the nested structure type for better type safety
-        interface EventWithTicketTypes extends EventRow {
+        interface EventWithRelations extends EventRow {
           TICKET_TYPES: TicketTypeRow[];
+          USERS: { name: string; email: string }[];
         }
 
+        // Transform to match the consistent Event interface from hooks
         const transformedEvents: Event[] = (eventsData || []).map(
-          (event: EventWithTicketTypes) => {
-            const ticketTypes = event.TICKET_TYPES || [];
-            const minPrice = ticketTypes.length > 0
-              ? Math.min(...ticketTypes.map((t) => t.price || 0))
+          (row: EventWithRelations) => {
+            // Get organizer name from joined USERS data
+            const organizerName = row.USERS && row.USERS.length > 0 
+              ? row.USERS[0].name 
+              : 'Event Organizer';
+
+            // Get minimum ticket price from joined TICKET_TYPES data
+            const minPrice = row.TICKET_TYPES && row.TICKET_TYPES.length > 0
+              ? Math.min(...row.TICKET_TYPES.map(ticket => ticket.price || 0))
               : 0;
 
+            // Get primary image
+            const primaryImage = row.images && row.images.length > 0 ? row.images[0] : '/placeholder-event.jpg';
+
+            // Transform ticket types to match your TicketOption interface
+            const ticketOptions = row.TICKET_TYPES?.map(ticket => ({
+              type: 'Regular' as const,
+              price: ticket.price || 0,
+              currency: 'GHS',
+              availability: 'Available'
+            })) || [];
+
             return {
-              id: event.id,
-              title: event.title,
-              date: event.event_date,
-              time: event.start_time,
-              location: event.location_name || "",
-              image: event.images || "/images/event-placeholder.jpg",
-              price: minPrice,
-              category: event.event_status,
-              venue: event.address || "",
-              organizer: event.sponsor_name || "Unknown Organizer",
-              description: event.description || "",
-              ticketOptions: ticketTypes.map(tt => ({
-                id: tt.id,
-                name: tt.name,
-                description: tt.description,
-                price: tt.price,
-                max_quatity: tt.max_quatity,
-                ticket_image_url: tt.ticket_image_url,
-                event_id: tt.event_id,
-                created_at: tt.created_at,
-              })),
-              // Additional fields
-              address: event.address,
-              end_time: event.end_time,
-              event_status: event.event_status,
-              images: event.images,
-              is_featured: event.is_featured,
-              is_sponsored: event.is_sponsored,
-              latitude: event.latitude,
-              longitude: event.longitude,
-              organizer_id: event.organizer_id,
-              sponsor_logo_url: event.sponsor_logo_url,
-              sponsor_name: event.sponsor_name,
-              created_at: event.created_at,
-              updated_at: event.updated_at,
+              id: row.id.toString(), // Convert to string to match Event interface
+              title: row.title,
+              date: row.event_date || 'TBD',
+              time: row.start_time || 'TBD',
+              venue: row.location_name || 'TBD',
+              location: row.address || row.location_name || 'Location TBD',
+              image: primaryImage,
+              organizer: organizerName || 'Event Organizer',
+              description: row.description || 'No description available',
+              ticketOptions: ticketOptions,
+              tags: [], // You might want to add tags to your database
+              isSponsored: row.is_sponsored || false,
+              price: minPrice > 0 ? `GHS ${minPrice}` : 'Free',
+              category: 'General', // You might want to add category field to your database
+              phone: undefined, // You might want to get this from organizer data
             };
           }
         );
@@ -150,15 +183,13 @@ export default function MyEvents() {
         // Fetch tickets for the user
         const { data: ticketsData, error: ticketsError } = await supabase
           .from("TICKETS")
-          .select(
-            `
+          .select(`
             *,
             TICKET_TYPES(
               *,
               EVENTS(*)
             )
-          `
-          )
+          `)
           .eq("user_id", currentUser.id)
           .order("created_at", { ascending: false });
 
@@ -191,13 +222,12 @@ export default function MyEvents() {
               purchaseDate: ticket.created_at,
               status: (ticket.ticket_status as UserTicket["status"]) || "confirmed",
               userId: ticket.user_id || "",
-              // Convert null to undefined to match UserTicket interface
               qr_code_data: ticket.qr_code_data || undefined,
               unit_price: ticket.unit_price || undefined,
               used_at: ticket.used_at || undefined,
               scanned_by: ticket.scanned_by || undefined,
               ticket_status: ticket.ticket_status || undefined,
-            } as UserTicket; // Type assertion to ensure compatibility
+            };
           }
         );
 
@@ -220,25 +250,33 @@ export default function MyEvents() {
   // Tab switching function
   const handleTabChange = (tab: "events" | "tickets") => {
     setActiveTab(tab);
-    // Reset error when switching tabs
     setError(null);
   };
 
   // Handle ticket sub-tab changes
   const handleTicketSubTabChange = (subTab: 'active' | 'expired') => {
     console.log('Ticket sub-tab changed to:', subTab);
-    // You can add additional logic here if needed
   };
 
+  if (loading) {
+    return (
+      <main className="w-full min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading your events...</p>
+        </div>
+      </main>
+    );
+  }
   
   if (error && activeTab === "events") {
     return (
       <main className="w-full min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600">{error}</p>
+          <p className="text-red-600 mb-4">{error}</p>
           <button 
             onClick={() => window.location.reload()} 
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
           >
             Retry
           </button>
