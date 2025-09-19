@@ -135,52 +135,7 @@ export default function HomePage() {
         <VideoSlider slides={slides} interval={4000} />
       </section>
 
-      {/* Recommended Events Section */}
-      {recommendedLoading ? (
-        <CarouselSkeleton title="Recommended Events" />
-      ) : recommendedError ? (
-        <CarouselError error={recommendedError} />
-      ) : recommendedEvents.length > 0 ? (
-        <RecommendedEvents
-          events={recommendedEvents}
-          onEventClick={handleEventClick}
-          onSeeMore={handleSeeMore}
-        />
-      ) : (
-        <section className="py-16 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">Recommended Events</h2>
-            <p className="text-gray-600">No recommended events available at the moment.</p>
-          </div>
-        </section>
-      )}
-
-      {/* Sponsored Events Section */}
-      {sponsoredLoading ? (
-        <CarouselSkeleton title="Sponsored Events" />
-      ) : sponsoredError ? (
-        <CarouselError error={sponsoredError} />
-      ) : sponsoredEvents.length > 0 ? (
-        <SponsoredEvents
-          events={sponsoredEvents}
-          onEventClick={handleEventClick}
-          onSeeMore={handleSeeMore}
-        />
-      ) : null}
-
-      {/* Upcoming Events Section */}
-      {upcomingLoading ? (
-        <CarouselSkeleton title="Upcoming Events" />
-      ) : upcomingError ? (
-        <CarouselError error={upcomingError} />
-      ) : upcomingEvents.length > 0 ? (
-        <UpcomingEvents
-          events={upcomingEvents}
-          onEventClick={handleEventClick}
-          onSeeMore={handleSeeMore}
-        />
-      ) : null}
-
+   
       {/* Discover Amazing Events Section */}
       <section className="py-16 bg-gray-50">
         <div className="container mx-auto px-4">
