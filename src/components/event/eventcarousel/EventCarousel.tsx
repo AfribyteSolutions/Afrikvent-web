@@ -1,7 +1,7 @@
-import React, { useRef } from 'react';
-import EventCard from '../eventcard/EventCard';
-import { Event } from '@/types/event';
-import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
+import React, { useRef } from "react";
+import EventCard from "../eventcard/EventCard";
+import { Event } from "@/hooks/useEvents"; // Use the transformed Event type
+import { ChevronLeft, ChevronRight, ArrowRight } from "lucide-react";
 
 interface EventCarouselProps {
   events: Event[];
@@ -13,25 +13,26 @@ interface EventCarouselProps {
 const EventCarousel: React.FC<EventCarouselProps> = ({
   events,
   onEventClick,
-  title = 'Events',
-  onSeeMore
+  title = "Events",
+  onSeeMore,
 }) => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const scroll = (direction: 'left' | 'right') => {
+  const scroll = (direction: "left" | "right") => {
     if (!scrollContainerRef.current) return;
-    
+
     const container = scrollContainerRef.current;
     const cardWidth = 320; // Approximate card width + gap
     const scrollAmount = cardWidth * 2; // Scroll 2 cards at a time
-    
-    const newScrollLeft = direction === 'left' 
-      ? container.scrollLeft - scrollAmount 
-      : container.scrollLeft + scrollAmount;
-    
+
+    const newScrollLeft =
+      direction === "left"
+        ? container.scrollLeft - scrollAmount
+        : container.scrollLeft + scrollAmount;
+
     container.scrollTo({
       left: newScrollLeft,
-      behavior: 'smooth'
+      behavior: "smooth",
     });
   };
 
@@ -58,7 +59,7 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
           <h2 className="text-2xl md:text-4xl font-bold text-gray-900">
             {title}
           </h2>
-          
+
           <div className="flex items-center gap-2 md:gap-4">
             {/* See More Button */}
             {onSeeMore && (
@@ -70,18 +71,18 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
                 <ArrowRight className="w-3 h-3 md:w-4 md:h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             )}
-            
+
             {/* Navigation Buttons */}
             <div className="flex gap-2">
               <button
-                onClick={() => scroll('left')}
+                onClick={() => scroll("left")}
                 disabled={!canScrollLeft()}
                 className="p-1.5 md:p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 <ChevronLeft className="w-4 h-4 md:w-5 md:h-5 text-gray-600" />
               </button>
               <button
-                onClick={() => scroll('right')}
+                onClick={() => scroll("right")}
                 disabled={!canScrollRight()}
                 className="p-1.5 md:p-2 rounded-full bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
@@ -97,15 +98,12 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
             ref={scrollContainerRef}
             className="flex gap-6 overflow-x-auto scroll-smooth pb-4 scrollbar-hide"
             style={{
-              scrollbarWidth: 'none', // For Firefox
-              msOverflowStyle: 'none', // For Internet Explorer and Edge
+              scrollbarWidth: "none", // For Firefox
+              msOverflowStyle: "none", // For Internet Explorer and Edge
             }}
           >
             {events.map((event) => (
-              <div
-                key={event.id}
-                className="flex-shrink-0 w-72 md:w-80"
-              >
+              <div key={event.id} className="flex-shrink-0 w-72 md:w-80">
                 <EventCard
                   event={event}
                   onClick={onEventClick}
@@ -114,7 +112,7 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
               </div>
             ))}
           </div>
-          
+
           {/* Gradient Overlays for Visual Effect */}
           <div className="absolute top-0 left-0 w-8 h-full bg-gradient-to-r from-white to-transparent pointer-events-none" />
           <div className="absolute top-0 right-0 w-8 h-full bg-gradient-to-l from-white to-transparent pointer-events-none" />

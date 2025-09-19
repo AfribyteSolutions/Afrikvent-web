@@ -1,10 +1,32 @@
-import { useState, useEffect } from 'react';
-import { Event } from '@/types/event';
-import { EventService } from '@/lib/event/eventService';
+import { useState, useEffect } from "react";
+import { EventService } from "@/lib/event/eventService";
+
+// ✅ Use the Event type from your EventService (the transformed type)
+export interface Event {
+  id: string; // EventService returns string IDs
+  title: string;
+  date: string;
+  time: string;
+  venue: string;
+  location: string;
+  image: string;
+  organizer: string;
+  description: string;
+  ticketOptions: Array<{
+    type: 'Regular';
+    price: number;
+    currency: string;
+    availability: string;
+  }>;
+  tags: string[];
+  isSponsored: boolean;
+  price: string;
+  category: string;
+  phone?: string;
+}
 
 /**
  * Custom hook to fetch recommended events.
- * @param limit The maximum number of events to fetch.
  */
 export const useRecommendedEvents = (limit?: number) => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -15,10 +37,13 @@ export const useRecommendedEvents = (limit?: number) => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
+        setError(null);
         const data = await EventService.getRecommendedEvents(limit);
         setEvents(data);
       } catch (err) {
-        setError('Failed to fetch recommended events');
+        console.error('Error fetching recommended events:', err);
+        setError("Failed to fetch recommended events");
+        setEvents([]); // Clear events on error
       } finally {
         setLoading(false);
       }
@@ -30,11 +55,8 @@ export const useRecommendedEvents = (limit?: number) => {
   return { events, loading, error };
 };
 
-
-
 /**
  * Custom hook to fetch upcoming events.
- * @param limit The maximum number of events to fetch.
  */
 export const useUpcomingEvents = (limit?: number) => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -45,10 +67,13 @@ export const useUpcomingEvents = (limit?: number) => {
     const fetchEvents = async () => {
       try {
         setLoading(true);
+        setError(null);
         const data = await EventService.getUpcomingEvents(limit);
         setEvents(data);
       } catch (err) {
-        setError('Failed to fetch upcoming events');
+        console.error('Error fetching upcoming events:', err);
+        setError("Failed to fetch upcoming events");
+        setEvents([]);
       } finally {
         setLoading(false);
       }
@@ -60,10 +85,8 @@ export const useUpcomingEvents = (limit?: number) => {
   return { events, loading, error };
 };
 
-
 /**
  * Custom hook to fetch a single event by its ID.
- * @param id The ID of the event to fetch.
  */
 export const useEventById = (id: string) => {
   const [event, setEvent] = useState<Event | null>(null);
@@ -71,15 +94,21 @@ export const useEventById = (id: string) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+
     const fetchEvent = async () => {
-      if (!id) return;
-      
       try {
         setLoading(true);
+        setError(null);
         const data = await EventService.getEventById(id);
         setEvent(data);
       } catch (err) {
-        setError('Failed to fetch event');
+        console.error('Error fetching event by ID:', err);
+        setError("Failed to fetch event");
+        setEvent(null);
       } finally {
         setLoading(false);
       }
@@ -91,10 +120,8 @@ export const useEventById = (id: string) => {
   return { event, loading, error };
 };
 
-
 /**
- * Custom hook to search for events based on a query.
- * @param query The search query string.
+ * Custom hook to search for events.
  */
 export const useSearchEvents = (query: string) => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -104,22 +131,26 @@ export const useSearchEvents = (query: string) => {
   useEffect(() => {
     if (!query.trim()) {
       setEvents([]);
+      setLoading(false);
+      setError(null);
       return;
     }
 
     const searchEvents = async () => {
       try {
         setLoading(true);
+        setError(null);
         const data = await EventService.searchEvents(query);
         setEvents(data);
       } catch (err) {
-        setError('Failed to search events');
+        console.error('Error searching events:', err);
+        setError("Failed to search events");
+        setEvents([]);
       } finally {
         setLoading(false);
       }
     };
 
-    // Debounce search to prevent excessive API calls
     const timeoutId = setTimeout(searchEvents, 300);
     return () => clearTimeout(timeoutId);
   }, [query]);
@@ -127,10 +158,8 @@ export const useSearchEvents = (query: string) => {
   return { events, loading, error };
 };
 
-
 /**
  * Custom hook to fetch sponsored events.
- * @param limit The maximum number of events to fetch.
  */
 export const useSponsoredEvents = (limit?: number) => {
   const [events, setEvents] = useState<Event[]>([]);
@@ -141,10 +170,13 @@ export const useSponsoredEvents = (limit?: number) => {
     const fetchSponsoredEvents = async () => {
       try {
         setLoading(true);
+        setError(null);
         const data = await EventService.getSponsoredEvents(limit);
         setEvents(data);
       } catch (err) {
-        setError('Failed to fetch sponsored events');
+        console.error('Error fetching sponsored events:', err);
+        setError("Failed to fetch sponsored events");
+        setEvents([]);
       } finally {
         setLoading(false);
       }

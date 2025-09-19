@@ -1,9 +1,7 @@
-"use client";
-
+// components/event/eventcard/EventCard.tsx
 import React from "react";
-import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { Event } from "@/types/index"; // ✅ Use the correct Event type that matches your database
+import { Event } from "@/hooks/useEvents"; // Use the transformed Event type
+import { Calendar, MapPin, Clock, User } from "lucide-react";
 
 interface EventCardProps {
   event: Event;
@@ -16,86 +14,85 @@ const EventCard: React.FC<EventCardProps> = ({
   onClick,
   className = "",
 }) => {
-  const router = useRouter();
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return "TBA"; // Handle null dates
-    const date = new Date(dateString);
-    return date.toLocaleDateString("en-US", {
-      weekday: "short",
-      day: "numeric",
-      month: "short",
-    });
-  };
-
-  const formatPrice = (price: number | string) => {
-    if (typeof price === "string") return price;
-    return price > 0 ? `₵${price}+` : "Free";
-  };
-
-  // Handle nullable properties safely
-  const eventDate = event.date;
-  const eventImage = (() => {
-    if (event.image) {
-      // Handle both string and string array
-      if (Array.isArray(event.image)) {
-        return event.image[0] || "/images/event-placeholder.jpg";
-      }
-      return event.image;
-    }
-    if (event.images && Array.isArray(event.images)) {
-      return event.images[0] || "/images/event-placeholder.jpg";
-    }
-    return "/images/event-placeholder.jpg";
-  })();
-  const eventLocation = event.location || "Location TBA";
-  const eventVenue = event.venue || "";
-  const eventPrice = event.price || 0;
-
   const handleClick = () => {
     if (onClick) {
-      onClick(event); // If parent passed custom handler, use it
-    } else {
-      router.push(`/events/${event.id}`); // ✅ Navigate to events detail page (using number id)
+      onClick(event);
     }
   };
 
   return (
     <div
-      className={`cursor-pointer transition-all duration-300 group rounded-lg ${className}`}
+      className={`bg-white rounded-xl shadow-md hover:shadow-lg transition-shadow cursor-pointer overflow-hidden ${className}`}
       onClick={handleClick}
     >
       {/* Event Image */}
-      <div className="relative h-32 w-full mb-3 rounded-lg overflow-hidden border border-transparent group-hover:border-blue-500 transition-all duration-300 border-4">
-        <Image
-          src={eventImage}
+      <div className="relative h-48 overflow-hidden">
+        <img
+          src={event.image}
           alt={event.title}
-          fill
-          className="object-cover rounded-lg"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
         />
+        {event.isSponsored && (
+          <div className="absolute top-2 left-2 bg-yellow-400 text-yellow-900 px-2 py-1 rounded-full text-xs font-semibold">
+            Sponsored
+          </div>
+        )}
+        <div className="absolute bottom-2 right-2 bg-black bg-opacity-70 text-white px-2 py-1 rounded text-sm font-semibold">
+          {event.price}
+        </div>
       </div>
 
       {/* Event Details */}
-      <div className="p-3 space-y-2 text-left">
-        <h3 className="font-bold text-sm text-gray-600 leading-tight line-clamp-2">
+      <div className="p-4">
+        <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-2">
           {event.title}
         </h3>
-
-        <div className="text-xs text-blue-400 font-medium">
-          {formatDate(eventDate)}
+        
+        <div className="space-y-2 text-sm text-gray-600 mb-4">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-blue-600" />
+            <span>{event.date}</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Clock className="w-4 h-4 text-blue-600" />
+            <span>{event.time}</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-blue-600" />
+            <span className="line-clamp-1">{event.venue}</span>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-blue-600" />
+            <span className="line-clamp-1">{event.organizer}</span>
+          </div>
         </div>
 
-        <div className="text-xs text-gray-400">
-          {eventVenue && eventLocation
-            ? `${eventVenue} / ${eventLocation}`
-            : eventLocation}
-        </div>
+        {event.description && (
+          <p className="text-gray-600 text-sm line-clamp-2 mb-4">
+            {event.description}
+          </p>
+        )}
 
-        <div className="pt-2 flex justify-start">
-          <span className="inline-block bg-blue-500 text-white text-xs font-semibold px-2 py-1 rounded-full shadow-md">
-            {formatPrice(eventPrice)}
-          </span>
-        </div>
+        {event.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {event.tags.slice(0, 2).map((tag, index) => (
+              <span
+                key={index}
+                className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs"
+              >
+                {tag}
+              </span>
+            ))}
+            {event.tags.length > 2 && (
+              <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs">
+                +{event.tags.length - 2} more
+              </span>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

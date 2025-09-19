@@ -1,7 +1,7 @@
 // components/event/recommendedevents/RecommendedEvents.tsx
-import React from 'react';
-import EventCarousel from '../eventcarousel/EventCarousel';
-import { Event } from '@/types/event';
+import React from "react";
+import EventCarousel from "../eventcarousel/EventCarousel";
+import { Event } from "@/hooks/useEvents"; // Use the transformed Event type
 
 interface RecommendedEventsProps {
   events: Event[];
@@ -13,8 +13,8 @@ interface RecommendedEventsProps {
 const RecommendedEvents: React.FC<RecommendedEventsProps> = ({
   events,
   onEventClick,
-  title = 'Recommended Events',
-  onSeeMore
+  title = "Recommended Events",
+  onSeeMore,
 }) => {
   return (
     <EventCarousel

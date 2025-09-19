@@ -1,6 +1,5 @@
 // lib/event/eventService.ts
 import { supabase } from '@/lib/supabaseClient';
-import { Event } from '@/types/event';
 import type { Database } from '@/types/database.types';
 
 // Use your database types
@@ -12,6 +11,30 @@ type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
 interface EventQueryResult extends EventRow {
   USERS: UserRow[];
   TICKET_TYPES: TicketTypeRow[];
+}
+
+// Event interface that matches what your components expect
+export interface Event {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  venue: string;
+  location: string;
+  image: string;
+  organizer: string;
+  description: string;
+  ticketOptions: Array<{
+    type: 'Regular';
+    price: number;
+    currency: string;
+    availability: string;
+  }>;
+  tags: string[];
+  isSponsored: boolean;
+  price: string;
+  category: string;
+  phone?: string;
 }
 
 // Transform database event to your Event interface
@@ -31,10 +54,10 @@ const transformEventRow = (row: EventQueryResult): Event => {
 
   // Transform ticket types to match your TicketOption interface
   const ticketOptions = row.TICKET_TYPES?.map(ticket => ({
-    type: 'Regular' as const, // You might want to map this based on ticket.name
+    type: 'Regular' as const,
     price: ticket.price || 0,
-    currency: 'GHS', // Adjust based on your currency
-    availability: 'Available' // You might want to calculate this based on max_quantity
+    currency: 'GHS',
+    availability: 'Available'
   })) || [];
 
   return {
@@ -48,11 +71,11 @@ const transformEventRow = (row: EventQueryResult): Event => {
     organizer: organizerName || 'Event Organizer',
     description: row.description || 'No description available',
     ticketOptions: ticketOptions,
-    tags: [], // You might want to add tags to your database
+    tags: [],
     isSponsored: row.is_sponsored || false,
     price: minPrice > 0 ? `GHS ${minPrice}` : 'Free',
-    category: 'General', // You might want to add category field to your database
-    phone: undefined, // You might want to get this from organizer data
+    category: 'General',
+    phone: undefined,
   };
 };
 
@@ -161,7 +184,7 @@ export class EventService {
         .select(`
           *,
           USERS!inner(name, email),
-          TICKET_TYPES(id, name, description, price, max_quatity)
+          TICKET_TYPES(id, name, description, price, max_quantity)
         `)
         .eq('id', parseInt(id))
         .single();
