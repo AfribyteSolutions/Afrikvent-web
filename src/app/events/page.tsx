@@ -97,7 +97,7 @@ export default function MyEvents() {
           .select(`
             *,
             TICKET_TYPES(*),
-            USERS!inner(name, email)
+            USERS!EVENTS_organizer_id_fkey(name, email)
           `)
           .eq("event_status", "published")
           .gte("event_date", new Date().toISOString().split('T')[0])
@@ -258,16 +258,6 @@ export default function MyEvents() {
     console.log('Ticket sub-tab changed to:', subTab);
   };
 
-  if (loading) {
-    return (
-      <main className="w-full min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading your events...</p>
-        </div>
-      </main>
-    );
-  }
   
   if (error && activeTab === "events") {
     return (
@@ -290,8 +280,8 @@ export default function MyEvents() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Page Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">My Events</h1>
-          <p className="text-gray-600 mt-2">Manage your events and tickets</p>
+          <h1 className="text-3xl font-bold text-gray-900">All Events</h1>
+          <p className="text-gray-600 mt-2">view all events and Check your tickets</p>
         </div>
 
         {/* Tab Navigation */}

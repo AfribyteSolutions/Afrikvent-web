@@ -9,7 +9,7 @@ type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
 
 // Interface for the actual joined query response
 interface EventQueryResult extends EventRow {
-  USERS: UserRow[];
+  USERS: UserRow | null;
   TICKET_TYPES: TicketTypeRow[];
 }
 
@@ -39,10 +39,8 @@ export interface Event {
 
 // Transform database event to your Event interface
 const transformEventRow = (row: EventQueryResult): Event => {
-  // Get organizer name from joined USERS data
-  const organizerName = row.USERS && row.USERS.length > 0 
-    ? row.USERS[0].name 
-    : 'Event Organizer';
+  // Get organizer name from joined USERS data (now single object, not array)
+  const organizerName = row.USERS?.name || 'Event Organizer';
 
   // Get minimum ticket price from joined TICKET_TYPES data
   const minPrice = row.TICKET_TYPES && row.TICKET_TYPES.length > 0
@@ -68,7 +66,7 @@ const transformEventRow = (row: EventQueryResult): Event => {
     venue: row.location_name || 'TBD',
     location: row.address || row.location_name || 'Location TBD',
     image: primaryImage,
-    organizer: organizerName || 'Event Organizer',
+    organizer: organizerName,
     description: row.description || 'No description available',
     ticketOptions: ticketOptions,
     tags: [],
@@ -89,11 +87,11 @@ export class EventService {
         .from('EVENTS')
         .select(`
           *,
-          USERS!inner(name, email),
+          USERS!EVENTS_organizer_id_fkey(name, email),
           TICKET_TYPES(price, name)
         `)
         .eq('event_status', 'published')
-        .gte('event_date', new Date().toISOString().split('T')[0]) // Only future events
+        .gte('event_date', new Date().toISOString().split('T')[0])
         .order('is_featured', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(limit);
@@ -123,7 +121,7 @@ export class EventService {
         .from('EVENTS')
         .select(`
           *,
-          USERS!inner(name, email),
+          USERS!EVENTS_organizer_id_fkey(name, email),
           TICKET_TYPES(price, name)
         `)
         .eq('event_status', 'published')
@@ -153,7 +151,7 @@ export class EventService {
         .from('EVENTS')
         .select(`
           *,
-          USERS!inner(name, email),
+          USERS!EVENTS_organizer_id_fkey(name, email),
           TICKET_TYPES(price, name)
         `)
         .eq('event_status', 'published')
@@ -183,7 +181,7 @@ export class EventService {
         .from('EVENTS')
         .select(`
           *,
-          USERS!inner(name, email),
+          USERS!EVENTS_organizer_id_fkey(name, email),
           TICKET_TYPES(id, name, description, price, max_quantity)
         `)
         .eq('id', parseInt(id))
@@ -191,7 +189,6 @@ export class EventService {
 
       if (error) {
         if (error.code === 'PGRST116') {
-          // No rows returned
           return null;
         }
         console.error('Error fetching event by ID:', error);
@@ -218,7 +215,7 @@ export class EventService {
         .from('EVENTS')
         .select(`
           *,
-          USERS!inner(name, email),
+          USERS!EVENTS_organizer_id_fkey(name, email),
           TICKET_TYPES(price, name)
         `)
         .eq('event_status', 'published')
@@ -255,7 +252,7 @@ export class EventService {
         .from('EVENTS')
         .select(`
           *,
-          USERS!inner(name, email),
+          USERS!EVENTS_organizer_id_fkey(name, email),
           TICKET_TYPES(price, name)
         `)
         .eq('event_status', 'published')
@@ -310,7 +307,7 @@ export class EventService {
         .from('EVENTS')
         .select(`
           *,
-          USERS!inner(name, email),
+          USERS!EVENTS_organizer_id_fkey(name, email),
           TICKET_TYPES(price, name)
         `)
         .eq('organizer_id', organizerId)
