@@ -6,6 +6,9 @@ import Image from 'next/image';
 import { supabase } from '@/lib/supabaseClient';
 import { Database } from '@/types/database.types';
 import { User } from '@supabase/supabase-js';
+import { EnhancedTicket } from '@/types/ticket';
+import PaymentModal from '@/components/checkout/PaymentModal';
+import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
 
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
@@ -22,6 +25,49 @@ interface EventDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
+// Color schemes for different ticket types
+const getTicketColorScheme = (index: number) => {
+  const schemes = [
+    {
+      border: 'border-blue-500',
+      bg: 'bg-blue-50',
+      checkIcon: 'bg-blue-500',
+      badge: 'bg-blue-200 text-blue-800',
+      gradient: 'from-blue-600 to-blue-800'
+    },
+    {
+      border: 'border-purple-500',
+      bg: 'bg-purple-50',
+      checkIcon: 'bg-purple-500',
+      badge: 'bg-purple-200 text-purple-800',
+      gradient: 'from-purple-600 to-purple-800'
+    },
+    {
+      border: 'border-green-500',
+      bg: 'bg-green-50',
+      checkIcon: 'bg-green-500',
+      badge: 'bg-green-200 text-green-800',
+      gradient: 'from-green-600 to-green-800'
+    },
+    {
+      border: 'border-orange-500',
+      bg: 'bg-orange-50',
+      checkIcon: 'bg-orange-500',
+      badge: 'bg-orange-200 text-orange-800',
+      gradient: 'from-orange-600 to-orange-800'
+    },
+    {
+      border: 'border-pink-500',
+      bg: 'bg-pink-50',
+      checkIcon: 'bg-pink-500',
+      badge: 'bg-pink-200 text-pink-800',
+      gradient: 'from-pink-600 to-pink-800'
+    }
+  ];
+  
+  return schemes[index % schemes.length];
+};
+
 const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const router = useRouter();
   const resolvedParams = use(params); // Unwrap the Promise
@@ -32,6 +78,10 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const [newComment, setNewComment] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<TicketTypeRow | null>(null);
+  const [ticketQuantity, setTicketQuantity] = useState(1);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [purchasedTickets, setPurchasedTickets] = useState<EnhancedTicket[]>([]);
 
   const eventId = parseInt(resolvedParams.id);
 
@@ -238,12 +288,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     });
   };
 
-  const handleBookTicket = () => {
-    if (!selectedTicket) return;
-    // Navigate to booking page
-    router.push(`/booking?eventId=${event?.id}&ticketTypeId=${selectedTicket.id}`);
-  };
-
   const handleShare = () => {
     if (navigator.share) {
       navigator.share({
@@ -257,13 +301,24 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      </div>
-    );
-  }
+  const handlePaymentSuccess = (tickets: EnhancedTicket[]) => {
+    setPurchasedTickets(tickets);
+    setShowPaymentModal(false);
+    setShowSuccessScreen(true);
+    
+    // Reset selections
+    setSelectedTicket(null);
+    setTicketQuantity(1);
+    
+    // Send email confirmation (this would be handled by your backend)
+    console.log('Email confirmation should be sent for tickets:', tickets);
+  };
+
+  const handleCloseSuccessScreen = () => {
+    setShowSuccessScreen(false);
+    setPurchasedTickets([]);
+  };
+
 
   if (error || !event) {
     return (
@@ -404,45 +459,89 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
             {/* Tickets Section */}
             {event.ticketTypes.length > 0 && (
               <div className="mb-8">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Tickets</h2>
-                <div className="space-y-3">
-                  {event.ticketTypes.map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                        selectedTicket?.id === ticket.id
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                      onClick={() => setSelectedTicket(ticket)}
-                    >
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900">{ticket.name}</h3>
-                          {ticket.description && (
-                            <p className="text-gray-600 text-sm mt-1">{ticket.description}</p>
-                          )}
-                          <p className="text-gray-500 text-sm mt-1">
-                            {ticket.max_quatity} available
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-lg font-bold text-gray-900">
-                            ₵{ticket.price?.toLocaleString() || '0'}
-                          </p>
+                <h2 className="text-xl font-semibold text-gray-900 mb-6">Select Tickets</h2>
+                <div className="space-y-4">
+                  {event.ticketTypes.map((ticket, index) => {
+                    const colorScheme = getTicketColorScheme(index);
+                    const isSelected = selectedTicket?.id === ticket.id;
+                    
+                    return (
+                      <div
+                        key={ticket.id}
+                        className={`relative border-2 rounded-2xl p-6 cursor-pointer transition-all duration-300 ${
+                          isSelected
+                            ? `${colorScheme.border} ${colorScheme.bg} shadow-lg transform scale-[1.02]`
+                            : 'border-gray-200 hover:border-gray-300 hover:shadow-md bg-white'
+                        }`}
+                        onClick={() => setSelectedTicket(ticket)}
+                      >
+                        {isSelected && (
+                          <div className={`absolute -top-2 -right-2 w-6 h-6 ${colorScheme.checkIcon} rounded-full flex items-center justify-center`}>
+                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                            </svg>
+                          </div>
+                        )}
+                        
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <h3 className="font-bold text-xl text-gray-900">{ticket.name}</h3>
+                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                                isSelected 
+                                  ? colorScheme.badge
+                                  : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {ticket.max_quatity} available
+                              </span>
+                            </div>
+                            {ticket.description && (
+                              <p className="text-gray-600 text-sm mb-3 leading-relaxed">{ticket.description}</p>
+                            )}
+                            
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <span className={`text-2xl font-bold ${
+                                  isSelected ? 'bg-gradient-to-r ' + colorScheme.gradient + ' bg-clip-text text-transparent' : 'text-gray-900'
+                                }`}>
+                                  ₵{ticket.price?.toLocaleString() || '0'}
+                                </span>
+                                <span className="text-sm text-gray-500">per ticket</span>
+                              </div>
+                              
+                              {isSelected && (
+                                <div className="flex items-center gap-3">
+                                  <span className="text-sm font-medium text-gray-700">Quantity:</span>
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTicketQuantity(Math.max(1, ticketQuantity - 1));
+                                      }}
+                                      className="w-8 h-8 rounded-full bg-white border-2 hover:bg-gray-50 flex items-center justify-center text-gray-600 font-bold shadow-sm"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="w-8 text-center font-bold text-gray-900">{ticketQuantity}</span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setTicketQuantity(Math.min(ticket.max_quatity || 10, ticketQuantity + 1));
+                                      }}
+                                      className="w-8 h-8 rounded-full bg-white border-2 hover:bg-gray-50 flex items-center justify-center text-gray-600 font-bold shadow-sm"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
-                
-                <button
-                  onClick={handleBookTicket}
-                  disabled={!selectedTicket}
-                  className="w-full mt-4 bg-blue-600 text-white py-3 px-6 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
-                >
-                  {selectedTicket ? `Book ${selectedTicket.name}` : 'Select a ticket'}
-                </button>
               </div>
             )}
 
@@ -540,6 +639,70 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
           </div>
         </div>
       </div>
+
+      {/* Bottom Summary Section - Fixed to bottom when ticket selected */}
+      {selectedTicket && (
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 shadow-2xl z-50">
+          <div className="max-w-4xl mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900">{selectedTicket.name}</h3>
+                    <p className="text-sm text-gray-600">
+                      {ticketQuantity} ticket{ticketQuantity > 1 ? 's' : ''} × ₵{selectedTicket.price?.toLocaleString() || '0'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-6">
+                <div className="text-right">
+                  <p className="text-sm text-gray-600">Total</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    ₵{((selectedTicket.price || 0) * ticketQuantity).toLocaleString()}
+                  </p>
+                </div>
+                
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold text-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                >
+                  Pay Now
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {selectedTicket && (
+        <PaymentModal
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          selectedTicket={selectedTicket}
+          quantity={ticketQuantity}
+          user={user}
+          eventTitle={event.title}
+          onPaymentSuccess={handlePaymentSuccess}
+        />
+      )}
+
+      {/* Success Screen */}
+      <PaymentSuccessScreen
+        isOpen={showSuccessScreen}
+        tickets={purchasedTickets}
+        eventTitle={event.title}
+        eventDate={event.event_date || ''}
+        eventLocation={event.location_name || 'TBA'}
+        onClose={handleCloseSuccessScreen}
+      />
     </div>
   );
 };

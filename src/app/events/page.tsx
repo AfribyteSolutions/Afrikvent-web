@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import EventCard from "@/components/event/eventcard/EventCard";
 import { TicketsSection } from "@/components/tickets/TicketSection";
+import EventFilters, { FilterState } from "@/components/event/eventfilters";
 
 // Use the consistent Event type from your hooks
 import { Event } from "@/hooks/useEvents";
@@ -36,13 +37,6 @@ interface UserTicket {
   used_at?: string;
   scanned_by?: string;
   ticket_status?: string;
-}
-
-interface FilterState {
-  search: string;
-  location: string;
-  priceRange: string;
-  dateRange: string;
 }
 
 // Database table row types using UPPERCASE table names
@@ -171,6 +165,65 @@ export default function MyEvents() {
     fetchEvents();
   }, []);
 
+  // New useEffect to handle filtering logic
+  useEffect(() => {
+    // A function to apply all filters to the event list
+    const applyFilters = () => {
+      let tempEvents = [...allEvents];
+
+      // Filter by search term
+      if (filters.search) {
+        const searchTerm = filters.search.toLowerCase();
+        tempEvents = tempEvents.filter(
+          (event) =>
+            event.title.toLowerCase().includes(searchTerm) ||
+            event.organizer.toLowerCase().includes(searchTerm) ||
+            event.location.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      // Filter by location
+      if (filters.location) {
+        tempEvents = tempEvents.filter(
+          (event) => event.location.toLowerCase().includes(filters.location.toLowerCase())
+        );
+      }
+
+      // Filter by price range
+      if (filters.priceRange) {
+        tempEvents = tempEvents.filter((event) => {
+          const isFree = event.price.toLowerCase().includes('free');
+          return filters.priceRange === 'free' ? isFree : !isFree;
+        });
+      }
+
+      // Filter by date range (simplified for this example)
+      if (filters.dateRange) {
+          const today = new Date();
+          tempEvents = tempEvents.filter((event) => {
+            const eventDate = new Date(event.date);
+            const diffInDays = Math.floor((eventDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+            
+            if (filters.dateRange === 'today') {
+              return diffInDays === 0;
+            }
+            if (filters.dateRange === 'this-week') {
+              return diffInDays >= 0 && diffInDays <= 7;
+            }
+            if (filters.dateRange === 'this-month') {
+              return diffInDays >= 0 && diffInDays <= 30;
+            }
+            return true;
+          });
+      }
+
+      setFilteredEvents(tempEvents);
+    };
+
+    applyFilters();
+  }, [filters, allEvents]); // Re-run this effect whenever filters or allEvents change
+
+
   // Fetch user tickets when switching to tickets tab
   useEffect(() => {
     const fetchUserTickets = async () => {
@@ -258,6 +311,10 @@ export default function MyEvents() {
     console.log('Ticket sub-tab changed to:', subTab);
   };
 
+  // Add a function to update the filters state from the child component
+  const handleFilterChange = (newFilters: FilterState) => {
+    setFilters(newFilters);
+  };
   
   if (error && activeTab === "events") {
     return (
@@ -319,6 +376,9 @@ export default function MyEvents() {
         {/* Content */}
         {activeTab === "events" ? (
           <div>
+            {/* Add the new filter component here */}
+            <EventFilters onFilterChange={handleFilterChange} />
+
             {/* Events Section */}
             {filteredEvents.length === 0 ? (
               <div className="text-center py-16">
@@ -332,7 +392,7 @@ export default function MyEvents() {
                     No events available
                   </h3>
                   <p className="text-gray-600 mb-6">
-                    There are currently no events to display. Check back later!
+                    There are currently no events that match your filter criteria.
                   </p>
                   <button 
                     onClick={() => router.push('/events')}
