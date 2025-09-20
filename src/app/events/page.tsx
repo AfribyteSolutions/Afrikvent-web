@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import EventCard from "@/components/event/eventcard/EventCard";
 import { TicketsSection } from "@/components/tickets/TicketSection";
-import EventFilters, { FilterState } from "@/components/event/eventfilters";
+import EventFilters, { FilterState } from "@/components/event/eventfilter";
 
 // Use the consistent Event type from your hooks
 import { Event } from "@/hooks/useEvents";
