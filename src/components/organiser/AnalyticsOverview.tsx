@@ -22,8 +22,15 @@ interface SupabaseTicketWithJoins {
   quantity: string | null;
   ticket_status: string | null;
   created_at: string;
-  EVENTS: EventRow[];
-  USERS: UserRow[];
+  event_id: number | null;
+  EVENTS: Array<{
+    id: number;
+    title: string;
+    organizer_id: string;
+  }>;
+  USERS: Array<{
+    name: string;
+  }>;
 }
 
 interface AnalyticsData {
@@ -49,6 +56,15 @@ interface AnalyticsData {
     time: string;
     buyer_name?: string | null;
   }>;
+  recentEvents: Array<{
+    id: number;
+    title: string;
+    event_status: string;
+    event_date: string;
+    created_at: string;
+    ticketsSold?: number;
+    revenue?: number;
+  }>;
   loading: boolean;
 }
 
@@ -62,8 +78,11 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     topSellingEvents: [],
     salesByMonth: [],
     recentActivity: [],
+    recentEvents: [],
     loading: true
   });
+
+  const [toggleLoading, setToggleLoading] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     if (user) {
@@ -80,8 +99,9 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
       // Fetch events data
       const { data: eventsData } = await supabase
         .from('EVENTS')
-        .select('id, title')
-        .eq('organizer_id', user.id);
+        .select('id, title, event_status, event_date, created_at')
+        .eq('organizer_id', user.id)
+        .order('created_at', { ascending: false });
 
       const totalEvents = eventsData?.length || 0;
 
@@ -94,12 +114,13 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
           quantity,
           ticket_status,
           created_at,
-          EVENTS!inner(title, organizer_id),
+          event_id,
+          EVENTS!inner(id, title, organizer_id),
           USERS!inner(name)
         `)
         .eq('EVENTS.organizer_id', user.id);
 
-      const confirmedTickets = (ticketsData as SupabaseTicketWithJoins[])?.filter(ticket => 
+      const confirmedTickets = (ticketsData as SupabaseTicketWithJoins[] | null)?.filter(ticket => 
         ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
       ) || [];
 
@@ -112,6 +133,34 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
       );
 
       const averageTicketPrice = totalTicketsSold > 0 ? totalRevenue / totalTicketsSold : 0;
+
+      // Calculate event performance data
+      const eventPerformance = eventsData?.reduce((acc, event) => {
+        const eventTickets = confirmedTickets.filter(ticket => 
+          ticket.EVENTS?.[0]?.id === event.id
+        );
+        
+        const eventRevenue = eventTickets.reduce((sum, ticket) => 
+          sum + (ticket.total || 0), 0
+        );
+        
+        const eventTicketsSold = eventTickets.reduce((sum, ticket) => 
+          sum + parseInt(ticket.quantity || '0'), 0
+        );
+
+        acc[event.id] = {
+          revenue: eventRevenue,
+          ticketsSold: eventTicketsSold
+        };
+        return acc;
+      }, {} as Record<number, { revenue: number; ticketsSold: number }>) || {};
+
+      // Add performance data to recent events
+      const recentEvents = eventsData?.slice(0, 5).map(event => ({
+        ...event,
+        ticketsSold: eventPerformance[event.id]?.ticketsSold || 0,
+        revenue: eventPerformance[event.id]?.revenue || 0
+      })) || [];
 
       // Calculate top selling events
       const eventSales = confirmedTickets.reduce((acc, ticket) => {
@@ -173,12 +222,48 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         topSellingEvents,
         salesByMonth,
         recentActivity,
+        recentEvents,
         loading: false
       });
 
     } catch (error) {
       console.error('Error fetching analytics data:', error);
       setAnalyticsData(prev => ({ ...prev, loading: false }));
+    }
+  };
+
+  const handlePublishToggle = async (eventId: number, currentStatus: string) => {
+    if (!user) return;
+
+    setToggleLoading(prev => ({ ...prev, [eventId]: true }));
+
+    try {
+      const newStatus = currentStatus === 'draft' ? 'published' : 'draft';
+      
+      const { error } = await supabase
+        .from('EVENTS')
+        .update({ event_status: newStatus })
+        .eq('id', eventId)
+        .eq('organizer_id', user.id);
+
+      if (error) {
+        throw error;
+      }
+
+      // Update local state
+      setAnalyticsData(prev => ({
+        ...prev,
+        recentEvents: prev.recentEvents.map(event =>
+          event.id === eventId
+            ? { ...event, event_status: newStatus }
+            : event
+        )
+      }));
+
+    } catch (error) {
+      console.error('Error toggling event status:', error);
+    } finally {
+      setToggleLoading(prev => ({ ...prev, [eventId]: false }));
     }
   };
 
@@ -217,6 +302,39 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
+        );
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'published':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+            <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-1.5"></div>
+            Live
+          </span>
+        );
+      case 'draft':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+            <div className="w-1.5 h-1.5 bg-gray-400 rounded-full mr-1.5"></div>
+            Draft
+          </span>
+        );
+      case 'cancelled':
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+            <div className="w-1.5 h-1.5 bg-red-400 rounded-full mr-1.5"></div>
+            Cancelled
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+            <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-1.5"></div>
+            {status}
+          </span>
         );
     }
   };
@@ -266,7 +384,65 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         </>
       )}
 
-      {/* Top Selling Events */}
+      {/* My Events with integrated publish toggle */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-semibold text-gray-900">Publish or Draft Events</h3>
+        </div>
+        
+        <div className="space-y-4">
+          {analyticsData.recentEvents.length > 0 ? (
+            analyticsData.recentEvents.map((event) => (
+              <div key={event.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h4 className="font-medium text-gray-900">{event.title}</h4>
+                    {getStatusBadge(event.event_status)}
+                  </div>
+                  <div className="flex items-center gap-6 text-sm text-gray-600">
+                    <span>📅 {new Date(event.event_date).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric'
+                    })}</span>
+                    <span>📍 ghana</span>
+                  </div>
+                </div>
+                
+                  <div className="flex items-center gap-3 ml-6">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handlePublishToggle(event.id, event.event_status)}
+                        disabled={toggleLoading[event.id] || event.event_status === 'cancelled'}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                          event.event_status === 'published' ? 'bg-green-600' : 'bg-gray-200'
+                        } ${
+                          event.event_status === 'cancelled' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                            event.event_status === 'published' ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                        {toggleLoading[event.id] && (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                          </div>
+                        )}
+                      </button>
+                      <span className="text-xs text-gray-500">Publish</span>
+                    </div>
+                  </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-gray-500 text-center py-8">No events created yet</p>
+          )}
+        </div>
+      </div>
+
+      {/* Top Selling Events / Performance Overview */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">
           {detailed ? 'Top Selling Events' : 'Performance Overview'}

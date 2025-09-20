@@ -60,13 +60,22 @@ const EventDetails: React.FC<EventDetailsProps> = ({
   ];
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      weekday: 'short',
-      month: 'short', 
-      day: 'numeric',
-      year: 'numeric'
-    });
+    if (!dateString) return 'Date TBA';
+    
+    try {
+      const date = new Date(dateString);
+      // Check if date is valid
+      if (isNaN(date.getTime())) return 'Date TBA';
+      
+      return date.toLocaleDateString('en-US', { 
+        weekday: 'short',
+        month: 'short', 
+        day: 'numeric',
+        year: 'numeric'
+      });
+    } catch (error) {
+      return 'Date TBA';
+    }
   };
 
   const handleBookNow = () => {
@@ -78,20 +87,40 @@ const EventDetails: React.FC<EventDetailsProps> = ({
   return (
     <div className="bg-white min-h-screen">
       {/* Hero Image */}
-      <div className="relative h-64 w-full">
-        <Image
-          src={event.image}
-          alt={event.title}
-          fill
-          className="object-cover"
-        />
+      <div className="relative h-64 w-full bg-gray-200">
+        {event.image && (
+          <Image
+            src={event.image}
+            alt={event.title}
+            fill
+            className="object-cover"
+            onError={(e) => {
+              const target = e.currentTarget;
+              target.style.display = 'none';
+            }}
+          />
+        )}
+        {!event.image && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+        )}
         <div className="absolute inset-0 bg-black bg-opacity-30" />
+        
+        {/* Sponsored badge */}
+        {event.isSponsored && (
+          <div className="absolute top-4 left-4 bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-900 px-3 py-1.5 rounded-full text-xs font-bold">
+            Sponsored
+          </div>
+        )}
       </div>
 
       <div className="p-6">
         {/* Event Date */}
         <div className="text-green-600 text-sm font-medium mb-2">
-          {formatDate(event.date)}
+          {formatDate(event.date)} • {event.time}
         </div>
 
         {/* Event Title */}
@@ -102,21 +131,21 @@ const EventDetails: React.FC<EventDetailsProps> = ({
         {/* Location */}
         <div className="flex items-center text-gray-600 mb-4">
           <MapPinIcon className="w-5 h-5 mr-2" />
-          <span>{event.venue}, {event.location}</span>
+          <span>{event.venue}{event.location ? `, ${event.location}` : ''}</span>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={() => onShare?.(event)}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors"
           >
             <ShareIcon className="w-5 h-5" />
             <span>Share</span>
           </button>
           <button
             onClick={() => onAddToCalendar?.(event)}
-            className="flex items-center gap-2 text-blue-600 hover:text-blue-800"
+            className="flex items-center gap-2 text-blue-600 hover:text-blue-800 transition-colors"
           >
             <CalendarIcon className="w-5 h-5" />
             <span>Add to Calendar</span>
@@ -131,6 +160,23 @@ const EventDetails: React.FC<EventDetailsProps> = ({
           </p>
         </div>
 
+        {/* Tags */}
+        {event.tags && event.tags.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Tags</h2>
+            <div className="flex flex-wrap gap-2">
+              {event.tags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-50 text-blue-700 border border-blue-200"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Organizer Info */}
         <div className="mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Organizer Info</h2>
@@ -141,44 +187,65 @@ const EventDetails: React.FC<EventDetailsProps> = ({
         </div>
 
         {/* Ticket Options */}
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Ticket Options</h2>
-          <div className="grid grid-cols-3 gap-4 mb-4">
-            {event.ticketOptions.map((ticket, index) => (
-              <div
-                key={index}
-                className={`border rounded-lg p-4 text-center cursor-pointer transition-colors ${
-                  selectedTicket?.type === ticket.type
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-                onClick={() => setSelectedTicket(ticket)}
-              >
-                <div className="font-semibold text-gray-900 mb-1">
-                  {ticket.type}
+        {event.ticketOptions && event.ticketOptions.length > 0 ? (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Ticket Options</h2>
+            <div className="space-y-3 mb-4">
+              {event.ticketOptions.map((ticket, index) => (
+                <div
+                  key={index}
+                  className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                    selectedTicket?.type === ticket.type
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                  onClick={() => setSelectedTicket(ticket)}
+                >
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-semibold text-gray-900 mb-1">
+                        {ticket.type}
+                      </div>
+                      <div className="text-sm text-gray-500">
+                        {ticket.availability}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-gray-900">
+                        {ticket.currency}{ticket.price}
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className="text-lg font-bold text-gray-900 mb-1">
-                  {ticket.price} {ticket.currency}
-                </div>
-                <div className="text-xs text-gray-500">
-                  {ticket.availability}
-                </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          {/* Book Now Button */}
-          <button
-            onClick={handleBookNow}
-            disabled={!selectedTicket}
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
-          >
-            {selectedTicket 
-              ? `From ${selectedTicket.price} ${selectedTicket.currency} - Book Now`
-              : 'Select a ticket option'
-            }
-          </button>
-        </div>
+            {/* Book Now Button */}
+            <button
+              onClick={handleBookNow}
+              disabled={!selectedTicket}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition-colors"
+            >
+              {selectedTicket 
+                ? `Book ${selectedTicket.type} - ${selectedTicket.currency}${selectedTicket.price}`
+                : 'Select a ticket option'
+              }
+            </button>
+          </div>
+        ) : (
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Event Access</h2>
+            <div className="bg-gray-50 rounded-lg p-4 text-center">
+              <p className="text-gray-600 mb-4">This is a free event or ticket information is not available yet.</p>
+              <button
+                onClick={() => onBookTicket?.(event, { type: 'Free', price: '0', currency: '₵', availability: 'Available' })}
+                className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Register for Free
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Comments & Questions */}
         <div>

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
 import CreateEventModal from './CreateEventModal';
+import EditEventModal from './EditEventModal';
 
 interface Event {
   id: number;
@@ -34,6 +35,8 @@ const EventsList: React.FC<EventsListProps> = ({
   const router = useRouter();
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -164,19 +167,36 @@ const EventsList: React.FC<EventsListProps> = ({
   };
 
   const handleEventClick = (eventId: number) => {
-    router.push(`/organiser/events/${eventId}`);
+    router.push(`/events/${eventId}`);
   };
 
   const handleCreateEvent = () => {
     setIsCreateModalOpen(true);
   };
 
+  const handleEditEvent = (eventId: number) => {
+    setEditingEventId(eventId);
+    setIsEditModalOpen(true);
+  };
+
   const handleModalClose = () => {
     setIsCreateModalOpen(false);
   };
 
+  const handleEditModalClose = () => {
+    setIsEditModalOpen(false);
+    setEditingEventId(null);
+  };
+
   const handleEventCreated = () => {
     setIsCreateModalOpen(false);
+    // Refresh events list
+    fetchEvents();
+  };
+
+  const handleEventUpdated = () => {
+    setIsEditModalOpen(false);
+    setEditingEventId(null);
     // Refresh events list
     fetchEvents();
   };
@@ -347,7 +367,7 @@ const EventsList: React.FC<EventsListProps> = ({
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        router.push(`/organiser/events/${event.id}/edit`);
+                        handleEditEvent(event.id);
                       }}
                       className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="Edit Event"
@@ -409,6 +429,15 @@ const EventsList: React.FC<EventsListProps> = ({
         onClose={handleModalClose}
         onSuccess={handleEventCreated}
         user={user}
+      />
+
+      {/* Edit Event Modal */}
+      <EditEventModal
+        isOpen={isEditModalOpen}
+        onClose={handleEditModalClose}
+        onSuccess={handleEventUpdated}
+        user={user}
+        eventId={editingEventId || 0}
       />
     </>
   );

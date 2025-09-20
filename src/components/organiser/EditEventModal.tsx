@@ -1,14 +1,15 @@
-// src/components/organiser/CreateEventModal.tsx
+// src/components/organiser/EditEventModal.tsx
 'use client';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
 
-interface CreateEventModalProps {
+interface EditEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
   user: User | null;
+  eventId: number;
 }
 
 interface EventFormData {
@@ -21,6 +22,7 @@ interface EventFormData {
   category: string;
   currency: string;
   image: File | null;
+  currentImageUrl?: string;
   ticketTypes: TicketType[];
   eventStatus: 'draft' | 'published';
 }
@@ -32,6 +34,7 @@ interface TicketType {
   quantity: number;
   description: string;
   format: 'in-person' | 'online';
+  existingId?: number; // For existing ticket types from database
 }
 
 interface Currency {
@@ -41,14 +44,16 @@ interface Currency {
   flag: string;
 }
 
-const CreateEventModal: React.FC<CreateEventModalProps> = ({ 
+const EditEventModal: React.FC<EditEventModalProps> = ({ 
   isOpen, 
   onClose, 
   onSuccess,
-  user
+  user,
+  eventId
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(true);
   const [error, setError] = useState('');
   const [formData, setFormData] = useState<EventFormData>({
     title: '',
@@ -58,10 +63,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     location: '',
     venue: '',
     category: '',
-    currency: 'GHS', // Default to Ghanaian Cedi
+    currency: 'GHS',
     image: null,
+    currentImageUrl: '',
     ticketTypes: [],
-    eventStatus: 'draft' // Default to draft
+    eventStatus: 'draft'
   });
 
   const categories = [
@@ -77,10 +83,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
   ];
 
   const currencies: Currency[] = [
-    // Ghanaian currency (primary)
     { code: 'GHS', symbol: '₵', name: 'Ghanaian Cedi', flag: '🇬🇭' },
-    
-    // Major African currencies
     { code: 'NGN', symbol: '₦', name: 'Nigerian Naira', flag: '🇳🇬' },
     { code: 'XAF', symbol: 'FC', name: 'Central African CFA Franc', flag: '🇨🇲' },
     { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc', flag: '🇸🇳' },
@@ -92,8 +95,6 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     { code: 'EGP', symbol: '£', name: 'Egyptian Pound', flag: '🇪🇬' },
     { code: 'MAD', symbol: 'DH', name: 'Moroccan Dirham', flag: '🇲🇦' },
     { code: 'BWP', symbol: 'P', name: 'Botswanan Pula', flag: '🇧🇼' },
-    
-    // International currencies
     { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
     { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
     { code: 'GBP', symbol: '£', name: 'British Pound', flag: '🇬🇧' }
@@ -101,9 +102,82 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
   const selectedCurrency = currencies.find(c => c.code === formData.currency) || currencies[0];
 
+  // Load existing event data
+  useEffect(() => {
+    if (isOpen && eventId && user) {
+      loadEventData();
+    }
+  }, [isOpen, eventId, user]);
+
+  const loadEventData = async () => {
+    if (!user) return;
+
+    setIsLoadingData(true);
+    try {
+      // Fetch event data
+      const { data: eventData, error: eventError } = await supabase
+        .from('EVENTS')
+        .select('*')
+        .eq('id', eventId)
+        .eq('organizer_id', user.id)
+        .single();
+
+      if (eventError) {
+        throw new Error('Event not found or access denied');
+      }
+
+      // Fetch ticket types
+      const { data: ticketTypesData, error: ticketError } = await supabase
+        .from('TICKET_TYPES')
+        .select('*')
+        .eq('event_id', eventId);
+
+      if (ticketError) {
+        console.warn('Error loading ticket types:', ticketError);
+      }
+
+      // Parse event date
+      const eventDate = new Date(eventData.event_date);
+      const date = eventDate.toISOString().split('T')[0];
+      const time = eventDate.toTimeString().slice(0, 5);
+
+      // Map ticket types
+      const mappedTicketTypes: TicketType[] = (ticketTypesData || []).map(ticket => ({
+        id: `existing-${ticket.id}`,
+        existingId: ticket.id,
+        name: ticket.name || '',
+        price: ticket.price || 0,
+        quantity: ticket.max_quatity || 0,
+        description: ticket.description || '',
+        format: 'in-person' as const // Default, since format isn't in database
+      }));
+
+      setFormData({
+        title: eventData.title || '',
+        description: eventData.description || '',
+        date,
+        time,
+        location: eventData.location_name || '',
+        venue: eventData.address || '',
+        category: eventData.category || '',
+        currency: 'GHS', // Default since currency isn't stored
+        image: null,
+        currentImageUrl: eventData.images?.[0] || '',
+        ticketTypes: mappedTicketTypes,
+        eventStatus: eventData.event_status as 'draft' | 'published'
+      });
+
+    } catch (error) {
+      console.error('Error loading event data:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load event data');
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
   const handleInputChange = (field: keyof EventFormData, value: string | 'draft' | 'published') => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    setError(''); // Clear errors when user starts typing
+    setError('');
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,7 +187,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
   const addTicketType = () => {
     const newTicket: TicketType = {
-      id: Date.now().toString(),
+      id: `new-${Date.now()}`,
       name: '',
       price: 0,
       quantity: 0,
@@ -142,8 +216,8 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     }));
   };
 
-  const uploadEventImage = async (eventId: number): Promise<string | null> => {
-    if (!formData.image || !user) return null;
+  const uploadEventImage = async (): Promise<string | null> => {
+    if (!formData.image || !user) return formData.currentImageUrl || null;
 
     try {
       const fileExt = formData.image.name.split('.').pop();
@@ -159,7 +233,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
       if (uploadError) {
         console.error('Image upload error:', uploadError);
-        return null;
+        return formData.currentImageUrl || null;
       }
 
       const { data: publicUrlData } = supabase.storage
@@ -170,7 +244,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
     } catch (error) {
       console.error('Error uploading image:', error);
-      return null;
+      return formData.currentImageUrl || null;
     }
   };
 
@@ -187,85 +261,75 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
       // Combine date and time
       const eventDateTime = `${formData.date}T${formData.time}:00.000Z`;
 
-      // Create the event first
-      const { data: eventData, error: eventError } = await supabase
+      // Upload new image if provided
+      const imageUrl = await uploadEventImage();
+
+      // Update the event
+      const { error: eventError } = await supabase
         .from('EVENTS')
-        .insert([{
+        .update({
           title: formData.title,
           description: formData.description,
           event_date: eventDateTime,
           location_name: formData.location,
           address: formData.venue,
-          organizer_id: user.id,
           event_status: formData.eventStatus,
-          is_featured: false,
-          is_sponsored: false
-        }])
-        .select()
-        .single();
+          images: imageUrl ? [imageUrl] : (formData.currentImageUrl ? [formData.currentImageUrl] : [])
+        })
+        .eq('id', eventId)
+        .eq('organizer_id', user.id);
 
       if (eventError) {
         throw new Error(eventError.message);
       }
 
-      const eventId = eventData.id;
+      // Handle ticket types
+      const existingTickets = formData.ticketTypes.filter(t => t.existingId);
+      const newTickets = formData.ticketTypes.filter(t => !t.existingId);
 
-      // Upload image if provided
-      let imageUrl: string | null = null;
-      if (formData.image) {
-        imageUrl = await uploadEventImage(eventId);
-      }
+      // Update existing ticket types
+      for (const ticket of existingTickets) {
+        if (ticket.existingId) {
+          const { error: updateError } = await supabase
+            .from('TICKET_TYPES')
+            .update({
+              name: ticket.name,
+              description: ticket.description,
+              price: ticket.price,
+              max_quatity: ticket.quantity
+            })
+            .eq('id', ticket.existingId);
 
-      // Update event with image URL if uploaded
-      if (imageUrl) {
-        const { error: updateError } = await supabase
-          .from('EVENTS')
-          .update({ images: [imageUrl] })
-          .eq('id', eventId);
-
-        if (updateError) {
-          console.warn('Error updating event with image:', updateError);
+          if (updateError) {
+            console.error('Error updating ticket type:', updateError);
+          }
         }
       }
 
-      // Create ticket types
-      for (const ticketType of formData.ticketTypes) {
-        const { error: ticketError } = await supabase
+      // Create new ticket types
+      for (const ticket of newTickets) {
+        const { error: createError } = await supabase
           .from('TICKET_TYPES')
           .insert([{
             event_id: eventId,
-            name: ticketType.name,
-            description: ticketType.description,
-            price: ticketType.price,
-            max_quatity: ticketType.quantity
+            name: ticket.name,
+            description: ticket.description,
+            price: ticket.price,
+            max_quatity: ticket.quantity
           }]);
 
-        if (ticketError) {
-          console.error('Error creating ticket type:', ticketError);
+        if (createError) {
+          console.error('Error creating ticket type:', createError);
         }
       }
 
-      // Reset form
-      setFormData({
-        title: '',
-        description: '',
-        date: '',
-        time: '',
-        location: '',
-        venue: '',
-        category: '',
-        currency: 'GHS',
-        image: null,
-        ticketTypes: [],
-        eventStatus: 'draft'
-      });
-
+      // Reset form and close
       setCurrentStep(1);
       onSuccess();
 
     } catch (error) {
-      console.error('Error creating event:', error);
-      setError(error instanceof Error ? error.message : 'Failed to create event');
+      console.error('Error updating event:', error);
+      setError(error instanceof Error ? error.message : 'Failed to update event');
     } finally {
       setIsLoading(false);
     }
@@ -294,13 +358,29 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
           ticket.name && ticket.price >= 0 && ticket.quantity > 0 && ticket.format
         );
       case 4:
-        return true; // Publish step is always valid
+        return true;
       default:
         return false;
     }
   };
 
   if (!isOpen) return null;
+
+  if (isLoadingData) {
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div className="flex items-center justify-center min-h-screen px-4">
+          <div className="fixed inset-0 bg-black opacity-50"></div>
+          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-center">
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              <span className="ml-3 text-gray-600">Loading event data...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -311,7 +391,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
           {/* Header */}
           <div className="flex justify-between items-center p-6 border-b border-gray-200">
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">Create New Event</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Edit Event</h2>
               <p className="text-sm text-gray-600">Step {currentStep} of 4</p>
             </div>
             <button
@@ -346,7 +426,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
               <span>Event Details</span>
               <span>Date & Location</span>
               <span>Tickets</span>
-              <span>Publish</span>
+              <span>Update</span>
             </div>
           </div>
 
@@ -424,9 +504,6 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                         ))}
                       </optgroup>
                     </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Selected: {selectedCurrency.flag} {selectedCurrency.name}
-                    </p>
                   </div>
                 </div>
 
@@ -447,13 +524,25 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Event Image
                   </label>
+                  {formData.currentImageUrl && (
+                    <div className="mb-2">
+                      <img 
+                        src={formData.currentImageUrl} 
+                        alt="Current event image" 
+                        className="w-32 h-32 object-cover rounded-lg"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Current image</p>
+                    </div>
+                  )}
                   <input
                     type="file"
                     accept="image/*"
                     onChange={handleImageChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Upload an image for your event (JPG, PNG, up to 5MB)</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Upload a new image to replace the current one (JPG, PNG, up to 5MB)
+                  </p>
                 </div>
               </div>
             )}
@@ -544,14 +633,21 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                       </svg>
                     </div>
-                    <p className="text-gray-600">No ticket types added yet. Click -Add Ticket Type- to get started.</p>
+                    <p className="text-gray-600">No ticket types found. Click -Add Ticket Type- to get started.</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {formData.ticketTypes.map((ticket, index) => (
                       <div key={ticket.id} className="border border-gray-200 rounded-lg p-4">
                         <div className="flex justify-between items-center mb-4">
-                          <h4 className="font-medium text-gray-900">Ticket Type #{index + 1}</h4>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium text-gray-900">Ticket Type #{index + 1}</h4>
+                            {ticket.existingId && (
+                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                Existing
+                              </span>
+                            )}
+                          </div>
                           <button
                             onClick={() => removeTicketType(ticket.id)}
                             className="text-red-600 hover:text-red-800"
@@ -648,7 +744,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
             {currentStep === 4 && (
               <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900">Publish Event</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Update Event</h3>
                 
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
                   <div className="flex items-start space-x-3">
@@ -656,9 +752,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <div>
-                      <h4 className="text-lg font-medium text-blue-900 mb-2">Ready to publish your event?</h4>
+                      <h4 className="text-lg font-medium text-blue-900 mb-2">Ready to update your event?</h4>
                       <p className="text-blue-700 mb-4">
-                        Choose how you want to create your event. You can always change the status later from your dashboard.
+                        Review your changes and update the event status if needed.
                       </p>
                     </div>
                   </div>
@@ -678,15 +774,15 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                           : 'border-2 border-gray-300'
                       }`}></div>
                       <div>
-                        <h4 className="font-medium text-gray-900">Save as Draft</h4>
+                        <h4 className="font-medium text-gray-900">Keep as Draft</h4>
                         <p className="text-sm text-gray-600 mt-1">
-                          Create the event but keep it private. You can review, edit, and publish it later.
+                          Save changes but keep the event private for further editing.
                         </p>
                         <div className="flex items-center mt-2 text-xs text-gray-500">
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 0h12a2 2 0 002-2v-4a2 2 0 00-2-2H6a2 2 0 00-2 2v4a2 2 0 002 2zM4 10V6a2 2 0 012-2h12a2 2 0 012 2v4" />
                           </svg>
-                          Event will be private and not visible to attendees
+                          Event will remain private and not visible to attendees
                         </div>
                       </div>
                     </div>
@@ -705,9 +801,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                           : 'border-2 border-gray-300'
                       }`}></div>
                       <div>
-                        <h4 className="font-medium text-gray-900">Publish Immediately</h4>
+                        <h4 className="font-medium text-gray-900">Publish Event</h4>
                         <p className="text-sm text-gray-600 mt-1">
-                          Make your event live and visible to attendees. They can start purchasing tickets right away.
+                          Make your updated event live and visible to attendees.
                         </p>
                         <div className="flex items-center mt-2 text-xs text-gray-500">
                           <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -788,25 +884,14 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                       <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                       </svg>
-                      {formData.eventStatus === 'published' ? 'Publishing...' : 'Creating...'}
+                      Updating...
                     </>
                   ) : (
                     <>
-                      {formData.eventStatus === 'published' ? (
-                        <>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          Publish Event
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                          </svg>
-                          Save as Draft
-                        </>
-                      )}
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                      </svg>
+                      Update Event
                     </>
                   )}
                 </button>
@@ -819,4 +904,4 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
   );
 };
 
-export default CreateEventModal;
+export default EditEventModal;
