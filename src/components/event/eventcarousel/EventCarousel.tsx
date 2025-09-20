@@ -1,143 +1,188 @@
-import React, { useRef } from "react";
-import EventCard from "../eventcard/EventCard";
-import { Event } from "@/hooks/useEvents"; // Use the transformed Event type
-import { ArrowRight } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Event } from '@/hooks/useEvents';
+import { ArrowRight, Calendar, MapPin, Clock, User, Sparkles } from 'lucide-react';
 
-interface EventCarouselProps {
+interface Event3DCarouselProps {
   events: Event[];
   onEventClick?: (event: Event) => void;
   title?: string;
   onSeeMore?: () => void;
 }
 
-const EventCarousel: React.FC<EventCarouselProps> = ({
+const Event3DCarousel: React.FC<Event3DCarouselProps> = ({
   events,
   onEventClick,
-  title = "Events",
+  title = "Featured Events",
   onSeeMore,
 }) => {
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  // Auto-rotate carousel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (events.length > 1 && !isAnimating) {
+        setIsAnimating(true);
+        setCurrentIndex((prev) => (prev + 1) % events.length);
+        setTimeout(() => setIsAnimating(false), 1000);
+      }
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [events.length, isAnimating]);
 
   if (events.length === 0) {
     return null;
   }
 
+  const displayEvents = events.slice(0, 5); // Limit to 5 cards max for optimal 3D effect
+
   return (
-    <section className="w-full py-8 sm:py-12 lg:py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="w-full py-16 bg-gradient-to-br from-slate-50 to-blue-50 relative overflow-hidden">
+      {/* Background decoration */}
+      <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-purple-500/5 to-pink-500/5" />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
-        <div className="flex items-center justify-between mb-6 sm:mb-8">
-          <div className="flex-1">
-            <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 bg-clip-text text-transparent">
+        <div className="text-center mb-16">
+          <div className="flex items-center justify-center gap-4 mb-6">
+            <h2 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-blue-700 to-purple-700 bg-clip-text text-transparent">
               {title}
             </h2>
-            <div className="mt-1 sm:mt-2 h-1 w-12 sm:w-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
-          </div>
-
-          {/* See More Arrow Button */}
-          {onSeeMore && (
-            <button
-              onClick={onSeeMore}
-              className="group flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
-              aria-label="See more events"
-            >
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 group-hover:translate-x-0.5 transition-transform duration-200" />
-            </button>
-          )}
-        </div>
-
-        {/* Carousel Container */}
-        <div className="relative">
-          {/* Event Count Indicator */}
-          <div className="mb-4 sm:mb-6">
-            <span className="text-xs sm:text-sm text-gray-500 font-medium px-3 py-1 bg-gray-100 rounded-full">
-              {events.length} {events.length === 1 ? 'Event' : 'Events'}
-            </span>
-          </div>
-
-          <div
-            ref={scrollContainerRef}
-            className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto scroll-smooth pb-4 snap-x snap-mandatory"
-            style={{
-              scrollbarWidth: "none", // For Firefox
-              msOverflowStyle: "none", // For Internet Explorer and Edge
-            }}
-          >
-            {events.map((event, index) => (
-              <div 
-                key={event.id} 
-                className="flex-shrink-0 w-64 sm:w-72 md:w-80 lg:w-96 snap-start first:ml-0 last:mr-4"
+            {onSeeMore && (
+              <button
+                onClick={onSeeMore}
+                className="group flex items-center justify-center w-12 h-12 lg:w-16 lg:h-16 rounded-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white shadow-xl hover:shadow-2xl transform hover:scale-110 transition-all duration-300"
+                aria-label="See more events"
               >
-                <div className="group">
-                  <EventCard
-                    event={event}
-                    onClick={onEventClick}
-                    className="h-full transform group-hover:scale-[1.02] transition-transform duration-300 shadow-md hover:shadow-xl"
-                  />
-          
-                </div>
-              </div>
-            ))}
-            
-            {/* End Spacer for Better Scroll Experience */}
-            <div className="flex-shrink-0 w-4 sm:w-6"></div>
-          </div>
-
-          {/* Scroll Indicators */}
-          <div className="flex justify-center mt-4 sm:mt-6 space-x-1">
-            {events.slice(0, Math.min(events.length, 8)).map((_, index) => (
-              <div
-                key={index}
-                className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-gray-300"
-              />
-            ))}
-            {events.length > 8 && (
-              <div className="flex items-center ml-2">
-                <span className="text-xs text-gray-400">+{events.length - 8}</span>
-              </div>
+                <ArrowRight className="w-5 h-5 lg:w-6 lg:h-6 group-hover:translate-x-1 transition-transform duration-300" />
+              </button>
             )}
           </div>
-
-          {/* Modern Gradient Overlays */}
-          <div className="absolute top-0 left-0 w-4 sm:w-6 lg:w-8 h-full bg-gradient-to-r from-white via-white/80 to-transparent pointer-events-none z-10" />
-          <div className="absolute top-0 right-0 w-4 sm:w-6 lg:w-8 h-full bg-gradient-to-l from-white via-white/80 to-transparent pointer-events-none z-10" />
-          
-          {/* Bottom fade for mobile */}
-          <div className="absolute bottom-0 left-0 right-0 h-4 bg-gradient-to-t from-white to-transparent pointer-events-none sm:hidden" />
+          <div className="w-24 h-1 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full mx-auto" />
         </div>
 
-        {/* Mobile Swipe Hint */}
-        <div className="flex justify-center mt-4 sm:hidden">
-          <div className="flex items-center space-x-2 text-gray-400 text-xs">
-            <div className="flex space-x-1">
-              <div className="w-6 h-0.5 bg-gray-300 rounded"></div>
-              <div className="w-4 h-0.5 bg-gray-400 rounded"></div>
-              <div className="w-6 h-0.5 bg-gray-300 rounded"></div>
+        {/* 3D Carousel Container */}
+        <div className="relative flex justify-center items-center h-96">
+          <div className="relative w-80 h-80 perspective-1000">
+            <div 
+              className="absolute w-full h-full transform-style-preserve-3d transition-transform duration-1000 ease-out"
+              style={{
+                transform: `translateZ(-200px) rotateY(${-currentIndex * (360 / displayEvents.length)}deg)`
+              }}
+            >
+              {displayEvents.map((event, index) => (
+                <div
+                  key={event.id}
+                  className="absolute top-0 left-0 w-80 h-72 cursor-pointer group"
+                  style={{
+                    transform: `rotateY(${index * (360 / displayEvents.length)}deg) translateZ(200px)`
+                  }}
+                  onClick={() => onEventClick?.(event)}
+                >
+                  {/* Event Card */}
+                  <div className="w-full h-full bg-white rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-500 border border-gray-100 group-hover:border-blue-200">
+                    {/* Image Section */}
+                    <div className="relative h-48 overflow-hidden">
+                      <img
+                        src={event.image}
+                        alt={event.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      />
+                      
+                      {/* Gradient Overlay */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      
+                      {/* Badges */}
+                      <div className="absolute top-3 left-3 right-3 flex justify-between items-start">
+                        {event.isSponsored && (
+                          <div className="flex items-center gap-1.5 bg-gradient-to-r from-amber-400 to-yellow-500 text-amber-900 px-3 py-1.5 rounded-full text-xs font-bold shadow-lg">
+                            <Sparkles className="w-3 h-3" />
+                            Sponsored
+                          </div>
+                        )}
+                        
+                        <div className="bg-black/80 backdrop-blur text-white px-3 py-1.5 rounded-full text-sm font-bold">
+                          {event.price}
+                        </div>
+                      </div>
+                      
+                      {/* Title Overlay */}
+                      <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
+                        <h3 className="font-bold text-lg leading-tight line-clamp-2 drop-shadow-lg">
+                          {event.title}
+                        </h3>
+                      </div>
+                    </div>
+                    
+                    {/* Content Section */}
+                    <div className="p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-gray-600 text-sm">
+                        <Calendar className="w-4 h-4 text-blue-500" />
+                        <span>{event.date}</span>
+                        <Clock className="w-4 h-4 text-purple-500 ml-2" />
+                        <span>{event.time}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-gray-600 text-sm">
+                        <MapPin className="w-4 h-4 text-green-500" />
+                        <span className="truncate">{event.venue}</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 text-gray-600 text-sm">
+                        <User className="w-4 h-4 text-orange-500" />
+                        <span className="truncate">{event.organizer}</span>
+                      </div>
+                    </div>
+                    
+                    {/* Hover Effect */}
+                    <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-2xl" />
+                  </div>
+                </div>
+              ))}
             </div>
-            <span>Swipe to explore</span>
+          </div>
+          
+          {/* Navigation Dots */}
+          <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 flex space-x-2">
+            {displayEvents.map((_, index) => (
+              <button
+                key={index}
+                className={`w-3 h-3 rounded-full transition-all duration-300 ${
+                  currentIndex === index 
+                    ? 'bg-blue-500 scale-125' 
+                    : 'bg-gray-300 hover:bg-gray-400'
+                }`}
+                onClick={() => {
+                  if (!isAnimating) {
+                    setIsAnimating(true);
+                    setCurrentIndex(index);
+                    setTimeout(() => setIsAnimating(false), 1000);
+                  }
+                }}
+              />
+            ))}
           </div>
         </div>
-
-        {/* Custom Scrollbar Styles */}
-        <style jsx>{`
-          .scrollbar-hide::-webkit-scrollbar {
-            display: none;
-          }
-          .scrollbar-hide {
-            -ms-overflow-style: none;
-            scrollbar-width: none;
-          }
-          
-          /* Smooth scroll behavior enhancement */
-          @media (prefers-reduced-motion: no-preference) {
-            .scroll-smooth {
-              scroll-behavior: smooth;
-            }
-          }
-        `}</style>
+        
+        {/* Event Counter */}
+        <div className="text-center mt-8">
+          <span className="text-sm text-gray-500 font-medium px-4 py-2 bg-white/60 backdrop-blur rounded-full shadow-sm">
+            Showing {displayEvents.length} of {events.length} events
+          </span>
+        </div>
       </div>
-    </section>
+      
+      <style jsx>{`
+        .perspective-1000 {
+          perspective: 1000px;
+        }
+        .transform-style-preserve-3d {
+          transform-style: preserve-3d;
+        }
+      `}</style>
+    </div>
   );
 };
 
-export default EventCarousel;
+export default Event3DCarousel;

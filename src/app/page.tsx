@@ -182,20 +182,7 @@ export default function HomePage() {
         />
       ) : null}
 
-      {/* Discover Amazing Events */}
-      <section className="py-16 bg-gray-50">
-        <div className="container mx-auto px-4">
-          <div className="text-center max-w-4xl mx-auto">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
-              Discover Amazing Events
-            </h2>
-            <p className="text-lg text-gray-600 mb-12">
-              From music festivals to tech conferences, find events that match your interests and
-              connect with like-minded people in your community.
-            </p>
-          </div>
-        </div>
-      </section>
+      
 
       {/* Promotional Banner */}
       <PromotionalBannerSection
