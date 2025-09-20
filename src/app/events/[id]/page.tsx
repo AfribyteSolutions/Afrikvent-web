@@ -324,7 +324,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Event Not Found</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Just a Sec</h2>
           <p className="text-gray-600 mb-6">{error}</p>
           <button 
             onClick={() => router.push('/')}
