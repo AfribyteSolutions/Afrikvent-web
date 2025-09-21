@@ -91,8 +91,7 @@ export default function MyEvents() {
           .select(`
             *,
             TICKET_TYPES(*),
-            USERS!EVENTS_organizer_id_fkey(name, email),
-            ORGANIZER_KYC!EVENTS_organizer_id_fkey(organization_name, contact_person_name)
+            USERS!EVENTS_organizer_id_fkey(name, email)
           `)
           .eq("event_status", "published")
           .gte("event_date", new Date().toISOString().split('T')[0])
@@ -107,22 +106,33 @@ export default function MyEvents() {
         interface EventWithRelations extends EventRow {
           TICKET_TYPES: TicketTypeRow[];
           USERS: { name: string; email: string }[];
-          ORGANIZER_KYC: { organization_name: string; contact_person_name: string }[];
         }
 
         // Transform to match the Event interface from eventService
-        const transformedEvents: Event[] = (eventsData || []).map(
-          (row: EventWithRelations) => {
-            // Get organizer information from joined tables
-            const organizationName = row.ORGANIZER_KYC && row.ORGANIZER_KYC.length > 0 
-              ? row.ORGANIZER_KYC[0].organization_name 
-              : null;
-            
-            const organizerName = row.USERS && row.USERS.length > 0 
+        const transformedEvents: Event[] = await Promise.all(
+          (eventsData || []).map(async (row: EventWithRelations) => {
+            // Get organizer name from joined USERS data
+            const userName = row.USERS && row.USERS.length > 0 
               ? row.USERS[0].name 
-              : (row.ORGANIZER_KYC && row.ORGANIZER_KYC.length > 0 
-                  ? row.ORGANIZER_KYC[0].contact_person_name 
-                  : 'Event Organizer');
+              : 'Event Organizer';
+
+            // Fetch organization data separately to avoid join issues
+            let organizationName = null;
+            try {
+              const { data: kycData } = await supabase
+                .from('ORGANIZER_KYC')
+                .select('organization_name')
+                .eq('user_id', row.organizer_id)
+                .single();
+              
+              organizationName = kycData?.organization_name || null;
+            } catch (error) {
+              // Silently handle if no KYC data exists
+              console.log('No organization data found for organizer:', row.organizer_id);
+            }
+
+            // Use organization name if available, otherwise fall back to user name
+            const organizerName = organizationName || userName;
 
             // Get minimum ticket price from joined TICKET_TYPES data
             const minPrice = row.TICKET_TYPES && row.TICKET_TYPES.length > 0
@@ -159,7 +169,7 @@ export default function MyEvents() {
               category: 'General', // You might want to add category field to your database
               phone: undefined, // You might want to get this from organizer data
             };
-          }
+          })
         );
 
         setAllEvents(transformedEvents);
@@ -188,7 +198,6 @@ export default function MyEvents() {
           (event) =>
             event.title.toLowerCase().includes(searchTerm) ||
             event.organizer.toLowerCase().includes(searchTerm) ||
-            (event.organization_name && event.organization_name.toLowerCase().includes(searchTerm)) ||
             event.location.toLowerCase().includes(searchTerm)
         );
       }
@@ -385,9 +394,11 @@ export default function MyEvents() {
 
         {/* Content */}
         {activeTab === "events" ? (
-          <div>
-            {/* Add the new filter component here */}
-            <EventFilters onFilterChange={handleFilterChange} />
+          <div className="relative z-10">
+            {/* Add the new filter component here with high z-index */}
+            <div className="relative z-50">
+              <EventFilters onFilterChange={handleFilterChange} />
+            </div>
 
             {/* Events Section */}
             {filteredEvents.length === 0 ? (
@@ -413,7 +424,7 @@ export default function MyEvents() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {filteredEvents.map((event) => (
                   <EventCard
                     key={event.id}
