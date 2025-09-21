@@ -24,7 +24,13 @@ const VideoSlide = forwardRef<HTMLVideoElement, VideoSlideProps>(
         onEnded={onEnded}
         autoPlay
         aria-label={title ?? "video slide"}
-        style={style}
+        className="w-full h-full object-cover"
+        style={{
+          objectPosition: 'center',
+          minHeight: '100vh',
+          minWidth: '100vw',
+          ...style
+        }}
       />
     );
   }

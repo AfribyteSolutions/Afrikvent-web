@@ -1,29 +1,5 @@
 import { useState, useEffect } from "react";
-import { EventService } from "@/lib/event/eventService";
-
-// ✅ Use the Event type from your EventService (the transformed type)
-export interface Event {
-  id: string; // EventService returns string IDs
-  title: string;
-  date: string;
-  time: string;
-  venue: string;
-  location: string;
-  image: string;
-  organizer: string;
-  description: string;
-  ticketOptions: Array<{
-    type: 'Regular';
-    price: number;
-    currency: string;
-    availability: string;
-  }>;
-  tags: string[];
-  isSponsored: boolean;
-  price: string;
-  category: string;
-  phone?: string;
-}
+import { EventService, Event } from "@/lib/event/eventService"; // Import Event type from EventService
 
 /**
  * Custom hook to fetch recommended events.
@@ -187,3 +163,6 @@ export const useSponsoredEvents = (limit?: number) => {
 
   return { events, loading, error };
 };
+
+// Re-export the Event type for components that need it
+export type { Event } from "@/lib/event/eventService";

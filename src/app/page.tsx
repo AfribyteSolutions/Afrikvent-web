@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import VideoSlider from "@/components/video/VideoSlider";
 import { useRecommendedEvents, useSponsoredEvents, useUpcomingEvents, Event } from "@/hooks/useEvents";
@@ -7,6 +7,8 @@ import RecommendedEvents from "@/components/event/recommendedevents/RecommendedE
 import SponsoredEvents from "@/components/event/sponsoredevents/SponsoredEvents";
 import UpcomingEvents from "@/components/event/upcomingevents/UpcomingEvents";
 import PromotionalBannerSection from "@/components/promotionbanner/PromotionBannerSection";
+import SearchResults from "@/components/event/SearchResults";
+import EventFilters, { FilterState } from "@/components/event/EventFilters";
 
 const slides = [
   { src: "/videos/video1.mp4" },
@@ -41,6 +43,17 @@ const examplePromotionalBanners = [
 
 export default function HomePage() {
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Event[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [filters, setFilters] = useState<FilterState>({
+    search: "",
+    location: "",
+    priceRange: "",
+    dateRange: ""
+  });
 
   // Hooks fetching from Supabase using the correct Event type
   const {
@@ -61,6 +74,169 @@ export default function HomePage() {
     error: upcomingError,
   } = useUpcomingEvents(12);
 
+  // Search functionality - filter from existing events
+  const performSearch = (searchFilters: FilterState) => {
+    console.log('performSearch called with filters:', searchFilters); // Debug log
+    
+    setIsSearching(true);
+    setSearchError(null);
+
+    // Combine all loaded events
+    const allEvents = [
+      ...recommendedEvents,
+      ...sponsoredEvents,
+      ...upcomingEvents
+    ].filter((event, index, self) => 
+      // Remove duplicates by id
+      index === self.findIndex(e => e.id === event.id)
+    );
+
+    console.log('Total events to search through:', allEvents.length); // Debug log
+
+    // Filter events based on search criteria
+    const filteredEvents = allEvents.filter(event => {
+      let matches = true;
+
+      // Search query filter
+      if (searchFilters.search) {
+        const searchTerm = searchFilters.search.toLowerCase();
+        const eventMatches = (
+          event.title.toLowerCase().includes(searchTerm) ||
+          event.description?.toLowerCase().includes(searchTerm) ||
+          event.location?.toLowerCase().includes(searchTerm) ||
+          event.organizer?.toLowerCase().includes(searchTerm)
+        );
+        console.log(`Event "${event.title}" matches search "${searchTerm}":`, eventMatches); // Debug log
+        matches = matches && eventMatches;
+      }
+
+      // Location filter
+      if (searchFilters.location) {
+        matches = matches && event.location?.toLowerCase().includes(searchFilters.location.toLowerCase());
+      }
+
+      // Price filter
+      if (searchFilters.priceRange) {
+        matches = matches && filterByPrice(event, searchFilters.priceRange);
+      }
+
+      // Date filter
+      if (searchFilters.dateRange) {
+        matches = matches && filterByDate(event, searchFilters.dateRange);
+      }
+
+      return matches;
+    });
+
+    console.log('Filtered events count:', filteredEvents.length); // Debug log
+
+    setSearchResults(filteredEvents);
+    setShowSearchResults(true);
+    setIsSearching(false);
+  };
+
+  // Helper function to filter by price
+  const filterByPrice = (event: Event, priceRange: string) => {
+    const eventPrice = parseFloat(event.price?.toString() || '0');
+    
+    switch (priceRange) {
+      case 'free':
+        return eventPrice === 0;
+      case '0-50':
+        return eventPrice >= 0 && eventPrice <= 50;
+      case '50-200':
+        return eventPrice > 50 && eventPrice <= 200;
+      case '200+':
+        return eventPrice > 200;
+      default:
+        return true;
+    }
+  };
+
+  // Helper function to filter by date
+  const filterByDate = (event: Event, dateRange: string) => {
+    const eventDate = new Date(event.date);
+    const today = new Date();
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
+    const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const monthFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+    // Get weekend dates (Saturday and Sunday)
+    const startOfWeek = new Date(today);
+    const day = startOfWeek.getDay();
+    const saturday = new Date(startOfWeek.getTime() + (6 - day) * 24 * 60 * 60 * 1000);
+    const sunday = new Date(saturday.getTime() + 24 * 60 * 60 * 1000);
+
+    switch (dateRange) {
+      case 'today':
+        return eventDate.toDateString() === today.toDateString();
+      case 'tomorrow':
+        return eventDate.toDateString() === tomorrow.toDateString();
+      case 'this-week':
+        return eventDate >= today && eventDate <= weekFromNow;
+      case 'this-weekend':
+        return (eventDate.toDateString() === saturday.toDateString() || 
+                eventDate.toDateString() === sunday.toDateString());
+      case 'this-month':
+        return eventDate >= today && eventDate <= monthFromNow;
+      case 'next-month':
+        const nextMonthStart = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+        const nextMonthEnd = new Date(today.getFullYear(), today.getMonth() + 2, 0);
+        return eventDate >= nextMonthStart && eventDate <= nextMonthEnd;
+      default:
+        return true;
+    }
+  };
+
+  const handleSearch = (query: string) => {
+    console.log('handleSearch called with:', query); // Debug log
+    
+    if (!query.trim()) {
+      console.log('Empty query, hiding search results'); // Debug log
+      setShowSearchResults(false);
+      setSearchQuery("");
+      setFilters(prev => ({ ...prev, search: "" }));
+      return;
+    }
+
+    const trimmedQuery = query.trim();
+    const searchFilters = { ...filters, search: trimmedQuery };
+    
+    console.log('Updated filters:', searchFilters); // Debug log
+    
+    setFilters(searchFilters);
+    setSearchQuery(trimmedQuery);
+    performSearch(searchFilters);
+  };
+
+  // Handle filter changes from EventFilters component
+  const handleFilterChange = (newFilters: FilterState) => {
+    setFilters(newFilters);
+    
+    // If there's any filter applied, perform search
+    if (newFilters.search || newFilters.location || newFilters.priceRange || newFilters.dateRange) {
+      performSearch(newFilters);
+    } else {
+      // If all filters are cleared, hide search results
+      setShowSearchResults(false);
+      setSearchResults([]);
+    }
+  };
+
+  // Clear search and return to normal view
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setSearchError(null);
+    setFilters({
+      search: "",
+      location: "",
+      priceRange: "",
+      dateRange: ""
+    });
+  };
+
   // Handle event clicks - now uses the correct Event type with string ID
   const handleEventClick = (event: Event) => {
     router.push(`/events/${event.id}`);
@@ -70,9 +246,9 @@ export default function HomePage() {
     router.push("/events");
   };
 
-  // Skeleton loader for carousels
+  // Skeleton loader for carousels - Force light theme
   const CarouselSkeleton = ({ title }: { title: string }) => (
-    <section className="py-16 bg-white">
+    <section className="py-16 bg-white text-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between mb-8">
           <div className="animate-pulse">
@@ -96,9 +272,9 @@ export default function HomePage() {
     </section>
   );
 
-  // Error UI for carousels
+  // Error UI for carousels - Force light theme
   const CarouselError = ({ error, title }: { error: string; title: string }) => (
-    <section className="py-16 bg-white">
+    <section className="py-16 bg-white text-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-8 text-center">
           {title}
@@ -119,9 +295,9 @@ export default function HomePage() {
     </section>
   );
 
-  // Empty state component
+  // Empty state component - Force light theme
   const EmptySection = ({ title, message }: { title: string; message: string }) => (
-    <section className="py-16 bg-white">
+    <section className="py-16 bg-white text-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
         <h2 className="text-2xl md:text-4xl font-bold text-gray-900 mb-4">
           {title}
@@ -132,80 +308,118 @@ export default function HomePage() {
   );
 
   return (
-    <main className="w-full">
+    <main className="w-full bg-white text-gray-900 min-h-screen">
       {/* Hero Section with Video Slider */}
       <section className="w-full h-screen">
-        <VideoSlider slides={slides} interval={4000} />
+        <VideoSlider 
+          slides={slides} 
+          interval={4000} 
+          onSearch={handleSearch}
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          isSearching={isSearching}
+        />
       </section>
 
-      {/* Recommended Events */}
-      {recommendedLoading ? (
-        <CarouselSkeleton title="Recommended Events" />
-      ) : recommendedError ? (
-        <CarouselError error={recommendedError} title="Recommended Events" />
-      ) : recommendedEvents.length > 0 ? (
-        <RecommendedEvents
-          events={recommendedEvents}
-          onEventClick={handleEventClick}
-          onSeeMore={handleSeeMore}
-        />
-      ) : (
-        <EmptySection 
-          title="Recommended Events"
-          message="No recommended events available at the moment."
-        />
-      )}
-
-      {/* Sponsored Events */}
-      {sponsoredLoading ? (
-        <CarouselSkeleton title="Sponsored Events" />
-      ) : sponsoredError ? (
-        <CarouselError error={sponsoredError} title="Sponsored Events" />
-      ) : sponsoredEvents.length > 0 ? (
-        <SponsoredEvents
-          events={sponsoredEvents}
-          onEventClick={handleEventClick}
-          onSeeMore={handleSeeMore}
-        />
-      ) : null}
-
-      {/* Upcoming Events */}
-      {upcomingLoading ? (
-        <CarouselSkeleton title="Upcoming Events" />
-      ) : upcomingError ? (
-        <CarouselError error={upcomingError} title="Upcoming Events" />
-      ) : upcomingEvents.length > 0 ? (
-        <UpcomingEvents
-          events={upcomingEvents}
-          onEventClick={handleEventClick}
-          onSeeMore={handleSeeMore}
-        />
-      ) : null}
-
-      
-
-      {/* Promotional Banner */}
-      <PromotionalBannerSection
-        maxBanners={1}
-        className="bg-white"
-        banners={examplePromotionalBanners}
-      />
-
-      {/* Call to Action */}
-      <section className="py-16 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Find Your Next Event?</h2>
-          <p className="text-xl mb-8 opacity-90">
-            Join thousands of event-goers who trust our platform to discover amazing experiences.
-          </p>
-          <button
-            onClick={() => router.push("/events")}
-            className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
-          >
-            Explore All Events
-          </button>
+      {/* Conditional Content: Search Results or Normal Sections */}
+      {showSearchResults ? (
+        <div className="bg-white">
+          {/* Event Filters */}
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+            <EventFilters
+              onFilterChange={handleFilterChange}
+            />
+          </div>
+          
+          {/* Search Results */}
+          <SearchResults
+            query={filters.search || searchQuery}
+            results={searchResults}
+            loading={isSearching}
+            error={searchError}
+            onEventClick={handleEventClick}
+            onClearSearch={clearSearch}
+            filters={filters}
+          />
         </div>
-      </section>
+      ) : (
+        <>
+          {/* Recommended Events */}
+          {recommendedLoading ? (
+            <CarouselSkeleton title="Recommended Events" />
+          ) : recommendedError ? (
+            <CarouselError error={recommendedError} title="Recommended Events" />
+          ) : recommendedEvents.length > 0 ? (
+            <div className="bg-white">
+              <RecommendedEvents
+                events={recommendedEvents}
+                onEventClick={handleEventClick}
+                onSeeMore={handleSeeMore}
+              />
+            </div>
+          ) : (
+            <EmptySection 
+              title="Recommended Events"
+              message="No recommended events available at the moment."
+            />
+          )}
+
+          {/* Sponsored Events */}
+          {sponsoredLoading ? (
+            <CarouselSkeleton title="Sponsored Events" />
+          ) : sponsoredError ? (
+            <CarouselError error={sponsoredError} title="Sponsored Events" />
+          ) : sponsoredEvents.length > 0 ? (
+            <div className="bg-white">
+              <SponsoredEvents
+                events={sponsoredEvents}
+                onEventClick={handleEventClick}
+                onSeeMore={handleSeeMore}
+              />
+            </div>
+          ) : null}
+
+          {/* Upcoming Events */}
+          {upcomingLoading ? (
+            <CarouselSkeleton title="Upcoming Events" />
+          ) : upcomingError ? (
+            <CarouselError error={upcomingError} title="Upcoming Events" />
+          ) : upcomingEvents.length > 0 ? (
+            <div className="bg-white">
+              <UpcomingEvents
+                events={upcomingEvents}
+                onEventClick={handleEventClick}
+                onSeeMore={handleSeeMore}
+              />
+            </div>
+          ) : null}
+
+          {/* Call to Action */}
+          <section className="py-16 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+            <div className="container mx-auto px-4 text-center">
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Find Your Next Event?</h2>
+              <p className="text-xl mb-8 opacity-90">
+                Join thousands of event-goers who trust our platform to discover amazing experiences.
+              </p>
+              <button
+                onClick={() => router.push("/events")}
+                className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
+              >
+                Explore All Events
+              </button>
+            </div>
+          </section>
+        </>
+      )}
+      
+      {/* Promotional Banner */}
+      {/* <div className="bg-white">
+        <PromotionalBannerSection
+          maxBanners={1}
+          className="bg-white"
+          banners={examplePromotionalBanners}
+        />
+      </div> */}
     </main>
   );
 }

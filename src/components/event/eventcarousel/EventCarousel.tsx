@@ -1,6 +1,6 @@
 import React, { useRef } from "react";
 import EventCard from "../eventcard/EventCard";
-import { Event } from "@/hooks/useEvents"; // Use the transformed Event type
+import { Event } from "@/lib/event/eventService"; // Import from EventService directly
 import { ArrowRight } from "lucide-react";
 
 interface EventCarouselProps {
@@ -23,8 +23,8 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
   }
 
   return (
-    <section className="w-full py-8 sm:py-12 lg:py-16">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="w-full py-8 sm:py-12 lg:py-16 bg-transparent">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 bg-transparent">
         {/* Section Header */}
         <div className="flex items-center justify-between mb-6 sm:mb-8">
           <div className="flex-1">
@@ -33,17 +33,6 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
             </h2>
             <div className="mt-1 sm:mt-2 h-1 w-12 sm:w-16 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
           </div>
-
-          {/* See More Arrow Button */}
-          {onSeeMore && (
-            <button
-              onClick={onSeeMore}
-              className="group flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200"
-              aria-label="See more events"
-            >
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 group-hover:translate-x-0.5 transition-transform duration-200" />
-            </button>
-          )}
         </div>
 
         {/* Carousel Container */}
@@ -66,7 +55,7 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
             {events.map((event) => (
               <div 
                 key={event.id} 
-                className="flex-shrink-0 w-64 sm:w-72 md:w-80 lg:w-96 snap-start first:ml-0 last:mr-4"
+                className="flex-shrink-0 w-80 xl:w-96 snap-start first:ml-0 last:mr-4"
               >
                 <EventCard
                   event={event}
@@ -94,8 +83,6 @@ const EventCarousel: React.FC<EventCarouselProps> = ({
               </div>
             )}
           </div>
-
-
         </div>
 
         {/* Mobile Swipe Hint */}
