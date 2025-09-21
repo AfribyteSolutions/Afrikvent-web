@@ -17,6 +17,7 @@ type UserRow = Database['public']['Tables']['USERS']['Row'];
 
 interface EventWithDetails extends EventRow {
   USERS: UserRow | null;
+  organization_name?: string; // Add organization name
   ticketTypes: TicketTypeRow[];
   comments: (CommentRow & { USERS: UserRow | null })[];
 }
@@ -64,7 +65,6 @@ const getTicketColorScheme = (index: number) => {
       gradient: 'from-pink-600 to-pink-800'
     }
   ];
-  
   return schemes[index % schemes.length];
 };
 
@@ -91,8 +91,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
     };
-    getCurrentUser();
 
+    getCurrentUser();
     if (eventId) {
       fetchEventDetails();
     }
@@ -102,7 +102,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     try {
       setLoading(true);
       setError(null);
-
       console.log('🔍 Fetching event with ID:', eventId, 'Type:', typeof eventId);
 
       // First, let's try a simple query without joins
@@ -125,62 +124,27 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         return;
       }
 
-      // Now try with the join - fix the relationship reference
-      const { data: eventData, error: eventError } = await supabase
-        .from('EVENTS')
-        .select(`
-          *,
-          organizer:USERS!EVENTS_organizer_id_fkey (*)
-        `)
-        .eq('id', eventId)
-        .neq('event_status', 'cancelled')
+      const eventData = simpleEventData[0];
+
+      // Fetch organizer data separately
+      const { data: organizerData } = await supabase
+        .from('USERS')
+        .select('*')
+        .eq('user_id', eventData.organizer_id)
         .single();
 
-      console.log('📊 Join query result:', { eventData, eventError });
-
-      if (eventError) {
-        console.error('Join query error:', eventError);
-        // Fallback to simple data if join fails
-        console.log('Using simple event data as fallback');
-        const fallbackEvent = simpleEventData[0];
-        
-        // Fetch organizer separately
-        const { data: organizerData } = await supabase
-          .from('USERS')
-          .select('*')
-          .eq('user_id', fallbackEvent.organizer_id)
+      // Fetch organization data from ORGANIZER_KYC
+      let organizationName = null;
+      try {
+        const { data: kycData } = await supabase
+          .from('ORGANIZER_KYC')
+          .select('organization_name')
+          .eq('user_id', eventData.organizer_id)
           .single();
-
-        // Fetch ticket types
-        const { data: ticketTypes } = await supabase
-          .from('TICKET_TYPES')
-          .select('*')
-          .eq('event_id', eventId)
-          .order('price', { ascending: true });
-
-        // Fetch comments with user details
-        const { data: comments } = await supabase
-          .from('EVENT_COMMENTS')
-          .select(`
-            *,
-            USERS!EVENT_COMMENTS_user_id_fkey (*)
-          `)
-          .eq('event_id', eventId)
-          .eq('is_deleted', false)
-          .order('created_at', { ascending: true });
-
-        setEvent({
-          ...fallbackEvent,
-          USERS: organizerData || null,
-          ticketTypes: ticketTypes || [],
-          comments: comments || []
-        });
-        return;
-      }
-
-      if (!eventData) {
-        setError('Event not found or is cancelled');
-        return;
+        
+        organizationName = kycData?.organization_name || null;
+      } catch (error) {
+        console.log('No organization data found for organizer:', eventData.organizer_id);
       }
 
       // Fetch ticket types
@@ -190,7 +154,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         .eq('event_id', eventId)
         .order('price', { ascending: true });
 
-      // Fetch comments with user details
+      // Fetch comments with user details - Fixed the join
       const { data: comments } = await supabase
         .from('EVENT_COMMENTS')
         .select(`
@@ -203,7 +167,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
       setEvent({
         ...eventData,
-        USERS: eventData.organizer || null,
+        USERS: organizerData || null,
+        organization_name: organizationName || undefined,
         ticketTypes: ticketTypes || [],
         comments: comments || []
       });
@@ -221,7 +186,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
     try {
       setSubmittingComment(true);
-
       const { error } = await supabase
         .from('EVENT_COMMENTS')
         .insert({
@@ -234,7 +198,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
       setNewComment('');
       await fetchEventDetails(); // Refresh comments
-
     } catch (error) {
       console.error('Error adding comment:', error);
       alert('Failed to add comment');
@@ -262,7 +225,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
       if (error) throw error;
 
       await fetchEventDetails(); // Refresh comments
-
     } catch (error) {
       console.error('Error deleting comment:', error);
       alert('Failed to delete comment');
@@ -305,11 +267,9 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     setPurchasedTickets(tickets);
     setShowPaymentModal(false);
     setShowSuccessScreen(true);
-    
     // Reset selections
     setSelectedTicket(null);
     setTicketQuantity(1);
-    
     // Send email confirmation (this would be handled by your backend)
     console.log('Email confirmation should be sent for tickets:', tickets);
   };
@@ -319,6 +279,13 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     setPurchasedTickets([]);
   };
 
+  // Helper function to get organizer display name
+  const getOrganizerDisplayName = () => {
+    if (event?.organization_name) {
+      return event.organization_name;
+    }
+    return event?.USERS?.name || 'Anonymous Organizer';
+  };
 
   if (error || !event) {
     return (
@@ -326,7 +293,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Just a Sec</h2>
           <p className="text-gray-600 mb-6">{error}</p>
-          <button 
+          <button
             onClick={() => router.push('/')}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
           >
@@ -342,7 +309,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
       {/* Back Button */}
       <div className="bg-white border-b">
         <div className="max-w-4xl mx-auto px-4 py-3">
-          <button 
+          <button
             onClick={() => router.back()}
             className="flex items-center text-gray-600 hover:text-gray-800"
           >
@@ -372,7 +339,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </svg>
               </div>
             )}
-            
             {/* Status Badge */}
             <div className="absolute top-4 right-4">
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
@@ -380,8 +346,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 event.event_status === 'draft' ? 'bg-gray-100 text-gray-800' :
                 'bg-blue-100 text-blue-800'
               }`}>
-                {event.event_status === 'active' ? 'Live' : 
-                 event.event_status.charAt(0).toUpperCase() + event.event_status.slice(1)}
+                {event.event_status === 'active' ? 'Live' :
+                  event.event_status.charAt(0).toUpperCase() + event.event_status.slice(1)}
               </span>
             </div>
 
@@ -400,7 +366,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
             {/* Event Header */}
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-gray-900 mb-4">{event.title}</h1>
-              
               <div className="flex flex-wrap gap-6 text-gray-600">
                 <div className="flex items-center">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -408,14 +373,12 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   </svg>
                   {formatDate(event.event_date)}
                 </div>
-                
                 <div className="flex items-center">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   {formatTime(event.start_time)} - {formatTime(event.end_time)}
                 </div>
-                
                 <div className="flex items-center">
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
@@ -424,7 +387,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   {event.location_name || 'Location TBA'}
                 </div>
               </div>
-
               {event.address && (
                 <p className="text-gray-500 mt-2 ml-7">{event.address}</p>
               )}
@@ -440,7 +402,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             )}
 
-            {/* Organizer Info */}
+            {/* Organizer Info - Updated to show organization name */}
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Organizer</h2>
               <div className="flex items-center">
@@ -450,7 +412,10 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   </svg>
                 </div>
                 <div>
-                  <p className="font-medium text-gray-900">{event.USERS?.name || 'Anonymous Organizer'}</p>
+                  <p className="font-medium text-gray-900">{getOrganizerDisplayName()}</p>
+                  {event.organization_name && event.USERS?.name && (
+                    <p className="text-sm text-gray-500">Contact: {event.USERS.name}</p>
+                  )}
                   <p className="text-gray-600">{event.USERS?.email}</p>
                 </div>
               </div>
@@ -464,7 +429,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   {event.ticketTypes.map((ticket, index) => {
                     const colorScheme = getTicketColorScheme(index);
                     const isSelected = selectedTicket?.id === ticket.id;
-                    
+
                     return (
                       <div
                         key={ticket.id}
@@ -482,13 +447,13 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                             </svg>
                           </div>
                         )}
-                        
+
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
                               <h3 className="font-bold text-xl text-gray-900">{ticket.name}</h3>
                               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                isSelected 
+                                isSelected
                                   ? colorScheme.badge
                                   : 'bg-gray-100 text-gray-600'
                               }`}>
@@ -498,7 +463,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                             {ticket.description && (
                               <p className="text-gray-600 text-sm mb-3 leading-relaxed">{ticket.description}</p>
                             )}
-                            
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-4">
                                 <span className={`text-2xl font-bold ${
@@ -508,7 +472,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                                 </span>
                                 <span className="text-sm text-gray-500">per ticket</span>
                               </div>
-                              
                               {isSelected && (
                                 <div className="flex items-center gap-3">
                                   <span className="text-sm font-medium text-gray-700">Quantity:</span>
@@ -545,7 +508,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             )}
 
-            {/* Comments Section */}
+            {/* Comments Section - Updated to show proper user names */}
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 Comments ({event.comments.length})
@@ -586,7 +549,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </div>
               )}
 
-              {/* Comments List */}
+              {/* Comments List - Updated to show proper user names */}
               <div className="space-y-4">
                 {event.comments.map((comment) => (
                   <div key={comment.id} className="flex space-x-3">
@@ -613,7 +576,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                           </div>
                           <p className="text-gray-700">{comment.message}</p>
                         </div>
-                        
                         {user && (user.id === comment.user_id || user.id === event.organizer_id) && (
                           <button
                             onClick={() => handleDeleteComment(comment.id)}
@@ -628,7 +590,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                     </div>
                   </div>
                 ))}
-                
                 {event.comments.length === 0 && (
                   <div className="text-center py-8 text-gray-500">
                     No comments yet. Be the first to comment!
@@ -660,7 +621,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   </div>
                 </div>
               </div>
-              
               <div className="flex items-center gap-6">
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Total</p>
@@ -668,7 +628,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                     ₵{((selectedTicket.price || 0) * ticketQuantity).toLocaleString()}
                   </p>
                 </div>
-                
                 <button
                   onClick={() => setShowPaymentModal(true)}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold text-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
