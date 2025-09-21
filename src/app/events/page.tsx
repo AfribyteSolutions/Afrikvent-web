@@ -6,8 +6,8 @@ import EventCard from "@/components/event/eventcard/EventCard";
 import { TicketsSection } from "@/components/tickets/TicketSection";
 import EventFilters, { FilterState } from "@/components/event/EventFilters";
 
-// Use the consistent Event type from your hooks
-import { Event } from "@/hooks/useEvents";
+// Use the consistent Event type from your eventService
+import { Event } from "@/lib/event/eventService";
 
 // Import your generated DB types for database operations
 import { Database } from "@/types/database.types";
@@ -80,7 +80,7 @@ export default function MyEvents() {
     getCurrentUser();
   }, []);
 
-  // Fetch events - Transform to match the consistent Event type
+  // Fetch events - Transform to match the Event type from eventService
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -91,7 +91,8 @@ export default function MyEvents() {
           .select(`
             *,
             TICKET_TYPES(*),
-            USERS!EVENTS_organizer_id_fkey(name, email)
+            USERS!EVENTS_organizer_id_fkey(name, email),
+            ORGANIZER_KYC!EVENTS_organizer_id_fkey(organization_name, contact_person_name)
           `)
           .eq("event_status", "published")
           .gte("event_date", new Date().toISOString().split('T')[0])
@@ -106,15 +107,22 @@ export default function MyEvents() {
         interface EventWithRelations extends EventRow {
           TICKET_TYPES: TicketTypeRow[];
           USERS: { name: string; email: string }[];
+          ORGANIZER_KYC: { organization_name: string; contact_person_name: string }[];
         }
 
-        // Transform to match the consistent Event interface from hooks
+        // Transform to match the Event interface from eventService
         const transformedEvents: Event[] = (eventsData || []).map(
           (row: EventWithRelations) => {
-            // Get organizer name from joined USERS data
+            // Get organizer information from joined tables
+            const organizationName = row.ORGANIZER_KYC && row.ORGANIZER_KYC.length > 0 
+              ? row.ORGANIZER_KYC[0].organization_name 
+              : null;
+            
             const organizerName = row.USERS && row.USERS.length > 0 
               ? row.USERS[0].name 
-              : 'Event Organizer';
+              : (row.ORGANIZER_KYC && row.ORGANIZER_KYC.length > 0 
+                  ? row.ORGANIZER_KYC[0].contact_person_name 
+                  : 'Event Organizer');
 
             // Get minimum ticket price from joined TICKET_TYPES data
             const minPrice = row.TICKET_TYPES && row.TICKET_TYPES.length > 0
@@ -141,6 +149,8 @@ export default function MyEvents() {
               location: row.address || row.location_name || 'Location TBD',
               image: primaryImage,
               organizer: organizerName || 'Event Organizer',
+              organizer_name: organizerName || 'Event Organizer', // Add this required property
+              organization_name: organizationName || undefined, // Add organization name from ORGANIZER_KYC
               description: row.description || 'No description available',
               ticketOptions: ticketOptions,
               tags: [], // You might want to add tags to your database
@@ -178,6 +188,7 @@ export default function MyEvents() {
           (event) =>
             event.title.toLowerCase().includes(searchTerm) ||
             event.organizer.toLowerCase().includes(searchTerm) ||
+            (event.organization_name && event.organization_name.toLowerCase().includes(searchTerm)) ||
             event.location.toLowerCase().includes(searchTerm)
         );
       }
@@ -222,7 +233,6 @@ export default function MyEvents() {
 
     applyFilters();
   }, [filters, allEvents]); // Re-run this effect whenever filters or allEvents change
-
 
   // Fetch user tickets when switching to tickets tab
   useEffect(() => {
@@ -385,7 +395,7 @@ export default function MyEvents() {
                 <div className="max-w-sm mx-auto">
                   <div className="w-24 h-24 mx-auto mb-6 bg-gray-200 rounded-full flex items-center justify-center">
                     <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 002 2z" />
                     </svg>
                   </div>
                   <h3 className="text-xl font-medium text-gray-900 mb-2">
