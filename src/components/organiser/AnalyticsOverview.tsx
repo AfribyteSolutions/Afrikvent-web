@@ -10,6 +10,11 @@ type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 type UserRow = Database['public']['Tables']['USERS']['Row'];
 type TicketRow = Database['public']['Tables']['TICKETS']['Row'];
 
+// Extended type for events with currency
+interface EventWithCurrency extends EventRow {
+  currency: string;
+}
+
 interface AnalyticsOverviewProps {
   user: User | null;
   detailed?: boolean;
@@ -27,6 +32,7 @@ interface SupabaseTicketWithJoins {
     id: number;
     title: string;
     organizer_id: string;
+    currency: string; // Added currency field
   }>;
   USERS: Array<{
     name: string;
@@ -39,15 +45,19 @@ interface AnalyticsData {
   totalEvents: number;
   averageTicketPrice: number;
   conversionRate: number;
+  currency: string; // Add primary currency
+  revenueByCurrency: Record<string, number>; // Track revenue by currency
   topSellingEvents: Array<{
     name: string;
     sales: number;
     revenue: number;
+    currency: string;
   }>;
   salesByMonth: Array<{
     month: string;
     sales: number;
     revenue: number;
+    currency: string;
   }>;
   recentActivity: Array<{
     type: 'sale' | 'refund';
@@ -55,16 +65,19 @@ interface AnalyticsData {
     amount: number;
     time: string;
     buyer_name?: string | null;
+    currency: string;
   }>;
-  recentEvents: Array<{
-    id: number;
-    title: string;
-    event_status: string;
-    event_date: string;
-    created_at: string;
-    ticketsSold?: number;
-    revenue?: number;
-  }>;
+  // Update the recentEvents type in the AnalyticsData interface
+recentEvents: Array<{
+  id: number;
+  title: string;
+  event_status: string;
+  event_date: string | null; // Change this to allow null
+  created_at: string;
+  ticketsSold?: number;
+  revenue?: number;
+  currency?: string;
+}>;
   loading: boolean;
 }
 
@@ -75,6 +88,8 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     totalEvents: 0,
     averageTicketPrice: 0,
     conversionRate: 0,
+    currency: 'GHS', // Default currency
+    revenueByCurrency: {},
     topSellingEvents: [],
     salesByMonth: [],
     recentActivity: [],
@@ -90,22 +105,63 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     }
   }, [user]);
 
+  // Helper function to get currency symbol
+  const getCurrencySymbol = (currency: string): string => {
+    switch (currency) {
+      case 'GHS':
+        return '₵';
+      case 'CFA':
+      case 'XOF':
+      case 'XAF':
+        return 'CFA';
+      case 'USD':
+        return '$';
+      case 'EUR':
+        return '€';
+      default:
+        return currency;
+    }
+  };
+
+  // Helper function to format currency
+  const formatCurrency = (amount: number, currency: string = 'GHS'): string => {
+    const symbol = getCurrencySymbol(currency);
+    return `${symbol}${amount.toLocaleString()}`;
+  };
+
+  // Helper function to get primary currency from user's events
+  const getPrimaryCurrency = (eventsData: EventWithCurrency[]): string => {
+    if (!eventsData || eventsData.length === 0) return 'GHS';
+    
+    // Get the most common currency from user's events
+    const currencyCount: Record<string, number> = {};
+    eventsData.forEach(event => {
+      const currency = event.currency || 'GHS';
+      currencyCount[currency] = (currencyCount[currency] || 0) + 1;
+    });
+    
+    return Object.keys(currencyCount).reduce((a, b) => 
+      currencyCount[a] > currencyCount[b] ? a : b
+    );
+  };
+
   const fetchAnalyticsData = async () => {
     if (!user) return;
 
     try {
       setAnalyticsData(prev => ({ ...prev, loading: true }));
 
-      // Fetch events data
+      // Fetch events data with currency
       const { data: eventsData } = await supabase
         .from('EVENTS')
-        .select('id, title, event_status, event_date, created_at')
+        .select('id, title, event_status, event_date, created_at, currency')
         .eq('organizer_id', user.id)
         .order('created_at', { ascending: false });
 
       const totalEvents = eventsData?.length || 0;
+      const primaryCurrency = getPrimaryCurrency((eventsData as EventWithCurrency[]) || []);
 
-      // Fetch tickets data with payments and events
+      // Fetch tickets data with payments and events (including currency)
       const { data: ticketsData } = await supabase
         .from('TICKETS')
         .select(`
@@ -115,7 +171,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
           ticket_status,
           created_at,
           event_id,
-          EVENTS!inner(id, title, organizer_id),
+          EVENTS!inner(id, title, organizer_id, currency),
           USERS!inner(name)
         `)
         .eq('EVENTS.organizer_id', user.id);
@@ -124,10 +180,15 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
       ) || [];
 
-      const totalRevenue = confirmedTickets.reduce((sum, ticket) => 
-        sum + (ticket.total || 0), 0
-      );
+      // Calculate revenue by currency
+      const revenueByCurrency: Record<string, number> = {};
+      confirmedTickets.forEach(ticket => {
+        const currency = ticket.EVENTS?.[0]?.currency || 'GHS';
+        const total = ticket.total || 0;
+        revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + total;
+      });
 
+      const totalRevenue = Object.values(revenueByCurrency).reduce((sum, amount) => sum + amount, 0);
       const totalTicketsSold = confirmedTickets.reduce((sum, ticket) => 
         sum + parseInt(ticket.quantity || '0'), 0
       );
@@ -135,7 +196,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
       const averageTicketPrice = totalTicketsSold > 0 ? totalRevenue / totalTicketsSold : 0;
 
       // Calculate event performance data
-      const eventPerformance = eventsData?.reduce((acc, event) => {
+      const eventPerformance = (eventsData as EventWithCurrency[])?.reduce((acc, event) => {
         const eventTickets = confirmedTickets.filter(ticket => 
           ticket.EVENTS?.[0]?.id === event.id
         );
@@ -156,29 +217,37 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
       }, {} as Record<number, { revenue: number; ticketsSold: number }>) || {};
 
       // Add performance data to recent events
-      const recentEvents = eventsData?.slice(0, 5).map(event => ({
+      const recentEvents = (eventsData as EventWithCurrency[])?.slice(0, 5).map(event => ({
         ...event,
         ticketsSold: eventPerformance[event.id]?.ticketsSold || 0,
-        revenue: eventPerformance[event.id]?.revenue || 0
+        revenue: eventPerformance[event.id]?.revenue || 0,
+        currency: event.currency || 'GHS'
       })) || [];
 
-      // Calculate top selling events
+      // Calculate top selling events with currency
       const eventSales = confirmedTickets.reduce((acc, ticket) => {
         const eventTitle = ticket.EVENTS?.[0]?.title || 'Unknown Event';
-        if (!acc[eventTitle]) {
-          acc[eventTitle] = { sales: 0, revenue: 0 };
+        const currency = ticket.EVENTS?.[0]?.currency || 'GHS';
+        const key = `${eventTitle}-${currency}`;
+        
+        if (!acc[key]) {
+          acc[key] = { 
+            name: eventTitle, 
+            sales: 0, 
+            revenue: 0, 
+            currency 
+          };
         }
-        acc[eventTitle].sales += parseInt(ticket.quantity || '0');
-        acc[eventTitle].revenue += ticket.total || 0;
+        acc[key].sales += parseInt(ticket.quantity || '0');
+        acc[key].revenue += ticket.total || 0;
         return acc;
-      }, {} as Record<string, { sales: number; revenue: number }>);
+      }, {} as Record<string, { name: string; sales: number; revenue: number; currency: string }>);
 
-      const topSellingEvents = Object.entries(eventSales)
-        .map(([name, data]) => ({ name, ...data }))
+      const topSellingEvents = Object.values(eventSales)
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 3);
 
-      // Calculate sales by month (last 6 months)
+      // Calculate sales by month (last 6 months) with primary currency
       const salesByMonth = [];
       const now = new Date();
       for (let i = 5; i >= 0; i--) {
@@ -197,11 +266,12 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         salesByMonth.push({
           month: monthName,
           sales: monthSales,
-          revenue: monthRevenue
+          revenue: monthRevenue,
+          currency: primaryCurrency
         });
       }
 
-      // Recent activity (last 4 transactions)
+      // Recent activity (last 4 transactions) with currency
       const recentActivity = confirmedTickets
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 4)
@@ -210,7 +280,8 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
           event: ticket.EVENTS?.[0]?.title || 'Unknown Event',
           amount: ticket.total || 0,
           time: formatTimeAgo(ticket.created_at),
-          buyer_name: ticket.USERS?.[0]?.name || undefined
+          buyer_name: ticket.USERS?.[0]?.name || undefined,
+          currency: ticket.EVENTS?.[0]?.currency || 'GHS'
         }));
 
       setAnalyticsData({
@@ -219,6 +290,8 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         totalEvents,
         averageTicketPrice: Math.round(averageTicketPrice),
         conversionRate: 3.2, // This would need more complex calculation
+        currency: primaryCurrency,
+        revenueByCurrency,
         topSellingEvents,
         salesByMonth,
         recentActivity,
@@ -375,7 +448,9 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
                       }}
                     ></div>
                     <span className="text-xs text-gray-500 mt-2">{data.month}</span>
-                    <span className="text-xs font-medium text-gray-700">₵{data.revenue.toLocaleString()}</span>
+                    <span className="text-xs font-medium text-gray-700">
+                      {formatCurrency(data.revenue, data.currency)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -400,12 +475,15 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
                     {getStatusBadge(event.event_status)}
                   </div>
                   <div className="flex items-center gap-6 text-sm text-gray-600">
-                    <span>📅 {new Date(event.event_date).toLocaleDateString('en-US', {
+                  <span>
+                    📅 {event.event_date ? new Date(event.event_date).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
                       year: 'numeric'
-                    })}</span>
-                    <span>📍 ghana</span>
+                    }) : 'N/A'}
+                  </span>
+                    <span>📍 Location</span>
+                    <span>💰 {formatCurrency(event.revenue || 0, event.currency || analyticsData.currency)}</span>
                   </div>
                 </div>
                 
@@ -458,7 +536,9 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
                     <p className="text-sm text-gray-600">{event.sales} tickets sold</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold text-gray-900">₵{event.revenue.toLocaleString()}</p>
+                    <p className="font-semibold text-gray-900">
+                      {formatCurrency(event.revenue, event.currency)}
+                    </p>
                     <p className="text-sm text-gray-600">Revenue</p>
                   </div>
                 </div>
@@ -470,7 +550,9 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         ) : (
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <p className="text-2xl font-bold text-blue-600">₵{analyticsData.totalRevenue.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {formatCurrency(analyticsData.totalRevenue, analyticsData.currency)}
+              </p>
               <p className="text-sm text-gray-600">Total Revenue</p>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
@@ -478,7 +560,9 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
               <p className="text-sm text-gray-600">Tickets Sold</p>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <p className="text-2xl font-bold text-purple-600">₵{analyticsData.averageTicketPrice}</p>
+              <p className="text-2xl font-bold text-purple-600">
+                {formatCurrency(analyticsData.averageTicketPrice, analyticsData.currency)}
+              </p>
               <p className="text-sm text-gray-600">Avg. Ticket Price</p>
             </div>
             <div className="text-center p-4 bg-orange-50 rounded-lg">
@@ -507,7 +591,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
                   <p className={`text-sm font-medium ${
                     activity.amount > 0 ? 'text-green-600' : 'text-red-600'
                   }`}>
-                    {activity.amount > 0 ? '+' : ''}₵{Math.abs(activity.amount)}
+                    {activity.amount > 0 ? '+' : ''}{formatCurrency(Math.abs(activity.amount), activity.currency)}
                   </p>
                   <p className="text-xs text-gray-500">{activity.time}</p>
                 </div>

@@ -112,6 +112,8 @@ export type Database = {
           start_time: string | null
           title: string
           updated_at: string | null
+          currency: string | null  // Added
+          currency_symbol: string | null  // Added
         }
         Insert: {
           address?: string | null
@@ -133,6 +135,8 @@ export type Database = {
           start_time?: string | null
           title?: string
           updated_at?: string | null
+          currency?: string | null  // Added
+          currency_symbol?: string | null  // Added
         }
         Update: {
           address?: string | null
@@ -154,6 +158,8 @@ export type Database = {
           start_time?: string | null
           title?: string
           updated_at?: string | null
+          currency?: string | null  // Added
+          currency_symbol?: string | null  // Added
         }
         Relationships: [
           {
@@ -362,6 +368,8 @@ export type Database = {
           name: string | null
           price: number | null
           ticket_image_url: string | null
+          currency: string | null  // Added
+          currency_symbol: string | null  // Added
         }
         Insert: {
           created_at?: string
@@ -372,6 +380,8 @@ export type Database = {
           name?: string | null
           price?: number | null
           ticket_image_url?: string | null
+          currency?: string | null  // Added
+          currency_symbol?: string | null  // Added
         }
         Update: {
           created_at?: string
@@ -382,6 +392,8 @@ export type Database = {
           name?: string | null
           price?: number | null
           ticket_image_url?: string | null
+          currency?: string | null  // Added
+          currency_symbol?: string | null  // Added
         }
         Relationships: [
           {

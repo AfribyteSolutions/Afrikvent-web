@@ -9,7 +9,7 @@ import CreateEventModal from './CreateEventModal';
 import EditEventModal from './EditEventModal';
 
 interface Event {
-  id: number;
+  id: number; // Changed back to number to match database schema
   title: string;
   event_date: string | null;
   location_name: string | null;
@@ -18,6 +18,7 @@ interface Event {
   ticketsSold: number;
   totalTickets: number;
   revenue: number;
+  currency: string;
   description: string | null;
 }
 
@@ -36,7 +37,7 @@ const EventsList: React.FC<EventsListProps> = ({
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingEventId, setEditingEventId] = useState<number | null>(null);
+  const [editingEventId, setEditingEventId] = useState<number | null>(null); // Changed to number | null
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,13 +47,35 @@ const EventsList: React.FC<EventsListProps> = ({
     }
   }, [user]);
 
+  // Helper function to get currency symbol
+  const getCurrencySymbol = (currency: string): string => {
+    switch (currency) {
+      case 'GHS':
+        return '₵';
+      case 'CFA':
+      case 'XOF':
+      case 'XAF':
+        return 'CFA';
+      case 'USD':
+        return '$';
+      case 'EUR':
+        return '€';
+      default:
+        return currency;
+    }
+  };
+
+  const formatCurrency = (amount: number, currency: string = 'GHS'): string => {
+    const symbol = getCurrencySymbol(currency);
+    return `${symbol}${amount.toLocaleString()}`;
+  };
+
   const fetchEvents = async () => {
     if (!user) return;
 
     try {
       setLoading(true);
 
-      // Fetch events with ticket statistics
       const { data: eventsData, error: eventsError } = await supabase
         .from('EVENTS')
         .select(`
@@ -62,8 +85,9 @@ const EventsList: React.FC<EventsListProps> = ({
           location_name,
           images,
           event_status,
-          description
-        `)
+          description,
+          currency
+        `) 
         .eq('organizer_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -72,10 +96,8 @@ const EventsList: React.FC<EventsListProps> = ({
         return;
       }
 
-      // For each event, get ticket statistics
       const eventsWithStats = await Promise.all(
         (eventsData || []).map(async (event) => {
-          // Get total tickets available
           const { data: ticketTypes } = await supabase
             .from('TICKET_TYPES')
             .select('max_quatity')
@@ -85,7 +107,6 @@ const EventsList: React.FC<EventsListProps> = ({
             sum + (type.max_quatity || 0), 0
           ) || 0;
 
-          // Get tickets sold and revenue
           const { data: soldTickets } = await supabase
             .from('TICKETS')
             .select('quantity, total, ticket_status')
@@ -104,12 +125,13 @@ const EventsList: React.FC<EventsListProps> = ({
             ...event,
             ticketsSold,
             totalTickets,
-            revenue
+            revenue,
+            currency: event.currency || 'GHS'
           };
         })
       );
 
-      setEvents(eventsWithStats);
+      setEvents(eventsWithStats as Event[]);
 
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -166,7 +188,7 @@ const EventsList: React.FC<EventsListProps> = ({
     });
   };
 
-  const handleEventClick = (eventId: number) => {
+  const handleEventClick = (eventId: number) => { // Changed to number
     router.push(`/events/${eventId}`);
   };
 
@@ -175,6 +197,7 @@ const EventsList: React.FC<EventsListProps> = ({
   };
 
   const handleEditEvent = (eventId: number) => {
+    console.log('Edit clicked - eventId:', eventId, 'type:', typeof eventId);
     setEditingEventId(eventId);
     setIsEditModalOpen(true);
   };
@@ -190,18 +213,16 @@ const EventsList: React.FC<EventsListProps> = ({
 
   const handleEventCreated = () => {
     setIsCreateModalOpen(false);
-    // Refresh events list
     fetchEvents();
   };
 
   const handleEventUpdated = () => {
     setIsEditModalOpen(false);
     setEditingEventId(null);
-    // Refresh events list
     fetchEvents();
   };
 
-  const handleDeleteEvent = async (eventId: number, eventTitle: string) => {
+  const handleDeleteEvent = async (eventId: number, eventTitle: string) => { // Changed to number
     if (!confirm(`Are you sure you want to delete "${eventTitle}"? This action cannot be undone.`)) {
       return;
     }
@@ -211,7 +232,7 @@ const EventsList: React.FC<EventsListProps> = ({
         .from('EVENTS')
         .delete()
         .eq('id', eventId)
-        .eq('organizer_id', user?.id); // Extra security check
+        .eq('organizer_id', user?.id);
 
       if (error) {
         console.error('Error deleting event:', error);
@@ -219,7 +240,6 @@ const EventsList: React.FC<EventsListProps> = ({
         return;
       }
 
-      // Refresh events list
       fetchEvents();
       alert('Event deleted successfully.');
 
@@ -349,7 +369,7 @@ const EventsList: React.FC<EventsListProps> = ({
                       </div>
                       <div>
                         <span className="text-gray-500">Revenue</span>
-                        <p className="font-medium">₵{event.revenue.toLocaleString()}</p>
+                        <p className="font-medium">{formatCurrency(event.revenue, event.currency)}</p>
                       </div>
                       <div>
                         <span className="text-gray-500">Progress</span>
@@ -396,7 +416,7 @@ const EventsList: React.FC<EventsListProps> = ({
             <div className="p-12 text-center">
               <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2 2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
                 </svg>
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No events yet</h3>
@@ -423,7 +443,6 @@ const EventsList: React.FC<EventsListProps> = ({
         )}
       </div>
 
-      {/* Create Event Modal */}
       <CreateEventModal
         isOpen={isCreateModalOpen}
         onClose={handleModalClose}
@@ -431,13 +450,12 @@ const EventsList: React.FC<EventsListProps> = ({
         user={user}
       />
 
-      {/* Edit Event Modal */}
       <EditEventModal
         isOpen={isEditModalOpen}
         onClose={handleEditModalClose}
         onSuccess={handleEventUpdated}
         user={user}
-        eventId={editingEventId || 0}
+        eventId={editingEventId} // Now correctly typed as number | null
       />
     </>
   );

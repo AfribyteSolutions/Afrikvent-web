@@ -1,11 +1,11 @@
 import React, { useRef } from "react";
 import EventCard from "../eventcard/EventCard";
-import { Event } from "@/lib/event/eventService"; // Import from EventService directly
+import { TransformedEvent } from "@/utils/eventdatatransformer";
 import { ArrowRight } from "lucide-react";
 
 interface EventCarouselProps {
-  events: Event[];
-  onEventClick?: (event: Event) => void;
+  events: TransformedEvent[];
+  onEventClick?: (event: TransformedEvent) => void;
   title?: string;
   onSeeMore?: () => void;
 }

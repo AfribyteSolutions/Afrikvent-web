@@ -9,7 +9,7 @@ interface EditEventModalProps {
   onClose: () => void;
   onSuccess: () => void;
   user: User | null;
-  eventId: number;
+  eventId: number | null; // Change this from string to number to match database
 }
 
 interface EventFormData {
@@ -51,6 +51,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
   user,
   eventId
 }) => {
+  console.log("EditEventModal received eventId:", eventId); 
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(true);
@@ -63,7 +64,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     location: '',
     venue: '',
     category: '',
-    currency: 'GHS',
+    currency: 'CFA',
     image: null,
     currentImageUrl: '',
     ticketTypes: [],
@@ -102,56 +103,64 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
 
   const selectedCurrency = currencies.find(c => c.code === formData.currency) || currencies[0];
 
-  // Load existing event data
   useEffect(() => {
-    if (isOpen && eventId && user) {
-      loadEventData();
+    if (!isOpen || !eventId || !user) {
+      if (isOpen) {
+        setError('Error loading event data: Event ID or user not found.');
+        setIsLoadingData(false);
+      }
+      return;
     }
+
+    loadEventData();
   }, [isOpen, eventId, user]);
 
   const loadEventData = async () => {
-    if (!user) return;
-
+    if (!user || !eventId) {
+      return;
+    }
+  
     setIsLoadingData(true);
     try {
-      // Fetch event data
+      // Fetch event data - eventId is now correctly typed as number
       const { data: eventData, error: eventError } = await supabase
         .from('EVENTS')
-        .select('*')
-        .eq('id', eventId)
-        .eq('organizer_id', user.id)
+        .select('*, currency, category')
+        .eq('id', eventId) // This is now properly typed as number
+        .eq('organizer_id', user.id) // This is the user's UUID
         .single();
-
-      if (eventError) {
+  
+      if (eventError || !eventData) {
         throw new Error('Event not found or access denied');
       }
-
+  
       // Fetch ticket types
       const { data: ticketTypesData, error: ticketError } = await supabase
         .from('TICKET_TYPES')
         .select('*')
-        .eq('event_id', eventId);
-
+        .eq('event_id', eventId); // This is now properly typed as number
+  
       if (ticketError) {
         console.warn('Error loading ticket types:', ticketError);
       }
-
-      // Parse event date
+  
+      // Rest of the function remains the same...
+      // Parse event date and time
       const eventDate = new Date(eventData.event_date);
       const date = eventDate.toISOString().split('T')[0];
       const time = eventDate.toTimeString().slice(0, 5);
-
+  
       // Map ticket types
       const mappedTicketTypes: TicketType[] = (ticketTypesData || []).map(ticket => ({
         id: `existing-${ticket.id}`,
         existingId: ticket.id,
         name: ticket.name || '',
         price: ticket.price || 0,
-        quantity: ticket.max_quatity || 0,
+        quantity: ticket.max_quantity || 0,
         description: ticket.description || '',
-        format: 'in-person' as const // Default, since format isn't in database
+        format: 'in-person' as const
       }));
-
+  
       setFormData({
         title: eventData.title || '',
         description: eventData.description || '',
@@ -160,13 +169,13 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
         location: eventData.location_name || '',
         venue: eventData.address || '',
         category: eventData.category || '',
-        currency: 'GHS', // Default since currency isn't stored
+        currency: eventData.currency || 'GHS',
         image: null,
         currentImageUrl: eventData.images?.[0] || '',
         ticketTypes: mappedTicketTypes,
         eventStatus: eventData.event_status as 'draft' | 'published'
       });
-
+  
     } catch (error) {
       console.error('Error loading event data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load event data');
@@ -258,13 +267,9 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     setError('');
 
     try {
-      // Combine date and time
-      const eventDateTime = `${formData.date}T${formData.time}:00.000Z`;
-
-      // Upload new image if provided
+      const eventDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
       const imageUrl = await uploadEventImage();
 
-      // Update the event
       const { error: eventError } = await supabase
         .from('EVENTS')
         .update({
@@ -274,7 +279,9 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
           location_name: formData.location,
           address: formData.venue,
           event_status: formData.eventStatus,
-          images: imageUrl ? [imageUrl] : (formData.currentImageUrl ? [formData.currentImageUrl] : [])
+          images: imageUrl ? [imageUrl] : (formData.currentImageUrl ? [formData.currentImageUrl] : []),
+          currency: formData.currency,
+          category: formData.category
         })
         .eq('id', eventId)
         .eq('organizer_id', user.id);
@@ -283,11 +290,9 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
         throw new Error(eventError.message);
       }
 
-      // Handle ticket types
       const existingTickets = formData.ticketTypes.filter(t => t.existingId);
       const newTickets = formData.ticketTypes.filter(t => !t.existingId);
 
-      // Update existing ticket types
       for (const ticket of existingTickets) {
         if (ticket.existingId) {
           const { error: updateError } = await supabase
@@ -306,7 +311,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
         }
       }
 
-      // Create new ticket types
       for (const ticket of newTickets) {
         const { error: createError } = await supabase
           .from('TICKET_TYPES')
@@ -323,7 +327,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
         }
       }
 
-      // Reset form and close
       setCurrentStep(1);
       onSuccess();
 
@@ -363,7 +366,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
         return false;
     }
   };
-
   if (!isOpen) return null;
 
   if (isLoadingData) {

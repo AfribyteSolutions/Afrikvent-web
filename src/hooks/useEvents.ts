@@ -1,11 +1,15 @@
+// src/hooks/useEvents.ts
+
 import { useState, useEffect } from "react";
-import { EventService, Event } from "@/lib/event/eventService"; // Import Event type from EventService
+// ✅ This import is correct, as long as EventService is exported in the other file.
+import { EventService } from "@/lib/event/eventService"; 
+import { TransformedEvent } from "@/utils/eventdatatransformer";
 
 /**
  * Custom hook to fetch recommended events.
  */
 export const useRecommendedEvents = (limit?: number) => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<TransformedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -17,7 +21,7 @@ export const useRecommendedEvents = (limit?: number) => {
         const data = await EventService.getRecommendedEvents(limit);
         setEvents(data);
       } catch (err) {
-        console.error('Error fetching recommended events:', err);
+        console.error("Error fetching recommended events:", err);
         setError("Failed to fetch recommended events");
         setEvents([]); // Clear events on error
       } finally {
@@ -35,7 +39,7 @@ export const useRecommendedEvents = (limit?: number) => {
  * Custom hook to fetch upcoming events.
  */
 export const useUpcomingEvents = (limit?: number) => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<TransformedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +51,7 @@ export const useUpcomingEvents = (limit?: number) => {
         const data = await EventService.getUpcomingEvents(limit);
         setEvents(data);
       } catch (err) {
-        console.error('Error fetching upcoming events:', err);
+        console.error("Error fetching upcoming events:", err);
         setError("Failed to fetch upcoming events");
         setEvents([]);
       } finally {
@@ -65,7 +69,7 @@ export const useUpcomingEvents = (limit?: number) => {
  * Custom hook to fetch a single event by its ID.
  */
 export const useEventById = (id: string) => {
-  const [event, setEvent] = useState<Event | null>(null);
+  const [event, setEvent] = useState<TransformedEvent | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,7 +86,7 @@ export const useEventById = (id: string) => {
         const data = await EventService.getEventById(id);
         setEvent(data);
       } catch (err) {
-        console.error('Error fetching event by ID:', err);
+        console.error("Error fetching event by ID:", err);
         setError("Failed to fetch event");
         setEvent(null);
       } finally {
@@ -100,7 +104,7 @@ export const useEventById = (id: string) => {
  * Custom hook to search for events.
  */
 export const useSearchEvents = (query: string) => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<TransformedEvent[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,7 +123,7 @@ export const useSearchEvents = (query: string) => {
         const data = await EventService.searchEvents(query);
         setEvents(data);
       } catch (err) {
-        console.error('Error searching events:', err);
+        console.error("Error searching events:", err);
         setError("Failed to search events");
         setEvents([]);
       } finally {
@@ -138,7 +142,7 @@ export const useSearchEvents = (query: string) => {
  * Custom hook to fetch sponsored events.
  */
 export const useSponsoredEvents = (limit?: number) => {
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<TransformedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -150,7 +154,7 @@ export const useSponsoredEvents = (limit?: number) => {
         const data = await EventService.getSponsoredEvents(limit);
         setEvents(data);
       } catch (err) {
-        console.error('Error fetching sponsored events:', err);
+        console.error("Error fetching sponsored events:", err);
         setError("Failed to fetch sponsored events");
         setEvents([]);
       } finally {
@@ -164,5 +168,5 @@ export const useSponsoredEvents = (limit?: number) => {
   return { events, loading, error };
 };
 
-// Re-export the Event type for components that need it
-export type { Event } from "@/lib/event/eventService";
+// ✅ Re-export the correct event type for components that need it
+export type { TransformedEvent as Event };

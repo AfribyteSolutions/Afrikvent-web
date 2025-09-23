@@ -6,8 +6,8 @@ import EventCard from "@/components/event/eventcard/EventCard";
 import { TicketsSection } from "@/components/tickets/TicketSection";
 import EventFilters, { FilterState } from "@/components/event/EventFilters";
 
-// Use the consistent Event type from your eventService
-import { Event } from "@/lib/event/eventService";
+// ✅ Correct import: Use the TransformedEvent type from its original source
+import { TransformedEvent } from "@/utils/eventdatatransformer";
 
 // Import your generated DB types for database operations
 import { Database } from "@/types/database.types";
@@ -48,8 +48,8 @@ export default function MyEvents() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeTab, setActiveTab] = useState<"events" | "tickets">("events");
-  const [allEvents, setAllEvents] = useState<Event[]>([]);
-  const [filteredEvents, setFilteredEvents] = useState<Event[]>([]);
+  const [allEvents, setAllEvents] = useState<TransformedEvent[]>([]);
+  const [filteredEvents, setFilteredEvents] = useState<TransformedEvent[]>([]);
   const [userTickets, setUserTickets] = useState<UserTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export default function MyEvents() {
     getCurrentUser();
   }, []);
 
-  // Fetch events - Transform to match the Event type from eventService
+  // Fetch events - Transform to match the TransformedEvent type
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -108,8 +108,8 @@ export default function MyEvents() {
           USERS: { name: string; email: string }[];
         }
 
-        // Transform to match the Event interface from eventService
-        const transformedEvents: Event[] = await Promise.all(
+        // Transform to match the TransformedEvent interface from eventService
+        const transformedEvents: TransformedEvent[] = await Promise.all(
           (eventsData || []).map(async (row: EventWithRelations) => {
             // Get organizer name from joined USERS data
             const userName = row.USERS && row.USERS.length > 0 
@@ -145,8 +145,9 @@ export default function MyEvents() {
             // Transform ticket types to match your TicketOption interface
             const ticketOptions = row.TICKET_TYPES?.map(ticket => ({
               type: 'Regular' as const,
-              price: ticket.price || 0,
+              price: String(ticket.price || 0), // ✅ Ensure price is a string
               currency: 'GHS',
+              currency_symbol: '₵', // ✅ Add currency symbol
               availability: 'Available'
             })) || [];
 
@@ -165,9 +166,9 @@ export default function MyEvents() {
               ticketOptions: ticketOptions,
               tags: [], // You might want to add tags to your database
               isSponsored: row.is_sponsored || false,
-              price: minPrice > 0 ? `GHS ${minPrice}` : 'Free',
-              category: 'General', // You might want to add category field to your database
-              phone: undefined, // You might want to get this from organizer data
+              price: minPrice > 0 ? String(minPrice) : 'Free', // ✅ Ensure price is a string
+              currency: 'GHS', // ✅ Add required currency
+              currency_symbol: '₵', // ✅ Add required currency symbol
             };
           })
         );
@@ -315,7 +316,7 @@ export default function MyEvents() {
     fetchUserTickets();
   }, [currentUser, activeTab]);
 
-  const handleEventClick = (event: Event) => {
+  const handleEventClick = (event: TransformedEvent) => {
     router.push(`/events/${event.id}`);
   };
 
@@ -410,8 +411,7 @@ export default function MyEvents() {
                     </svg>
                   </div>
                   <h3 className="text-xl font-medium text-gray-900 mb-2">
-                    No events available
-                  </h3>
+                    No events available</h3>
                   <p className="text-gray-600 mb-6">
                     There are currently no events that match your filter criteria.
                   </p>

@@ -1,4 +1,4 @@
-// src/components/organiser/CreateEventModal.tsx
+// Updated CreateEventModal with proper currency handling and navigation
 'use client';
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -58,10 +58,10 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     location: '',
     venue: '',
     category: '',
-    currency: 'GHS', // Default to Ghanaian Cedi
+    currency: 'XOF', // Default to West African CFA Franc
     image: null,
     ticketTypes: [],
-    eventStatus: 'draft' // Default to draft
+    eventStatus: 'draft'
   });
 
   const categories = [
@@ -77,13 +77,13 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
   ];
 
   const currencies: Currency[] = [
-    // Ghanaian currency (primary)
-    { code: 'GHS', symbol: '₵', name: 'Ghanaian Cedi', flag: '🇬🇭' },
-    
-    // Major African currencies
-    { code: 'NGN', symbol: '₦', name: 'Nigerian Naira', flag: '🇳🇬' },
-    { code: 'XAF', symbol: 'FC', name: 'Central African CFA Franc', flag: '🇨🇲' },
+    // West African CFA Franc (primary default)
     { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc', flag: '🇸🇳' },
+    
+    // Other major African currencies
+    { code: 'GHS', symbol: '₵', name: 'Ghanaian Cedi', flag: '🇬🇭' },
+    { code: 'NGN', symbol: '₦', name: 'Nigerian Naira', flag: '🇳🇬' },
+    { code: 'XAF', symbol: 'FCFA', name: 'Central African CFA Franc', flag: '🇨🇲' },
     { code: 'ZAR', symbol: 'R', name: 'South African Rand', flag: '🇿🇦' },
     { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling', flag: '🇰🇪' },
     { code: 'UGX', symbol: 'USh', name: 'Ugandan Shilling', flag: '🇺🇬' },
@@ -103,7 +103,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
   const handleInputChange = (field: keyof EventFormData, value: string | 'draft' | 'published') => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    setError(''); // Clear errors when user starts typing
+    setError('');
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -140,6 +140,38 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
       ...prev,
       ticketTypes: prev.ticketTypes.filter(ticket => ticket.id !== id)
     }));
+  };
+
+  // Step validation functions
+  const isStepValid = (): boolean => {
+    switch (currentStep) {
+      case 1:
+        return formData.title.trim() !== '' && 
+               formData.description.trim() !== '' && 
+               formData.category.trim() !== '';
+      case 2:
+        return formData.date.trim() !== '' && 
+               formData.time.trim() !== '' && 
+               formData.location.trim() !== '';
+      case 3:
+        return true; // Tickets are optional
+      case 4:
+        return true; // Just choosing publish status
+      default:
+        return false;
+    }
+  };
+
+  const nextStep = () => {
+    if (currentStep < 4 && isStepValid()) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1);
+    }
   };
 
   const uploadEventImage = async (eventId: number): Promise<string | null> => {
@@ -184,20 +216,23 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     setError('');
 
     try {
-      // Combine date and time
-      const eventDateTime = `${formData.date}T${formData.time}:00.000Z`;
-
-      // Create the event first
+      // Combine date and time - Use proper ISO format
+      const eventDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
+      
+      // Create the event with currency information
       const { data: eventData, error: eventError } = await supabase
         .from('EVENTS')
         .insert([{
           title: formData.title,
           description: formData.description,
           event_date: eventDateTime,
+          start_time: formData.time, // Save time separately for easier parsing
           location_name: formData.location,
           address: formData.venue,
           organizer_id: user.id,
           event_status: formData.eventStatus,
+          currency: formData.currency, // Save selected currency
+          currency_symbol: selectedCurrency.symbol, // Save currency symbol
           is_featured: false,
           is_sponsored: false
         }])
@@ -228,7 +263,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
         }
       }
 
-      // Create ticket types
+      // Create ticket types with proper currency information
       for (const ticketType of formData.ticketTypes) {
         const { error: ticketError } = await supabase
           .from('TICKET_TYPES')
@@ -237,11 +272,14 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
             name: ticketType.name,
             description: ticketType.description,
             price: ticketType.price,
-            max_quatity: ticketType.quantity
+            max_quatity: ticketType.quantity,
+            currency: formData.currency, // Use event's currency
+            currency_symbol: selectedCurrency.symbol // Use event's currency symbol
           }]);
 
         if (ticketError) {
           console.error('Error creating ticket type:', ticketError);
+          // Don't throw here, just log - we don't want to fail the entire event creation
         }
       }
 
@@ -254,7 +292,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
         location: '',
         venue: '',
         category: '',
-        currency: 'GHS',
+        currency: 'XOF', // Reset to default CFA
         image: null,
         ticketTypes: [],
         eventStatus: 'draft'
@@ -268,35 +306,6 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
       setError(error instanceof Error ? error.message : 'Failed to create event');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const nextStep = () => {
-    if (currentStep < 4) {
-      setCurrentStep(currentStep + 1);
-    }
-  };
-
-  const prevStep = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    }
-  };
-
-  const isStepValid = () => {
-    switch (currentStep) {
-      case 1:
-        return formData.title && formData.description && formData.category;
-      case 2:
-        return formData.date && formData.time && formData.location;
-      case 3:
-        return formData.ticketTypes.length > 0 && formData.ticketTypes.every(ticket => 
-          ticket.name && ticket.price >= 0 && ticket.quantity > 0 && ticket.format
-        );
-      case 4:
-        return true; // Publish step is always valid
-      default:
-        return false;
     }
   };
 
@@ -402,15 +411,15 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                       onChange={(e) => handleInputChange('currency', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
-                      <optgroup label="Ghanaian Currency">
-                        {currencies.filter(c => c.code === 'GHS').map((currency) => (
+                      <optgroup label="West/Central African Currencies">
+                        {currencies.filter(c => ['XOF', 'XAF'].includes(c.code)).map((currency) => (
                           <option key={currency.code} value={currency.code}>
                             {currency.flag} {currency.symbol} - {currency.name}
                           </option>
                         ))}
                       </optgroup>
-                      <optgroup label="African Currencies">
-                        {currencies.filter(c => !['GHS', 'USD', 'EUR', 'GBP'].includes(c.code)).map((currency) => (
+                      <optgroup label="Other African Currencies">
+                        {currencies.filter(c => !['XOF', 'XAF', 'USD', 'EUR', 'GBP'].includes(c.code)).map((currency) => (
                           <option key={currency.code} value={currency.code}>
                             {currency.flag} {currency.symbol} - {currency.name}
                           </option>
@@ -588,9 +597,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                               onChange={(e) => {
                                 const value = e.target.value;
                                 if (value === '') {
-                                    updateTicketType(ticket.id, 'price', ''); 
+                                    updateTicketType(ticket.id, 'price', 0); 
                                 } else {
-                                    updateTicketType(ticket.id, 'price', parseFloat(value));
+                                    updateTicketType(ticket.id, 'price', parseFloat(value) || 0);
                                 }
                               }}
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
@@ -726,6 +735,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                     <p><span className="font-medium">Title:</span> {formData.title}</p>
                     <p><span className="font-medium">Date:</span> {formData.date} at {formData.time}</p>
                     <p><span className="font-medium">Location:</span> {formData.location}</p>
+                    <p><span className="font-medium">Currency:</span> {selectedCurrency.symbol} ({selectedCurrency.name})</p>
                     <p><span className="font-medium">Ticket Types:</span> {formData.ticketTypes.length}</p>
                     <p><span className="font-medium">Status:</span> 
                       <span className={`ml-1 px-2 py-1 rounded text-xs ${
