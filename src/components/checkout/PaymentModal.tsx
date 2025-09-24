@@ -242,6 +242,20 @@ const COUNTRIES: Country[] = [
   { code: 'YE', name: 'Yemen', flag: '🇾🇪', dialCode: '967', mtnSupported: true, vodafoneSupported: false, airtelSupported: false }
 ];
 
+interface EnhancedPaymentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  selectedTicket: TicketTypeRow;
+  quantity: number;
+  user: User | null;
+  eventTitle: string;
+  eventDate: string | null;
+  eventLocation: string | null;
+  eventId?: number; // Add event ID
+  eventImage?: string; // Add event image
+  onPaymentSuccess?: (tickets: EnhancedTicket[]) => void;
+}
+
 const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   isOpen,
   onClose,
@@ -249,6 +263,10 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   quantity,
   user,
   eventTitle,
+  eventDate, // Receive event date
+  eventLocation, // Receive event location  
+  eventId, // Receive event ID
+  eventImage, // Receive event image
   onPaymentSuccess
 }) => {
   const [step, setStep] = useState<'method' | 'details' | 'success'>('method');
@@ -372,6 +390,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     console.log('Viewing ticket details:', ticket.orderId);
     alert(`Viewing details for ${ticket.orderId}`);
   };
+  
 
   return (
     <AnimatePresence>
@@ -602,6 +621,12 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       onError={handlePaymentError}
                       disabled={!isPhoneNumberValid()}
                       className="w-full"
+                      eventTitle={eventTitle}
+                      eventDate={eventDate || new Date().toISOString()}
+                      eventLocation={eventLocation || 'Location TBA'}
+                      ticketTypeName={selectedTicket.name}
+                      eventId={eventId}
+                      eventImage={eventImage}
                     />
                   </div>
                 </motion.div>

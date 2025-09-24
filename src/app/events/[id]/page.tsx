@@ -1,4 +1,3 @@
-// app/events/[id]/page.tsx
 'use client';
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
@@ -643,14 +642,18 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
       {/* Payment Modal */}
       {selectedTicket && (
         <PaymentModal
-          isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          selectedTicket={selectedTicket}
-          quantity={ticketQuantity}
-          user={user}
-          eventTitle={event.title}
-          onPaymentSuccess={handlePaymentSuccess}
-        />
+        isOpen={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        selectedTicket={selectedTicket}
+        quantity={ticketQuantity}
+        user={user}
+        eventTitle={event.title}
+        eventDate={event.event_date} // Can be null
+        eventLocation={event.location_name} // Can be null
+        eventId={event.id}
+        eventImage={event.images?.[0]}
+        onPaymentSuccess={handlePaymentSuccess}
+      />
       )}
 
       {/* Success Screen */}

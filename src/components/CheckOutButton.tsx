@@ -1,14 +1,20 @@
-// CheckoutButton component aligned with your database schema
-
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { buyTicket } from "@/utils/payment";
-import { PaymentResult, EnhancedTicket } from "@/types/ticket";
-import { Loader2, CreditCard, CheckCircle, AlertCircle } from "lucide-react";
+import {
+  PaymentResult,
+  EnhancedTicket,
+  DatabaseTicket,
+} from "@/types/ticket";
+import {
+  Loader2,
+  CreditCard,
+  CheckCircle,
+  AlertCircle,
+} from "lucide-react";
 
 interface CheckoutButtonProps {
-  ticketId: number; // This should be ticket_type_id from TICKET_TYPES table
+  ticketId: number;
   userId: string;
   phone: string;
   quantity?: number;
@@ -16,17 +22,32 @@ interface CheckoutButtonProps {
   onError?: (error: string) => void;
   disabled?: boolean;
   className?: string;
+  // Event details
+  eventTitle: string;
+  eventDate: string | null;
+  eventLocation: string | null;
+  ticketTypeName: string | null;
+  eventId?: number;
+  eventImage?: string;
+  eventCategory?: string;
 }
 
-const CheckoutButton: React.FC<CheckoutButtonProps> = ({ 
-  ticketId, 
-  userId, 
-  phone, 
+const CheckoutButton: React.FC<CheckoutButtonProps> = ({
+  ticketId,
+  userId,
+  phone,
   quantity = 1,
-  onSuccess, 
+  onSuccess,
   onError,
   disabled = false,
-  className = ""
+  className = "",
+  eventTitle,
+  eventDate,
+  eventLocation,
+  ticketTypeName,
+  eventId,
+  eventImage,
+  eventCategory,
 }) => {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -34,157 +55,181 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
   const handleCheckout = async () => {
     if (loading || disabled) return;
-    
+
     setLoading(true);
     setSuccess(false);
     setError(null);
 
     try {
-      // Validate inputs before making payment
       if (!userId || !phone || !ticketId) {
         throw new Error("Missing required information: userId, phone, or ticketId");
       }
 
-      // Validate phone number format for international MTN Mobile Money
-      // Support for multiple countries: Ghana (+233), Cameroon (+237), Nigeria (+234), etc.
-      // Format: country code + mobile number (8-10 digits)
       const phoneRegex = /^(\+?[1-9]\d{2})[1-9]\d{7,9}$/;
-      if (!phoneRegex.test(phone.replace(/\s+/g, ''))) {
-        throw new Error("Invalid phone number format. Please enter a valid international mobile number with country code.");
+      if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
+        throw new Error(
+          "Invalid phone number format. Please enter a valid international mobile number with country code."
+        );
       }
 
-      // Prepare tickets array for payment - this should match what your buyTicket function expects
-      const tickets = [{ 
-        ticket_id: ticketId, // This references TICKET_TYPES.id
-        quantity: quantity 
-      }];
+      const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
+      const tickets = [{ ticket_id: ticketId, quantity }];
 
-      console.log('🚀 Starting checkout with:', {
+      console.log("🚀 Starting checkout with:", {
         userId,
-        phone,
+        phone: cleanPhone,
         tickets,
         ticketId,
-        quantity
+        quantity,
       });
 
-      // Call your payment function
-      const result: PaymentResult = await buyTicket(userId, phone, tickets);
+      const response = await fetch("/api/initiate-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          phone_number: cleanPhone,
+          payment_method: "mobile money",
+          tickets,
+        }),
+      });
 
-      console.log('💰 Payment result:', result);
-
-      // Check if the result has the expected structure
-      if (!result) {
-        throw new Error("No response received from payment service");
+      if (!response.ok) {
+        throw new Error(`API error: ${response.statusText}`);
       }
 
-      // More detailed error checking
-      if (!result.success) {
-        console.error('❌ Payment failed - Full result:', result);
-        
-        // Try to extract more specific error information
-        let errorMsg = "Payment was declined or failed";
-        
-        // Check for common failure reasons
-        if (result.transaction_id === '') {
-          errorMsg = "Payment service unavailable. Please try again later.";
-        } else if (result.tickets && result.tickets.length === 0) {
-          errorMsg = "Payment processed but no tickets were issued. Please contact support.";
+      // Parse raw JSON first
+      let rawResult: unknown = await response.json();
+      console.log("💰 Raw payment result:", rawResult);
+      console.log("💰 Raw result type:", typeof rawResult);
+
+      // If the result is a string, parse it again (double-encoded JSON)
+      if (typeof rawResult === "string") {
+        console.log("🔧 Result is string, parsing again...");
+        try {
+          rawResult = JSON.parse(rawResult);
+          console.log("✅ Successfully parsed string result:", rawResult);
+        } catch (parseError) {
+          console.error("❌ Failed to parse string result:", parseError);
+          throw new Error("Invalid JSON response format");
         }
+      }
+
+      // Direct type assertion - the response should now be a proper object
+      const result = rawResult as PaymentResult;
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // FIXED: Simplified and more reliable ticket extraction
+      let ticketsArray: DatabaseTicket[] = [];
+      
+      console.log("🔍 Extracting tickets from result:", result);
+      console.log("🔍 Result type:", typeof result);
+      
+      // Type-safe way to access the tickets property
+      const resultWithTickets = result as PaymentResult & { tickets?: DatabaseTicket[] };
+      
+      if (resultWithTickets.tickets && Array.isArray(resultWithTickets.tickets)) {
+        ticketsArray = resultWithTickets.tickets;
+        console.log("✅ Tickets extracted from result.tickets:", ticketsArray);
+      } else {
+        // Fallback: access rawResult directly with proper typing
+        const rawWithTickets = rawResult as Record<string, unknown>;
+        console.log("🔍 Fallback - rawResult.tickets:", rawWithTickets.tickets);
+        console.log("🔍 Is array:", Array.isArray(rawWithTickets.tickets));
         
-        // If there's additional error info in the result, use it
-        if ('error' in result && result.error) {
-          errorMsg = String(result.error);
-        } else if ('message' in result && result.message) {
-          errorMsg = String(result.message);
+        if (rawWithTickets.tickets && Array.isArray(rawWithTickets.tickets)) {
+          ticketsArray = rawWithTickets.tickets as DatabaseTicket[];
+          console.log("✅ Tickets extracted from rawResult.tickets:", ticketsArray);
         }
+      }
+
+      console.log("✅ Tickets array extracted:", ticketsArray);
+      console.log("✅ Tickets length:", ticketsArray.length);
+
+      if (ticketsArray.length === 0) {
+        console.error("❌ Payment failed - No tickets returned. Full result:", rawResult);
         
+        let errorMsg = "Payment failed - no tickets were created";
+        if (result.message) {
+          const msg = result.message.toLowerCase();
+          if (
+            msg.includes("fail") ||
+            msg.includes("error") ||
+            msg.includes("decline")
+          ) {
+            errorMsg = result.message;
+          }
+        }
         throw new Error(errorMsg);
       }
 
-      if (!result.tickets || !Array.isArray(result.tickets) || result.tickets.length === 0) {
-        console.error('❌ No tickets in result:', result);
-        throw new Error("Payment successful but no tickets were generated. Please contact support.");
-      }
+      console.log("✅ Payment successful, processing tickets:", ticketsArray);
 
-      console.log('✅ Payment successful, processing tickets:', result.tickets);
-
-      // Show success state briefly
       setSuccess(true);
-      
-      // Transform PaymentResult to EnhancedTicket format
-      const enhancedTickets: EnhancedTicket[] = result.tickets.map((ticket, index) => {
-        console.log('🎫 Processing ticket:', ticket);
-        
-        return {
-          // Required properties for EnhancedTicket based on your UserTicket interface
-          id: `${result.transaction_id || Date.now()}-${ticket.ticket_id}-${index}`,
-          eventId: result.eventData?.id?.toString() || ticketId.toString(),
-          eventTitle: result.eventData?.title || "Event",
-          eventDate: result.eventData?.date || new Date().toISOString(),
-          eventLocation: result.eventData?.location || "Location TBD",
-          ticketType: ticket.ticketType || "General Admission",
-          quantity: ticket.quantity || quantity,
-          totalPrice: ticket.price || 0,
-          purchaseDate: new Date().toISOString(),
-          status: "confirmed" as const,
-          userId: userId,
-          
-          // Enhanced properties
-          qrCode: result.qr_string || `${result.transaction_id || Date.now()}-${ticket.ticket_id}-${userId}`,
-          orderId: result.orderId || result.transaction_id || `ORDER_${Date.now()}`,
-          ticketStatus: "active" as const,
-          // Only include properties that exist in your PaymentResult type
-          eventImage: result.eventData?.image,
-          eventCategory: result.eventData?.category,
-        };
-      });
 
-      console.log('🎟️ Enhanced tickets created:', enhancedTickets);
+      // Enhanced ticket transformation with better error handling
+      const enhancedTickets: EnhancedTicket[] = ticketsArray.map(
+        (ticket: DatabaseTicket, index: number) => {
+          console.log("🎫 Processing ticket:", ticket);
 
-      // Wait a moment to show success state
+          // Generate a more robust ticket ID
+          const ticketId = ticket.id || `temp_${Date.now()}_${index}`;
+          const transactionId = result.payment?.transaction_id || `TXN_${Date.now()}`;
+
+          // Ensure eventId is always a string
+          const ticketEventId = eventId?.toString() || 
+                               ticket.event_id?.toString() || 
+                               ticket.ticket_type_id?.toString() || 
+                               ticketId.toString();
+
+          return {
+            id: `${transactionId}-${ticketId}-${index}`,
+            eventId: ticketEventId,
+            eventTitle: eventTitle || "Event",
+            eventDate: eventDate || new Date().toISOString(),
+            eventLocation: eventLocation || "Location TBA",
+            ticketType: ticketTypeName || "General Admission",
+            quantity: parseInt(ticket.quantity?.toString() || "1"),
+            totalPrice: Number(ticket.total || ticket.unit_price || 0),
+            purchaseDate: new Date().toISOString(),
+            status: "confirmed" as const,
+            userId,
+            qrCode: ticket.qr_code_data || `QR_${ticketId}`,
+            orderId: transactionId,
+            ticketStatus: "active" as const,
+            eventImage,
+            eventCategory,
+          };
+        }
+      );
+
+      console.log("🎟️ Enhanced tickets created:", enhancedTickets);
+
       setTimeout(() => {
         onSuccess(enhancedTickets);
         setSuccess(false);
       }, 1500);
+    } catch (err) {
+      console.error("💥 Checkout error:", err);
 
-    } catch (error) {
-      console.error("💥 Checkout error:", error);
-      
       let errorMessage = "Payment failed. Please try again.";
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      } else if (error && typeof error === 'object' && error !== null && 'message' in error) {
-        errorMessage = String((error as { message: unknown }).message);
-      }
-
-      // Handle specific error types from your payment system
-      if (errorMessage.includes('insufficient')) {
-        errorMessage = "Insufficient funds. Please check your mobile money balance.";
-      } else if (errorMessage.includes('network')) {
-        errorMessage = "Network error. Please check your connection and try again.";
-      } else if (errorMessage.includes('timeout')) {
-        errorMessage = "Payment timeout. Please try again.";
+      if (err instanceof Error) {
+        errorMessage = err.message;
       }
 
       setError(errorMessage);
-      
-      if (onError) {
-        onError(errorMessage);
-      }
+      if (onError) onError(errorMessage);
     } finally {
       setLoading(false);
     }
   };
 
-  // Clear error after 5 seconds
-  React.useEffect(() => {
+  useEffect(() => {
     if (error) {
-      const timer = setTimeout(() => {
-        setError(null);
-      }, 5000);
+      const timer = setTimeout(() => setError(null), 5000);
       return () => clearTimeout(timer);
     }
   }, [error]);
@@ -194,7 +239,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
     loading: { scale: 0.98 },
     success: { scale: 1.02 },
     error: { scale: 1, x: [-2, 2, -2, 2, 0] },
-    tap: { scale: 0.95 }
+    tap: { scale: 0.95 },
   };
 
   const getButtonContent = () => {
@@ -206,7 +251,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         </>
       );
     }
-    
     if (error) {
       return (
         <>
@@ -215,7 +259,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         </>
       );
     }
-    
     if (loading) {
       return (
         <>
@@ -224,11 +267,10 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         </>
       );
     }
-    
     return (
       <>
         <CreditCard className="w-4 h-4 mr-2" />
-        Buy {quantity > 1 ? `${quantity} Tickets` : 'Ticket'}
+        Buy {quantity > 1 ? `${quantity} Tickets` : "Ticket"}
       </>
     );
   };
@@ -268,8 +310,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       >
         {getButtonContent()}
       </motion.button>
-      
-      {/* Error message display */}
+
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -280,19 +321,30 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
           {error}
         </motion.div>
       )}
-      
-      {/* Debug info (remove in production) */}
-      {process.env.NODE_ENV === 'development' && (
+
+      {process.env.NODE_ENV === "development" && (
         <details className="text-xs text-gray-500 mt-2">
-          <summary className="cursor-pointer hover:text-gray-700">Debug Info</summary>
+          <summary className="cursor-pointer hover:text-gray-700">
+            Debug Info
+          </summary>
           <pre className="mt-1 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-32">
-            {JSON.stringify({ 
-              ticketId, 
-              userId, 
-              phone: phone.replace(/\d(?=\d{4})/g, '*'), // Mask phone for privacy
-              quantity,
-              timestamp: new Date().toISOString()
-            }, null, 2)}
+            {JSON.stringify(
+              {
+                phone_number: phone.replace(/\d(?=\d{4})/g, "*"),
+                payment_method: "mobile money",
+                user_id: userId,
+                tickets: [{ ticket_id: ticketId, quantity }],
+                event_details: {
+                  eventTitle,
+                  eventDate,
+                  eventLocation,
+                  ticketTypeName,
+                },
+                timestamp: new Date().toISOString(),
+              },
+              null,
+              2
+            )}
           </pre>
         </details>
       )}

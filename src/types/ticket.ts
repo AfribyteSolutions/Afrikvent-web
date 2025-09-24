@@ -76,36 +76,25 @@ export interface TicketsSectionProps {
   error?: string | null;
 }
 
-// Payment result interface - updated to match your actual data structure
-export interface PaymentResult {
-  success: boolean;
-  transaction_id?: string;
-  qr_string?: string;
-  orderId?: string;
-  tickets: {
-    ticket_id: number;
-    quantity: number;
-    template?: string;
-    ticketType?: string;
-    price?: number;
-  }[];
-  eventData?: {
-    id: string;
-    title: string;
-    date: string;
-    location: string;
-    image?: string;
-    category?: string;
-  };
+// Interface for the detailed payment object from the server
+export interface DatabasePayment {
+  id: number;
+  user_id: string | null;
+  amount: number | null;
+  currency: string | null;
+  payment_method: string | null;
+  payment_status: string | null;
+  mobile_number: string | null;
+  mobile_money_provider: string | null;
+  transaction_id: string | null;
+  reference_number: string | null;
+  provider_response: MobileMoneyProviderResponse | null;
+  created_at: string;
+  completed_at: string | null;
+  failed_at: string | null;
 }
 
-// For your buyTicket function input
-export interface TicketPurchaseRequest {
-  ticket_id: number;
-  quantity: number;
-}
-
-// Database types based on your Supabase schema
+// Interface for the detailed ticket object from the server
 export interface DatabaseTicket {
   id: number;
   event_id: number | null;
@@ -121,6 +110,22 @@ export interface DatabaseTicket {
   used_at: string | null;
   scanned_by: string | null;
 }
+
+// Payment result interface - updated to match your actual data structure
+export interface PaymentResult {
+  message?: string;
+  amount?: number;
+  payment?: DatabasePayment; // Corrected to include the detailed payment object
+  tickets?: DatabaseTicket[]; // Corrected to use the detailed ticket object
+  error?: string;
+}
+
+// For your buyTicket function input
+export interface TicketPurchaseRequest {
+  ticket_id: number;
+  quantity: number;
+}
+
 
 export interface DatabaseTicketType {
   id: number;
@@ -145,23 +150,6 @@ export interface MobileMoneyProviderResponse {
   timestamp?: string;
   error_code?: string;
   [key: string]: unknown; // Allow for additional provider-specific fields
-}
-
-export interface DatabasePayment {
-  id: number;
-  user_id: string | null;
-  amount: number | null;
-  currency: string | null;
-  payment_method: string | null;
-  payment_status: string | null;
-  mobile_number: string | null;
-  mobile_money_provider: string | null;
-  transaction_id: string | null;
-  reference_number: string | null;
-  provider_response: MobileMoneyProviderResponse | null;
-  created_at: string;
-  completed_at: string | null;
-  failed_at: string | null;
 }
 
 // Helper function to convert database ticket to EnhancedTicket

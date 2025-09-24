@@ -1,135 +1,75 @@
-// src/utils/payment.ts
-import { createClient } from '@supabase/supabase-js';
-import { getRandomTemplateId } from '@/config/ticketTemplates';
+// utils/payment.ts - Fixed version
 import { PaymentResult } from '@/types/ticket';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
-export interface PaymentTicketInput {
+interface TicketRequest {
   ticket_id: number;
   quantity: number;
 }
 
 export async function buyTicket(
-  userId: string, 
-  phone: string, 
-  tickets: PaymentTicketInput[]
+  userId: string,
+  phoneNumber: string,
+  tickets: TicketRequest[]
 ): Promise<PaymentResult> {
   try {
-    // Input validation
-    if (!userId || !phone || !tickets || tickets.length === 0) {
-      return {
-        success: false,
-        transaction_id: '',
-        tickets: []
-      };
-    }
+    // Log the request for debugging
+    console.log('Calling payment API with:', {
+      phone_number: phoneNumber.replace(/\d(?=\d{4})/g, '*'), // Mask for privacy
+      payment_method: 'mobile money',
+      user_id: userId,
+      tickets
+    });
 
-    // Validate phone number format (Ghana format)
-    const phoneRegex = /^(\+233|0)[2-9]\d{8}$/;
-    if (!phoneRegex.test(phone.replace(/\s/g, ''))) {
-      return {
-        success: false,
-        transaction_id: '',
-        tickets: []
-      };
-    }
-
-    // ✅ Step 1: Assign a random template to each ticket
-    const ticketsWithTemplate = tickets.map(ticket => ({
-      ...ticket,
-      template: getRandomTemplateId(),
-    }));
-
-    // ✅ Step 2: Call Supabase Edge Function
-    const { data, error } = await supabase.functions.invoke('initiate-pay', {
-      body: {
-        phone_number: phone,
-        payment_method: "mobile_money",
-        user_id: userId,
-        tickets: ticketsWithTemplate,
+    const response = await fetch('/api/initiate-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        phone_number: phoneNumber,
+        payment_method: 'mobile money',
+        user_id: userId,
+        tickets: tickets
+      }),
     });
 
-    if (error) {
-      console.error('Supabase function error:', error);
-      return {
-        success: false,
-        transaction_id: '',
-        tickets: []
-      };
-    }
-
-    if (!data) {
-      return {
-        success: false,
-        transaction_id: '',
-        tickets: []
-      };
-    }
-
-    // ✅ Step 3: Return payment result matching your PaymentResult interface
-    return {
-      success: true,
-      transaction_id: data.transaction_id || data.payment_id || `TXN-${Date.now()}`,
-      qr_string: data.qr_string,
-      orderId: data.order_id || data.payment_id,
-      tickets: ticketsWithTemplate.map(ticket => ({
-        ticket_id: ticket.ticket_id,
-        quantity: ticket.quantity,
-        template: ticket.template,
-        ticketType: data.ticket_type || 'General Admission',
-        price: data.price || 0
-      })),
-      eventData: {
-        id: data.event_id || tickets[0].ticket_id.toString(),
-        title: data.event_title || 'Event',
-        date: data.event_date || new Date().toISOString(),
-        location: data.event_location || 'Location TBD'
+    if (!response.ok) {
+      let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+      
+      try {
+        const errorData = await response.json();
+        console.error('Payment API error response:', errorData);
+        errorMessage = errorData.error || errorMessage;
+      } catch (parseError) {
+        // If we can't parse JSON, it might be an HTML error page (404, 500, etc.)
+        const responseText = await response.text();
+        console.error('Non-JSON error response:', responseText.substring(0, 200));
+        
+        if (response.status === 404) {
+          errorMessage = 'Payment API endpoint not found. Please check your API route configuration.';
+        } else if (response.status === 500) {
+          errorMessage = 'Internal server error. Please try again later.';
+        }
       }
-    };
+      
+      throw new Error(errorMessage);
+    }
+
+    const data = await response.json();
+    console.log('Payment API returned:', data);
+
+    // **FIX: Return the data directly instead of trying to destructure it**
+    // The API already returns the correct structure with payment and tickets
+    return data as PaymentResult;
 
   } catch (error) {
-    console.error('Payment error:', error);
+    console.error('Payment request failed:', error);
     
-    return {
-      success: false,
-      transaction_id: '',
-      tickets: []
-    };
-  }
-}
-
-// Helper function to generate QR code data
-export function generateQRCodeData(paymentId: string, ticketId: number, userId: string): string {
-  const timestamp = Date.now();
-  return `TICKET:${paymentId}:${ticketId}:${userId}:${timestamp}`;
-}
-
-// Helper function to validate payment status
-export async function checkPaymentStatus(paymentId: string): Promise<{
-  status: 'pending' | 'successful' | 'failed';
-  message?: string;
-}> {
-  try {
-    const { data, error } = await supabase.functions.invoke('check-payment-status', {
-      body: { payment_id: paymentId }
-    });
-
-    if (error) throw error;
-
-    return {
-      status: data?.status || 'failed',
-      message: data?.message
-    };
-  } catch (error) {
-    console.error('Status check error:', error);
-    return {
-      status: 'failed',
-      message: 'Could not check payment status'
-    };
+    // Re-throw the error with better context
+    if (error instanceof Error) {
+      throw error;
+    } else {
+      throw new Error('An unknown error occurred during payment processing');
+    }
   }
 }

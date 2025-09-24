@@ -12,32 +12,8 @@ import { TransformedEvent } from "@/utils/eventdatatransformer";
 // Import your generated DB types for database operations
 import { Database } from "@/types/database.types";
 
-// Types for other data
-interface User {
-  id: string;
-  email?: string;
-  phone?: string;
-  name?: string;
-}
-
-interface UserTicket {
-  id: number;
-  eventId: number;
-  eventTitle: string;
-  eventDate: string;
-  eventLocation: string;
-  ticketType: string;
-  quantity: number;
-  totalPrice: number;
-  purchaseDate: string;
-  status: "confirmed" | "pending" | "cancelled" | "used";
-  userId: string;
-  qr_code_data?: string;
-  unit_price?: number;
-  used_at?: string;
-  scanned_by?: string;
-  ticket_status?: string;
-}
+// Import the proper types from the ticket module
+import { User as TicketUser, UserTicket } from "@/types/ticket";
 
 // Database table row types using UPPERCASE table names
 type EventRow = Database["public"]["Tables"]["EVENTS"]["Row"];
@@ -46,7 +22,7 @@ type TicketRow = Database["public"]["Tables"]["TICKETS"]["Row"];
 
 export default function MyEvents() {
   const router = useRouter();
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<TicketUser | null>(null);
   const [activeTab, setActiveTab] = useState<"events" | "tickets">("events");
   const [allEvents, setAllEvents] = useState<TransformedEvent[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<TransformedEvent[]>([]);
@@ -69,11 +45,13 @@ export default function MyEvents() {
         return;
       }
       if (data?.user) {
+        // Transform to match TicketUser interface (name is required, not optional)
         setCurrentUser({
           id: data.user.id,
-          email: data.user.email ?? undefined,
-          phone: (data.user.user_metadata?.phone as string) ?? undefined,
-          name: (data.user.user_metadata?.name as string) ?? undefined,
+          name: (data.user.user_metadata?.name as string) || data.user.email || "User",
+          email: data.user.email || "",
+          phone: (data.user.user_metadata?.phone as string) || undefined,
+          avatar: (data.user.user_metadata?.avatar as string) || undefined,
         });
       }
     };
@@ -284,8 +262,8 @@ export default function MyEvents() {
             const event = ticketType?.EVENTS;
 
             return {
-              id: ticket.id,
-              eventId: event?.id || 0,
+              id: ticket.id.toString(), // Convert to string to match UserTicket interface
+              eventId: event?.id.toString() || "0", // Convert to string
               eventTitle: event?.title || "Unknown Event",
               eventDate: event?.event_date || "",
               eventLocation: event?.location_name || "",
@@ -295,11 +273,6 @@ export default function MyEvents() {
               purchaseDate: ticket.created_at,
               status: (ticket.ticket_status as UserTicket["status"]) || "confirmed",
               userId: ticket.user_id || "",
-              qr_code_data: ticket.qr_code_data || undefined,
-              unit_price: ticket.unit_price || undefined,
-              used_at: ticket.used_at || undefined,
-              scanned_by: ticket.scanned_by || undefined,
-              ticket_status: ticket.ticket_status || undefined,
             };
           }
         );
