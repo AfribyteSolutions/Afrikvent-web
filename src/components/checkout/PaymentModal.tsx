@@ -254,6 +254,8 @@ interface EnhancedPaymentModalProps {
   eventId?: number; // Add event ID
   eventImage?: string; // Add event image
   onPaymentSuccess?: (tickets: EnhancedTicket[]) => void;
+  // 💥 FIX 1: Add the eventCurrency prop to the interface 💥
+  eventCurrency: string | null; 
 }
 
 const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
@@ -267,7 +269,9 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   eventLocation, // Receive event location  
   eventId, // Receive event ID
   eventImage, // Receive event image
-  onPaymentSuccess
+  onPaymentSuccess,
+  // 💥 FIX 2: Destructure the new prop 💥
+  eventCurrency
 }) => {
   const [step, setStep] = useState<'method' | 'details' | 'success'>('method');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);

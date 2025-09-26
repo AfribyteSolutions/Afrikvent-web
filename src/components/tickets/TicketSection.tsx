@@ -41,19 +41,30 @@ const TICKET_TEMPLATES = [
 /**
  * Convert a UserTicket -> EnhancedTicket (only fields that exist in EnhancedTicket)
  * Fixed: Properly determine active/expired status based on event date
+ * Fixed: Use actual qrCodeData from database instead of generating fake data
  */
 const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
   // Ensure eventDate is an ISO string (EnhancedTicket.eventDate expects string)
   const eventDateIso = ticket.eventDate || new Date().toISOString();
 
-  // Create a simple deterministic orderId and qrCode for display
+  // Create a simple deterministic orderId
   const orderId = `ORD-${ticket.id.toString().padStart(6, "0")}`;
-  const qrCode = JSON.stringify({
-    ticketId: ticket.id.toString(),
-    eventId: ticket.eventId?.toString() || "",
-    orderId,
-    ts: new Date().toISOString(),
-  });
+  
+  // FIXED: Use the actual QR code data from the database if available
+  // Otherwise fall back to a generated one
+  let qrCode: string;
+  if (ticket.qrCodeData) {
+    // Use the actual QR code data from database
+    qrCode = ticket.qrCodeData;
+  } else {
+    // Fallback: generate QR code data (for legacy tickets)
+    qrCode = JSON.stringify({
+      ticketId: ticket.id.toString(),
+      eventId: ticket.eventId?.toString() || "",
+      orderId,
+      ts: new Date().toISOString(),
+    });
+  }
 
   // Fix: Determine active/expired based on event date, not ticket status
   const eventDate = new Date(eventDateIso);
@@ -74,7 +85,7 @@ const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
     purchaseDate: ticket.purchaseDate,
     status: ticket.status,
     userId: ticket.userId ?? "",
-    qrCode,
+    qrCode, // FIXED: Use actual QR code data
     orderId,
     ticketStatus, // Fixed: Based on event date, not ticket status
     // optional fields left undefined (eventImage/eventCategory/seatNumber/gate/validUntil)
@@ -235,10 +246,10 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
         setDbLoading(true);
         setDbError(null);
 
-        // Simplified approach: fetch tickets first, then get related data
+        // FIXED: Include qr_code_data in the ticket selection
         const { data: tickets, error: ticketsError } = await supabase
           .from("TICKETS")
-          .select("*")
+          .select("*, qr_code_data") // FIXED: Make sure to select the QR code data
           .eq("user_id", userId)
           .order("created_at", { ascending: false });
 
@@ -308,13 +319,15 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
               purchaseDate: ticket.created_at ?? new Date().toISOString(),
               status: (ticket.ticket_status as UserTicket["status"]) ?? "confirmed",
               userId: ticket.user_id ?? "",
+              qrCodeData: ticket.qr_code_data ?? undefined, // FIXED: Include QR code data
             };
 
             return mapped;
           })
           .filter((ticket): ticket is UserTicket => ticket !== null);
 
-        console.log(`Transformed ${transformedTickets.length} tickets`);
+        console.log(`Transformed ${transformedTickets.length} tickets with QR codes:`, 
+          transformedTickets.map(t => ({ id: t.id, qrCodeData: t.qrCodeData })));
         setDbUserTickets(transformedTickets);
       } catch (err) {
         console.error("Error fetching user tickets:", err);
@@ -330,12 +343,14 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
   // Convert to EnhancedTicket (stable mapping)
   const enhancedTickets = useMemo(() => {
     const enhanced = userTickets.map(enhanceTicket);
-    console.log(`Enhanced ${enhanced.length} tickets:`, enhanced.map(t => ({ 
-      id: t.id, 
-      eventTitle: t.eventTitle, 
-      eventDate: t.eventDate, 
-      ticketStatus: t.ticketStatus 
-    })));
+    console.log(`Enhanced ${enhanced.length} tickets with QR codes:`, 
+      enhanced.map(t => ({ 
+        id: t.id, 
+        eventTitle: t.eventTitle, 
+        eventDate: t.eventDate, 
+        ticketStatus: t.ticketStatus,
+        qrCode: t.qrCode.substring(0, 50) + '...' // Log first 50 chars of QR code
+      })));
     return enhanced;
   }, [userTickets]);
 
@@ -391,7 +406,7 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
   };
 
   const handleView = (ticket: EnhancedTicket) => {
-    alert(`Viewing details for ticket: ${ticket.orderId}\nEvent: ${ticket.eventTitle}\nDate: ${new Date(ticket.eventDate).toLocaleDateString()}\nStatus: ${ticket.ticketStatus}`);
+    alert(`Viewing details for ticket: ${ticket.orderId}\nEvent: ${ticket.eventTitle}\nDate: ${new Date(ticket.eventDate).toLocaleDateString()}\nStatus: ${ticket.ticketStatus}\nQR Code: ${ticket.qrCode.substring(0, 20)}...`);
   };
 
   // Derive counts for UI

@@ -1,4 +1,4 @@
-// src/types/ticket.ts - Updated and cleaned up
+// src/types/ticket.ts - Complete fixed version
 
 export interface User {
   id: string;
@@ -20,6 +20,7 @@ export interface UserTicket {
   purchaseDate: string;
   status: 'confirmed' | 'pending' | 'cancelled';
   userId?: string;
+  qrCodeData?: string; // ADDED: QR code data from database
 }
 
 export interface EnhancedTicket extends UserTicket {
@@ -109,14 +110,15 @@ export interface DatabaseTicket {
   updated_at: string | null;
   used_at: string | null;
   scanned_by: string | null;
+  no_times_scanned?: number | null;
 }
 
 // Payment result interface - updated to match your actual data structure
 export interface PaymentResult {
   message?: string;
   amount?: number;
-  payment?: DatabasePayment; // Corrected to include the detailed payment object
-  tickets?: DatabaseTicket[]; // Corrected to use the detailed ticket object
+  payment?: DatabasePayment;
+  tickets?: DatabaseTicket[];
   error?: string;
 }
 
@@ -125,7 +127,6 @@ export interface TicketPurchaseRequest {
   ticket_id: number;
   quantity: number;
 }
-
 
 export interface DatabaseTicketType {
   id: number;
@@ -149,7 +150,7 @@ export interface MobileMoneyProviderResponse {
   provider?: string;
   timestamp?: string;
   error_code?: string;
-  [key: string]: unknown; // Allow for additional provider-specific fields
+  [key: string]: unknown;
 }
 
 // Helper function to convert database ticket to EnhancedTicket
@@ -173,8 +174,9 @@ export function convertDatabaseTicketToEnhanced(
     status: dbTicket.ticket_status === 'active' ? 'confirmed' : 
             dbTicket.ticket_status === 'cancelled' ? 'cancelled' : 'pending',
     userId: dbTicket.user_id || '',
-    qrCode: dbTicket.qr_code_data || '',
+    qrCode: dbTicket.qr_code_data || `QR_${dbTicket.id}`,
     orderId: `ORDER_${dbTicket.id}`,
     ticketStatus: (dbTicket.ticket_status as 'active' | 'expired') || 'active',
+    qrCodeData: dbTicket.qr_code_data || undefined,
   };
 }

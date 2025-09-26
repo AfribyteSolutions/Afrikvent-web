@@ -8,6 +8,11 @@ import { User } from '@supabase/supabase-js';
 import { EnhancedTicket } from '@/types/ticket';
 import PaymentModal from '@/components/checkout/PaymentModal';
 import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
+// ------------------------------------------------------------------------------------------------
+// FIX: IMPORT CURRENCY UTILITY
+// ------------------------------------------------------------------------------------------------
+import { getCurrencyInfo } from '@/utils/currency';
+
 
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
@@ -24,6 +29,24 @@ interface EventWithDetails extends EventRow {
 interface EventDetailPageProps {
   params: Promise<{ id: string }>;
 }
+
+// ------------------------------------------------------------------------------------------------
+// NEW/REPLACED CURRENCY HELPER FUNCTION
+// This function uses the imported getCurrencyInfo utility.
+// ------------------------------------------------------------------------------------------------
+const formatCurrency = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
+    const safeAmount = amount || 0;
+    // getCurrencyInfo will correctly return the default (XOF/CFA) if code is null/undefined
+    const currencyInfo = getCurrencyInfo(currencyCode || undefined);
+    const symbol = currencyInfo.symbol;
+
+    // Use Intl.NumberFormat for proper localization and grouping
+    try {
+        return `${symbol}${safeAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+    } catch (e) {
+        return `${symbol}${safeAmount.toLocaleString()}`;
+    }
+};
 
 // Color schemes for different ticket types
 const getTicketColorScheme = (index: number) => {
@@ -302,6 +325,9 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
       </div>
     );
   }
+  
+  // Define eventCurrency here, which will be the primary source for currency display
+  const eventCurrency = event.currency;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -467,7 +493,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                                 <span className={`text-2xl font-bold ${
                                   isSelected ? 'bg-gradient-to-r ' + colorScheme.gradient + ' bg-clip-text text-transparent' : 'text-gray-900'
                                 }`}>
-                                  ₵{ticket.price?.toLocaleString() || '0'}
+                                  {/* FIX: Use formatCurrency with event.currency */}
+                                  {formatCurrency(ticket.price, eventCurrency)}
                                 </span>
                                 <span className="text-sm text-gray-500">per ticket</span>
                               </div>
@@ -615,7 +642,9 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   <div>
                     <h3 className="font-bold text-lg text-gray-900">{selectedTicket.name}</h3>
                     <p className="text-sm text-gray-600">
-                      {ticketQuantity} ticket{ticketQuantity > 1 ? 's' : ''} × ₵{selectedTicket.price?.toLocaleString() || '0'}
+                      {ticketQuantity} ticket{ticketQuantity > 1 ? 's' : ''} × 
+                      {/* FIX: Use formatCurrency with event.currency */}
+                      {formatCurrency(selectedTicket.price, eventCurrency)}
                     </p>
                   </div>
                 </div>
@@ -624,7 +653,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 <div className="text-right">
                   <p className="text-sm text-gray-600">Total</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    ₵{((selectedTicket.price || 0) * ticketQuantity).toLocaleString()}
+                    {/* FIX: Use formatCurrency with event.currency */}
+                    {formatCurrency((selectedTicket.price || 0) * ticketQuantity, eventCurrency)}
                   </p>
                 </div>
                 <button
@@ -653,6 +683,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         eventId={event.id}
         eventImage={event.images?.[0]}
         onPaymentSuccess={handlePaymentSuccess}
+        // Pass the event currency to the modal
+        eventCurrency={eventCurrency}
       />
       )}
 
