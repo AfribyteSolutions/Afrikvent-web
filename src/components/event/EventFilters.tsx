@@ -13,6 +13,7 @@ export interface FilterState {
 // Define the shape of a city option
 interface CityOption {
   name: string;
+  country?: string;
 }
 
 interface EventFiltersProps {
@@ -31,7 +32,8 @@ const LocationDropdown: React.FC<{
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const filteredLocations = locations.filter((location) =>
-    location.name.toLowerCase().includes(searchTerm.toLowerCase())
+    location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (location.country && location.country.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   const handleSelect = (location: string) => {
@@ -63,7 +65,7 @@ const LocationDropdown: React.FC<{
         <div className="flex items-center space-x-2">
           <MapPinIcon className="h-4 w-4 text-gray-400 group-hover:text-blue-500 transition-colors" />
           <span className={selectedLocation ? "text-gray-900" : "text-gray-500"}>
-            {selectedLocation || "All Locations"}
+            {selectedLocation || "All Cities"}
           </span>
         </div>
         <ChevronDownIcon
@@ -81,7 +83,7 @@ const LocationDropdown: React.FC<{
               <input
                 type="text"
                 className="w-full pl-10 pr-3 py-2 rounded-lg border border-gray-200 text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all"
-                placeholder="Search city..."
+                placeholder="Search city or country..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -94,7 +96,7 @@ const LocationDropdown: React.FC<{
             >
               <div className="flex items-center space-x-2">
                 <MapPinIcon className="h-4 w-4 text-gray-400" />
-                <span>All Locations</span>
+                <span>All Cities</span>
               </div>
             </li>
             {filteredLocations.length > 0 ? (
@@ -104,9 +106,16 @@ const LocationDropdown: React.FC<{
                   className="cursor-pointer px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-900 transition-colors"
                   onClick={() => handleSelect(location.name)}
                 >
-                  <div className="flex items-center space-x-2">
-                    <MapPinIcon className="h-4 w-4 text-gray-400" />
-                    <span>{location.name}</span>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <MapPinIcon className="h-4 w-4 text-gray-400" />
+                      <span>{location.name}</span>
+                    </div>
+                    {location.country && (
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">
+                        {location.country}
+                      </span>
+                    )}
                   </div>
                 </li>
               ))
@@ -192,12 +201,67 @@ const CustomSelect: React.FC<{
 const EventFilters: React.FC<EventFiltersProps> = ({ 
   onFilterChange, 
   locations = [
-    { name: "Accra" },
-    { name: "Kumasi" },
-    { name: "Cape Coast" },
-    { name: "Tamale" },
-    { name: "Tema" },
-    { name: "Sunyani" }
+    // Cameroon Cities (Primary focus)
+    { name: "Yaoundé", country: "Cameroon" },
+    { name: "Douala", country: "Cameroon" },
+    { name: "Bamenda", country: "Cameroon" },
+    { name: "Garoua", country: "Cameroon" },
+    { name: "Maroua", country: "Cameroon" },
+    { name: "Bafoussam", country: "Cameroon" },
+    { name: "Ngaoundéré", country: "Cameroon" },
+    { name: "Bertoua", country: "Cameroon" },
+    { name: "Edéa", country: "Cameroon" },
+    { name: "Loum", country: "Cameroon" },
+    { name: "Kumba", country: "Cameroon" },
+    { name: "Nkongsamba", country: "Cameroon" },
+    { name: "Mbouda", country: "Cameroon" },
+    { name: "Foumban", country: "Cameroon" },
+    { name: "Dschang", country: "Cameroon" },
+    { name: "Limbe", country: "Cameroon" },
+    { name: "Kribi", country: "Cameroon" },
+    { name: "Buea", country: "Cameroon" },
+    
+    // Other West/Central African Cities
+    { name: "Dakar", country: "Senegal" },
+    { name: "Abidjan", country: "Côte d'Ivoire" },
+    { name: "Accra", country: "Ghana" },
+    { name: "Lagos", country: "Nigeria" },
+    { name: "Abuja", country: "Nigeria" },
+    { name: "Kinshasa", country: "DRC" },
+    { name: "Brazzaville", country: "Congo" },
+    { name: "Libreville", country: "Gabon" },
+    { name: "Malabo", country: "Equatorial Guinea" },
+    { name: "Bangui", country: "CAR" },
+    { name: "N'Djamena", country: "Chad" },
+    { name: "Bamako", country: "Mali" },
+    { name: "Ouagadougou", country: "Burkina Faso" },
+    { name: "Niamey", country: "Niger" },
+    { name: "Lomé", country: "Togo" },
+    { name: "Cotonou", country: "Benin" },
+    
+    // East African Cities
+    { name: "Nairobi", country: "Kenya" },
+    { name: "Dar es Salaam", country: "Tanzania" },
+    { name: "Kampala", country: "Uganda" },
+    { name: "Kigali", country: "Rwanda" },
+    { name: "Bujumbura", country: "Burundi" },
+    { name: "Addis Ababa", country: "Ethiopia" },
+    
+    // Southern African Cities
+    { name: "Johannesburg", country: "South Africa" },
+    { name: "Cape Town", country: "South Africa" },
+    { name: "Durban", country: "South Africa" },
+    { name: "Harare", country: "Zimbabwe" },
+    { name: "Lusaka", country: "Zambia" },
+    { name: "Windhoek", country: "Namibia" },
+    
+    // North African Cities
+    { name: "Cairo", country: "Egypt" },
+    { name: "Casablanca", country: "Morocco" },
+    { name: "Rabat", country: "Morocco" },
+    { name: "Tunis", country: "Tunisia" },
+    { name: "Algiers", country: "Algeria" },
+    { name: "Tripoli", country: "Libya" }
   ]
 }) => {
   const [filters, setFilters] = useState<FilterState>({
@@ -216,9 +280,11 @@ const EventFilters: React.FC<EventFiltersProps> = ({
   const priceOptions = [
     { value: "", label: "Any Price" },
     { value: "free", label: "Free Events" },
-    { value: "0-50", label: "₵0 - ₵50" },
-    { value: "50-200", label: "₵50 - ₵200" },
-    { value: "200+", label: "₵200+" }
+    { value: "0-2500", label: "Free - 2,500 CFA" },
+    { value: "2500-10000", label: "2,500 - 10,000 CFA" },
+    { value: "10000-25000", label: "10,000 - 25,000 CFA" },
+    { value: "25000-50000", label: "25,000 - 50,000 CFA" },
+    { value: "50000+", label: "50,000+ CFA" }
   ];
 
   const dateOptions = [
@@ -244,7 +310,7 @@ const EventFilters: React.FC<EventFiltersProps> = ({
               type="text"
               name="search"
               className="block w-full rounded-xl border border-gray-200 bg-white/80 backdrop-blur-sm pl-11 pr-4 py-3 text-sm font-medium placeholder-gray-500 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all duration-200"
-              placeholder="Search events, organizers, venues..."
+              placeholder="Search events, organizers, venues across Africa..."
               value={filters.search}
               onChange={(e) => handleInputChange('search', e.target.value)}
             />

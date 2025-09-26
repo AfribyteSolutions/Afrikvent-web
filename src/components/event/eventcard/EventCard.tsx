@@ -55,6 +55,27 @@ const EventCard: React.FC<EventCardProps> = ({
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [exchangeRates, setExchangeRates] = useState<ExchangeRates>({});
   const [convertedPrice, setConvertedPrice] = useState<string>("");
+  const [isLoadingRates, setIsLoadingRates] = useState(false);
+
+  // Immediate fallback exchange rates for instant UX (updated regularly)
+  const INSTANT_RATES: { [key: string]: { [key: string]: number } } = {
+    XOF: { // CFA Franc to other currencies (updated Dec 2024)
+      USD: 0.0016,
+      EUR: 0.0015,
+      GBP: 0.0013,
+      GHS: 0.02,
+      NGN: 0.76,
+      KES: 0.21,
+      ZAR: 0.029,
+      INR: 0.135,
+      JPY: 0.24,
+      CAD: 0.0022,
+      AUD: 0.0024,
+      CNY: 0.011,
+      BRL: 0.0095,
+      MXN: 0.027,
+    },
+  };
 
   // Currency mapping
   const currencyMap: { [key: string]: { currency: string; symbol: string } } = {
@@ -85,69 +106,201 @@ const EventCard: React.FC<EventCardProps> = ({
     TG: { currency: "XOF", symbol: "CFA" }, // Togo
   };
 
-  // Get user location and currency
+  // Get user location with immediate timezone detection
   useEffect(() => {
-    const getUserLocation = async () => {
+    const getUserLocationFast = () => {
+      // INSTANT: Get timezone-based location first (no network needed)
       try {
-        const response = await fetch("https://ipapi.co/json/");
-        const data = await response.json();
-
-        if (data.country_code && currencyMap[data.country_code]) {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        const countryFromTimezone = getCountryFromTimezone(timezone);
+        
+        if (countryFromTimezone && currencyMap[countryFromTimezone]) {
           setUserLocation({
-            country: data.country_code,
-            currency: currencyMap[data.country_code].currency,
-            currencySymbol: currencyMap[data.country_code].symbol,
+            country: countryFromTimezone,
+            currency: currencyMap[countryFromTimezone].currency,
+            currencySymbol: currencyMap[countryFromTimezone].symbol,
           });
         } else {
-          // Fallback to CFA
-          setUserLocation({
-            country: "SN",
-            currency: "XOF",
-            currencySymbol: "CFA",
-          });
+          // INSTANT: Language-based fallback
+          const language = navigator.language || navigator.languages?.[0] || 'en-US';
+          const countryFromLang = getCountryFromLanguage(language);
+          
+          if (countryFromLang && currencyMap[countryFromLang]) {
+            setUserLocation({
+              country: countryFromLang,
+              currency: currencyMap[countryFromLang].currency,
+              currencySymbol: currencyMap[countryFromLang].symbol,
+            });
+          } else {
+            // Final fallback to CFA
+            setUserLocation({
+              country: "SN",
+              currency: "XOF",
+              currencySymbol: "CFA",
+            });
+          }
         }
       } catch (error) {
-        console.error("Failed to get user location:", error);
-        // Fallback to CFA
+        // Immediate fallback to CFA
         setUserLocation({
           country: "SN",
           currency: "XOF",
           currencySymbol: "CFA",
         });
       }
+
+      // BACKGROUND: Try to get more accurate location (non-blocking)
+      setTimeout(() => {
+        getUserLocationFromIP();
+      }, 100);
     };
 
-    getUserLocation();
-  }, []);
+    const getUserLocationFromIP = async () => {
+      const ipServices = [
+        "https://api.country.is",
+        "https://ipinfo.io/json",
+      ];
 
-  // Get exchange rates
-  useEffect(() => {
-    const getExchangeRates = async () => {
-      if (!userLocation || !event.currency) return;
-      if (userLocation.currency === event.currency) return;
+      for (const service of ipServices) {
+        try {
+          const response = await fetch(service, { 
+            signal: AbortSignal.timeout(3000) // 3 second timeout
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            const countryCode = data.country || data.country_code;
 
-      try {
-        const response = await fetch(
-          `https://api.exchangerate-api.com/v4/latest/${event.currency}`
-        );
-        const data = await response.json();
-        setExchangeRates(data.rates);
-      } catch (error) {
-        console.error("Failed to get exchange rates:", error);
+            if (countryCode && currencyMap[countryCode]) {
+              // Only update if it's different from current location
+              setUserLocation(current => {
+                if (current?.country !== countryCode) {
+                  return {
+                    country: countryCode,
+                    currency: currencyMap[countryCode].currency,
+                    currencySymbol: currencyMap[countryCode].symbol,
+                  };
+                }
+                return current;
+              });
+              return; // Success, stop trying other services
+            }
+          }
+        } catch (error) {
+          continue; // Try next service
+        }
       }
     };
 
-    getExchangeRates();
+    getUserLocationFast();
+  }, []);
+
+  // Helper function to get country from timezone
+  const getCountryFromTimezone = (timezone: string): string | null => {
+    const timezoneToCountry: { [key: string]: string } = {
+      'America/New_York': 'US',
+      'America/Los_Angeles': 'US',
+      'America/Chicago': 'US',
+      'America/Denver': 'US',
+      'America/Toronto': 'CA',
+      'America/Vancouver': 'CA',
+      'Europe/London': 'GB',
+      'Europe/Paris': 'FR',
+      'Europe/Berlin': 'DE',
+      'Europe/Rome': 'IT',
+      'Europe/Madrid': 'ES',
+      'Asia/Tokyo': 'JP',
+      'Asia/Shanghai': 'CN',
+      'Asia/Kolkata': 'IN',
+      'Australia/Sydney': 'AU',
+      'Australia/Melbourne': 'AU',
+      'Africa/Accra': 'GH',
+      'Africa/Lagos': 'NG',
+      'Africa/Nairobi': 'KE',
+      'Africa/Johannesburg': 'ZA',
+      'Africa/Dakar': 'SN',
+      'America/Sao_Paulo': 'BR',
+      'America/Mexico_City': 'MX',
+    };
+
+    return timezoneToCountry[timezone] || null;
+  };
+
+  // Helper function to get country from language
+  const getCountryFromLanguage = (language: string): string | null => {
+    const langToCountry: { [key: string]: string } = {
+      'en-US': 'US',
+      'en-GB': 'GB',
+      'en-CA': 'CA',
+      'en-AU': 'AU',
+      'fr-FR': 'FR',
+      'de-DE': 'DE',
+      'it-IT': 'IT',
+      'es-ES': 'ES',
+      'ja-JP': 'JP',
+      'zh-CN': 'CN',
+      'hi-IN': 'IN',
+      'pt-BR': 'BR',
+      'es-MX': 'MX',
+    };
+
+    return langToCountry[language] || langToCountry[language.split('-')[0]] || null;
+  };
+
+  // Get exchange rates with instant fallback and background updates
+  useEffect(() => {
+    if (!userLocation || !event.currency) return;
+    if (userLocation.currency === "XOF") return; // No conversion needed for CFA users
+
+    // INSTANT: Use cached rates immediately
+    if (INSTANT_RATES[event.currency] && INSTANT_RATES[event.currency][userLocation.currency]) {
+      setExchangeRates({
+        [userLocation.currency]: INSTANT_RATES[event.currency][userLocation.currency]
+      });
+    }
+
+    // BACKGROUND: Get live rates (non-blocking)
+    const getLiveRates = async () => {
+      setIsLoadingRates(true);
+      
+      const exchangeServices = [
+        `https://api.exchangerate-api.com/v4/latest/${event.currency}`,
+      ];
+
+      for (const service of exchangeServices) {
+        try {
+          const response = await fetch(service, {
+            signal: AbortSignal.timeout(5000) // 5 second timeout
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            if (data.rates && data.rates[userLocation.currency]) {
+              // Update with live rates
+              setExchangeRates(prev => ({
+                ...prev,
+                [userLocation.currency]: data.rates[userLocation.currency]
+              }));
+              setIsLoadingRates(false);
+              return;
+            }
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+      
+      setIsLoadingRates(false);
+    };
+
+    // Delay live rate fetching to not block UI
+    setTimeout(getLiveRates, 200);
   }, [userLocation, event.currency]);
 
-  // Convert price
+  // Convert price instantly with cached rates
   useEffect(() => {
-    if (!userLocation || !exchangeRates || !event.price || !event.currency)
-      return;
-
-    if (userLocation.currency === event.currency) return;
-
-    // Handle "Free" events
+    if (!userLocation || !event.price || !event.currency) return;
+    if (userLocation.currency === "XOF") return; // Don't convert for CFA users
     if (event.price.toLowerCase() === "free") return;
 
     const priceMatch = event.price.match(/[\d,]+\.?\d*/);
@@ -156,8 +309,7 @@ const EventCard: React.FC<EventCardProps> = ({
     const numericPrice = parseFloat(priceMatch[0].replace(",", ""));
 
     if (exchangeRates[userLocation.currency]) {
-      const convertedAmount =
-        numericPrice * exchangeRates[userLocation.currency];
+      const convertedAmount = numericPrice * exchangeRates[userLocation.currency];
       const formatted = new Intl.NumberFormat("en-US", {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
@@ -182,18 +334,20 @@ const EventCard: React.FC<EventCardProps> = ({
       return { primary: "Free", secondary: null };
     }
 
-    // Use the event's currency and symbol from the database
-    const originalPrice = `${event.currency_symbol}${event.price}`;
+    // Always use CFA as primary currency for display
+    const cfaPrice = `CFA ${event.price}`;
 
+    // If user is from a different country (not CFA region), show their currency as secondary
     if (
       convertedPrice &&
       userLocation &&
-      userLocation.currency !== event.currency
+      userLocation.currency !== "XOF" && // User is not in CFA region
+      event.currency !== userLocation.currency
     ) {
-      return { primary: originalPrice, secondary: `≈ ${convertedPrice}` };
+      return { primary: cfaPrice, secondary: `≈ ${convertedPrice}` };
     }
 
-    return { primary: originalPrice, secondary: null };
+    return { primary: cfaPrice, secondary: null };
   };
 
   const getEventTime = () => {

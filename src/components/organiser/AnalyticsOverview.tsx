@@ -124,19 +124,19 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
   };
 
   // Helper function to format currency
-  const formatCurrency = (amount: number, currency: string = 'GHS'): string => {
+  const formatCurrency = (amount: number, currency: string = 'CFA'): string => {
     const symbol = getCurrencySymbol(currency);
     return `${symbol}${amount.toLocaleString()}`;
   };
 
   // Helper function to get primary currency from user's events
   const getPrimaryCurrency = (eventsData: EventWithCurrency[]): string => {
-    if (!eventsData || eventsData.length === 0) return 'GHS';
+    if (!eventsData || eventsData.length === 0) return 'CFA';
     
     // Get the most common currency from user's events
     const currencyCount: Record<string, number> = {};
     eventsData.forEach(event => {
-      const currency = event.currency || 'GHS';
+      const currency = event.currency || 'CFA';
       currencyCount[currency] = (currencyCount[currency] || 0) + 1;
     });
     

@@ -1,4 +1,4 @@
-// Updated CreateEventModal with proper currency handling and navigation
+// Updated CreateEventModal with proper currency handling, navigation, and fee disclaimer
 'use client';
 import React, { useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
@@ -669,6 +669,57 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                       <p className="text-blue-700 mb-4">
                         Choose how you want to create your event. You can always change the status later from your dashboard.
                       </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Fee Structure and Withdrawal Policy Disclaimer */}
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
+                  <div className="flex items-start space-x-3">
+                    <svg className="w-6 h-6 text-amber-600 mt-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    <div className="flex-1">
+                      <h4 className="text-lg font-medium text-amber-900 mb-3">Important: Fees & Withdrawal Policy</h4>
+                      <div className="text-amber-800 space-y-3">
+                        <div className="bg-white bg-opacity-70 rounded-lg p-4">
+                          <h5 className="font-semibold mb-2 flex items-center">
+                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                            </svg>
+                            Platform Fees
+                          </h5>
+                          <p className="text-sm">
+                            We collect a <span className="font-semibold">9% service fee</span> on all ticket sales made through our platform. 
+                            This fee covers payment processing, platform maintenance, customer support, and security features.
+                          </p>
+                        </div>
+                        
+                        <div className="bg-white bg-opacity-70 rounded-lg p-4">
+                          <h5 className="font-semibold mb-2 flex items-center">
+                            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                            Withdrawal Policy
+                          </h5>
+                          <p className="text-sm mb-2">
+                            For security and fraud prevention, funds can only be withdrawn <span className="font-semibold">after your event has concluded</span>. 
+                            This policy protects both organizers and attendees.
+                          </p>
+                          <ul className="text-xs space-y-1 ml-4 list-disc">
+                            <li>Withdrawals available 24 hours after event end time</li>
+                            <li>All refunds and disputes must be resolved first</li>
+                            <li>Identity verification may be required for large amounts</li>
+                          </ul>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-4 p-3 bg-white bg-opacity-70 rounded border-l-4 border-amber-500">
+                        <p className="text-sm text-amber-800">
+                          <span className="font-semibold">By publishing this event, you acknowledge and agree to our fee structure and withdrawal policy.</span> 
+                          These terms help us maintain a secure and reliable platform for all users.
+                        </p>
+                      </div>
                     </div>
                   </div>
                 </div>
