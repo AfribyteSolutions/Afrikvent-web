@@ -1,5 +1,6 @@
-// src/components/QRCodeComponent.tsx
+// src/components/QRCodeComponent.tsx - Alternative using qrcode.react
 import React from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface QRCodeProps {
   value: string;
@@ -8,30 +9,31 @@ interface QRCodeProps {
   style?: React.CSSProperties;
 }
 
-// Simple QR code placeholder component (you'll need to install qrcode.js or similar)
-export const QRCode: React.FC<QRCodeProps> = ({ 
-  value, 
-  size = 128, 
+export const QRCode: React.FC<QRCodeProps> = ({
+  value,
+  size = 128,
   level = 'M',
-  style 
+  style
 }) => {
   return (
     <div 
-      style={{
-        width: size,
-        height: size,
-        backgroundColor: '#fff',
-        border: '1px solid #ddd',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '12px',
-        textAlign: 'center',
+      style={{ 
+        display: 'inline-block',
         padding: '8px',
-        ...style
+        backgroundColor: '#fff',
+        borderRadius: '4px',
+        border: '1px solid #ddd',
+        ...style 
       }}
     >
-      QR: {value.substring(0, 8)}...
+      <QRCodeSVG
+        value={value}
+        size={size - 16} // Account for padding
+        level={level}
+        bgColor="#ffffff"
+        fgColor="#000000"
+        includeMargin={true}
+      />
     </div>
   );
 };

@@ -43,36 +43,37 @@ const TICKET_TEMPLATES = [
  * Fixed: Properly determine active/expired status based on event date
  * Fixed: Use actual qrCodeData from database instead of generating fake data
  */
+/**
+ * Convert a UserTicket -> EnhancedTicket with proper QR code handling
+ * Uses short database code for QR generation but keeps full data available
+ */
 const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
-  // Ensure eventDate is an ISO string (EnhancedTicket.eventDate expects string)
+  // Ensure eventDate is an ISO string
   const eventDateIso = ticket.eventDate || new Date().toISOString();
-
+  
   // Create a simple deterministic orderId
   const orderId = `ORD-${ticket.id.toString().padStart(6, "0")}`;
   
-  // FIXED: Use the actual QR code data from the database if available
-  // Otherwise fall back to a generated one
+  // Use the short database QR code for scanning (what organizers will use)
   let qrCode: string;
-  if (ticket.qrCodeData) {
-    // Use the actual QR code data from database
+  
+  if (ticket.qrCodeData && ticket.qrCodeData.trim() !== '') {
+    // Use the short database QR code (e.g., "rTPRfg")
     qrCode = ticket.qrCodeData;
+    console.log(`Using database short QR code for ticket ${ticket.id}: ${qrCode}`);
   } else {
-    // Fallback: generate QR code data (for legacy tickets)
-    qrCode = JSON.stringify({
-      ticketId: ticket.id.toString(),
-      eventId: ticket.eventId?.toString() || "",
-      orderId,
-      ts: new Date().toISOString(),
-    });
+    // Fallback: generate a short code if none exists
+    qrCode = `TKT${ticket.id.toString().padStart(3, "0")}`;
+    console.log(`Generated fallback short QR code for ticket ${ticket.id}: ${qrCode}`);
   }
 
-  // Fix: Determine active/expired based on event date, not ticket status
+  // Determine active/expired based on event date
   const eventDate = new Date(eventDateIso);
   const now = new Date();
   const isEventInFuture = eventDate.getTime() > now.getTime();
   const ticketStatus = isEventInFuture ? "active" : "expired";
 
-  // Map to EnhancedTicket type
+  // Create enhanced ticket with short QR code
   const enhanced: EnhancedTicket = {
     id: ticket.id.toString(),
     eventId: ticket.eventId?.toString() || "",
@@ -85,10 +86,12 @@ const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
     purchaseDate: ticket.purchaseDate,
     status: ticket.status,
     userId: ticket.userId ?? "",
-    qrCode, // FIXED: Use actual QR code data
+    qrCode, // Short code for QR generation (e.g., "rTPRfg")
     orderId,
-    ticketStatus, // Fixed: Based on event date, not ticket status
-    // optional fields left undefined (eventImage/eventCategory/seatNumber/gate/validUntil)
+    ticketStatus,
+    qrCodeData: ticket.qrCodeData, // Keep original for reference
+    // Add validation code as a separate field for easy access
+    validationCode: qrCode,
   };
 
   return enhanced;

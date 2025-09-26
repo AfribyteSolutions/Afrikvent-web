@@ -32,6 +32,7 @@ export interface EnhancedTicket extends UserTicket {
   seatNumber?: string;
   gate?: string;
   validUntil?: string;
+  validationCode?: string; // Add this line
 }
 
 export interface TicketTemplate {
