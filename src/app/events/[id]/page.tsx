@@ -160,11 +160,11 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         .eq('event_id', eventId)
         .order('price', { ascending: true });
 
-      const { data: comments } = await supabase
+        const { data: comments } = await supabase
         .from('EVENT_COMMENTS')
         .select(`
           *,
-          USERS!EVENT_COMMENTS_user_id_fkey (*)
+          USERS (*)
         `)
         .eq('event_id', eventId)
         .eq('is_deleted', false)
@@ -213,25 +213,33 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
   const handleDeleteComment = async (commentId: number) => {
     if (!user || !event) return;
-
+  
     const comment = event.comments.find(c => c.id === commentId);
     const isOrganizer = event.organizer_id === user.id;
     const isCommentOwner = comment?.user_id === user.id;
-
-    if (!isOrganizer && !isCommentOwner) return;
-
+  
+    if (!isOrganizer && !isCommentOwner) {
+      alert('You do not have permission to delete this comment');
+      return;
+    }
+  
+    if (!confirm('Are you sure you want to delete this comment?')) return;
+  
     try {
       const { error } = await supabase
         .from('EVENT_COMMENTS')
         .update({ is_deleted: true })
         .eq('id', commentId);
-
-      if (error) throw error;
-
+  
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
+  
       await fetchEventDetails();
     } catch (error) {
       console.error('Error deleting comment:', error);
-      alert('Failed to delete comment');
+      alert('Failed to delete comment. Please try again.');
     }
   };
 
@@ -561,51 +569,58 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </div>
               )}
 
-              <div className="space-y-4">
-                {event.comments.map((comment) => (
-                  <div key={comment.id} className="flex space-x-3">
-                    <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
-                      <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 bg-gray-50 rounded-lg p-3">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="font-medium text-gray-900">
-                              {comment.USERS?.name || 'Anonymous'}
-                            </span>
-                            {comment.user_id === event.organizer_id && (
-                              <span className="bg-blue-100 text-blue-800 text-xs px-2 py-0.5 rounded">
-                                Organizer
-                              </span>
-                            )}
-                            <span className="text-gray-500 text-xs">
-                              {new Date(comment.created_at).toLocaleDateString()}
-                            </span>
-                          </div>
-                          <p className="text-gray-700">{comment.message}</p>
-                        </div>
-                        {user && (user.id === comment.user_id || user.id === event.organizer_id) && (
-                          <button
-                            onClick={() => handleDeleteComment(comment.id)}
-                            className="text-red-500 hover:text-red-700 ml-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {event.comments.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    No comments yet. Be the first to comment!
-                  </div>
-                )}
+<div className="space-y-4">
+  {event.comments.map((comment) => (
+    <div key={comment.id} className="flex space-x-2 sm:space-x-3">
+      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+        {comment.USERS?.image_url ? (
+          <Image
+            src={comment.USERS.image_url}
+            alt={comment.USERS.name || 'User'}
+            width={40}
+            height={40}
+            className="object-cover w-full h-full"
+          />
+        ) : (
+          <span className="text-white font-semibold text-xs sm:text-sm">
+            {(comment.USERS?.name || comment.USERS?.email || 'A')
+              .charAt(0)
+              .toUpperCase()}
+          </span>
+        )}
+      </div>
+      <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-2 sm:p-3">
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+              <span className="font-medium text-gray-900 text-sm sm:text-base truncate">
+                {comment.USERS?.name || 'Anonymous'}
+              </span>
+              {comment.user_id === event.organizer_id && (
+                <span className="bg-blue-100 text-blue-800 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">
+                  Organizer
+                </span>
+              )}
+              <span className="text-gray-500 text-[10px] sm:text-xs whitespace-nowrap">
+                {new Date(comment.created_at).toLocaleDateString()}
+              </span>
+            </div>
+            <p className="text-gray-700 text-sm sm:text-base break-words">{comment.message}</p>
+          </div>
+          {user && (user.id === comment.user_id || user.id === event.organizer_id) && (
+            <button
+              onClick={() => handleDeleteComment(comment.id)}
+              className="text-red-500 hover:text-red-700 flex-shrink-0"
+            >
+              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  ))}
               </div>
             </div>
           </div>

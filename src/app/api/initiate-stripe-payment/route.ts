@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
 
     console.log('About to call edge function with:', JSON.stringify(edgeFunctionPayload, null, 2));
 
-    // Call the Supabase edge function (fixed function name)
+    // FIXED: Call the correct edge function name (strip-payment instead of stripe-payment)
     const { data, error } = await supabase.functions.invoke('initiate-strip-payment', {
       body: edgeFunctionPayload
     });
