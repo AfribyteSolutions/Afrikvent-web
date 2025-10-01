@@ -7,6 +7,8 @@ import CheckoutButton from '@/components/CheckOutButton';
 import { User } from '@supabase/supabase-js';
 import { Database } from '@/types/database.types';
 import { EnhancedTicket } from '@/types/ticket';
+import { getCurrencyInfo } from '@/utils/currency'; // <-- ADDED
+import StripeCheckoutButton from '@/components/StripeCheckoutButton';
 
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
 
@@ -46,6 +48,20 @@ const generateRandomColor = (ticketId: string) => {
   
   const index = Math.abs(hash) % TICKET_COLORS.length;
   return TICKET_COLORS[index];
+};
+
+// Currency formatting helper - uses getCurrencyInfo utility
+const formatCurrency = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
+  const safeAmount = amount || 0;
+  const currencyInfo = getCurrencyInfo(currencyCode || undefined);
+  const symbol = currencyInfo?.symbol ?? '';
+
+  try {
+    // No decimals per your original formatting
+    return `${symbol}${safeAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  } catch (e) {
+    return `${symbol}${safeAmount.toLocaleString()}`;
+  }
 };
 
 const formatTicketDate = (dateStr: string) => {
@@ -202,16 +218,6 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onDownload, onShare, on
   );
 };
 
-interface EnhancedPaymentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  selectedTicket: TicketTypeRow;
-  quantity: number;
-  user: User | null;
-  eventTitle: string;
-  onPaymentSuccess?: (tickets: EnhancedTicket[]) => void;
-}
-
 type PaymentMethod = 'mobile_money' | 'credit_card' | null;
 type Country = {
   code: string;
@@ -225,8 +231,9 @@ type Country = {
 
 // Comprehensive list of MTN Mobile Money supported countries
 const COUNTRIES: Country[] = [
-  { code: 'GH', name: 'Ghana', flag: '🇬🇭', dialCode: '233', mtnSupported: true, vodafoneSupported: true, airtelSupported: true },
+ 
   { code: 'CM', name: 'Cameroon', flag: '🇨🇲', dialCode: '237', mtnSupported: true, vodafoneSupported: false, airtelSupported: false },
+  { code: 'GH', name: 'Ghana', flag: '🇬🇭', dialCode: '233', mtnSupported: true, vodafoneSupported: true, airtelSupported: true },
   { code: 'NG', name: 'Nigeria', flag: '🇳🇬', dialCode: '234', mtnSupported: true, vodafoneSupported: false, airtelSupported: true },
   { code: 'UG', name: 'Uganda', flag: '🇺🇬', dialCode: '256', mtnSupported: true, vodafoneSupported: false, airtelSupported: true },
   { code: 'RW', name: 'Rwanda', flag: '🇷🇼', dialCode: '250', mtnSupported: true, vodafoneSupported: false, airtelSupported: false },
@@ -254,7 +261,7 @@ interface EnhancedPaymentModalProps {
   eventId?: number; // Add event ID
   eventImage?: string; // Add event image
   onPaymentSuccess?: (tickets: EnhancedTicket[]) => void;
-  // 💥 FIX 1: Add the eventCurrency prop to the interface 💥
+  // 💥 FIX: Add the eventCurrency prop to the interface 💥
   eventCurrency: string | null; 
 }
 
@@ -270,7 +277,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   eventId, // Receive event ID
   eventImage, // Receive event image
   onPaymentSuccess,
-  // 💥 FIX 2: Destructure the new prop 💥
+  // 💥 FIX: Destructure the new prop 💥
   eventCurrency
 }) => {
   const [step, setStep] = useState<'method' | 'details' | 'success'>('method');
@@ -460,12 +467,12 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Price per ticket</span>
-                      <span className="font-medium text-gray-900">₵{selectedTicket.price?.toLocaleString()}</span>
+                      <span className="font-medium text-gray-900">{formatCurrency(selectedTicket.price as unknown as number, eventCurrency)}</span>
                     </div>
                     <hr className="my-2" />
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total</span>
-                      <span className="text-blue-600">₵{totalAmount.toLocaleString()}</span>
+                      <span className="text-blue-600">{formatCurrency(totalAmount, eventCurrency)}</span>
                     </div>
                   </div>
                 </div>
@@ -491,7 +498,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       </div>
                       <div>
                         <h4 className="font-semibold text-gray-900">Mobile Money</h4>
-                        <p className="text-sm text-gray-600">MTN, Vodafone, Airtel - Global Coverage</p>
+                        <p className="text-sm text-gray-600">MTN For Now</p>
                       </div>
                       <Globe className="w-5 h-5 text-gray-400 ml-auto" />
                     </div>
@@ -573,7 +580,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       {getAvailableProviders().map((p) => (
                         <button
                           key={p.id}
-                          onClick={() => setProvider(p.id as 'mtn' | 'vodafone' | 'airteltigo')}
+                          onClick={() => setProvider(p.id as 'mtn')}
                           className={`px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 flex-1 min-w-[80px] ${
                             provider === p.id
                               ? `border-2 ${p.color}`
@@ -636,58 +643,74 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 </motion.div>
               )}
 
-              {/* Credit Card Details */}
-              {step === 'details' && paymentMethod === 'credit_card' && (
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="space-y-6"
-                >
-                  <h3 className="font-semibold text-gray-900">Credit Card Details</h3>
-                  
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Card Number
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="1234 5678 9012 3456"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Expiry Date
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="MM/YY"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          CVV
-                        </label>
-                        <input
-                          type="text"
-                          placeholder="123"
-                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                  </div>
 
-                  <button
-                    className="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-bold hover:bg-blue-700 transition-colors"
-                  >
-                    Pay ₵{totalAmount.toLocaleString()}
-                  </button>
-                </motion.div>
-              )}
+{/* Credit Card Details */}
+{step === 'details' && paymentMethod === 'credit_card' && (
+  <motion.div
+    initial={{ opacity: 0, x: 20 }}
+    animate={{ opacity: 1, x: 0 }}
+    className="space-y-6"
+  >
+    <h3 className="font-semibold text-gray-900">Credit Card Payment</h3>
+    
+    <div className="bg-blue-50 rounded-lg p-4 mb-4">
+      <div className="flex items-start gap-3">
+        <CreditCard className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+        <div className="text-sm text-blue-800">
+          <p className="font-medium mb-1">Secure Payment via Stripe</p>
+          <p className="text-xs">You will be redirected to Stripe secure checkout page to complete your payment.</p>
+        </div>
+      </div>
+    </div>
+
+    {/* Customer Email */}
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Email Address
+      </label>
+      <input
+        type="email"
+        value={user?.email || ''}
+        disabled
+        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+      />
+      <p className="text-xs text-gray-500 mt-1">
+        Payment confirmation will be sent to this email
+      </p>
+    </div>
+
+    {/* Stripe Checkout Button */}
+    <div className="pt-4">
+      <StripeCheckoutButton
+        ticketId={selectedTicket.id}
+        userId={user?.id || ''}
+        customerEmail={user?.email || ''}
+        quantity={quantity}
+        onSuccess={() => {
+          // Stripe will redirect, so this won't really be called
+          console.log('Stripe payment initiated successfully');
+        }}
+        onError={handlePaymentError}
+        disabled={!user?.email}
+        className="w-full"
+        eventTitle={eventTitle}
+        eventDate={eventDate || new Date().toISOString()}
+        eventLocation={eventLocation || 'Location TBA'}
+        ticketTypeName={selectedTicket.name}
+        eventId={eventId}
+        eventImage={eventImage}
+      />
+    </div>
+
+    {/* Security Notice */}
+    <div className="flex items-center gap-2 text-xs text-gray-500 pt-2">
+      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+      </svg>
+      <span>Secured by Stripe • Your payment information is encrypted</span>
+    </div>
+  </motion.div>
+)}
 
               {/* Success Step - Show Generated Tickets */}
               {step === 'success' && (

@@ -8,11 +8,7 @@ import { User } from '@supabase/supabase-js';
 import { EnhancedTicket } from '@/types/ticket';
 import PaymentModal from '@/components/checkout/PaymentModal';
 import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
-// ------------------------------------------------------------------------------------------------
-// FIX: IMPORT CURRENCY UTILITY
-// ------------------------------------------------------------------------------------------------
 import { getCurrencyInfo } from '@/utils/currency';
-
 
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
@@ -21,7 +17,7 @@ type UserRow = Database['public']['Tables']['USERS']['Row'];
 
 interface EventWithDetails extends EventRow {
   USERS: UserRow | null;
-  organization_name?: string; // Add organization name
+  organization_name?: string;
   ticketTypes: TicketTypeRow[];
   comments: (CommentRow & { USERS: UserRow | null })[];
 }
@@ -30,30 +26,24 @@ interface EventDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
-// ------------------------------------------------------------------------------------------------
-// NEW/REPLACED CURRENCY HELPER FUNCTION
-// This function uses the imported getCurrencyInfo utility.
-// ------------------------------------------------------------------------------------------------
 const formatCurrency = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
-    const safeAmount = amount || 0;
-    // getCurrencyInfo will correctly return the default (XOF/CFA) if code is null/undefined
-    const currencyInfo = getCurrencyInfo(currencyCode || undefined);
-    const symbol = currencyInfo.symbol;
+  const safeAmount = amount || 0;
+  const currencyInfo = getCurrencyInfo(currencyCode || undefined);
+  const symbol = currencyInfo.symbol;
 
-    // Use Intl.NumberFormat for proper localization and grouping
-    try {
-        return `${symbol}${safeAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
-    } catch (e) {
-        return `${symbol}${safeAmount.toLocaleString()}`;
-    }
+  try {
+    return `${symbol}${safeAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  } catch (e) {
+    return `${symbol}${safeAmount.toLocaleString()}`;
+  }
 };
 
-// Color schemes for different ticket types
 const getTicketColorScheme = (index: number) => {
   const schemes = [
     {
       border: 'border-blue-500',
       bg: 'bg-blue-50',
+      bgCard: 'bg-blue-50/30',
       checkIcon: 'bg-blue-500',
       badge: 'bg-blue-200 text-blue-800',
       gradient: 'from-blue-600 to-blue-800'
@@ -61,6 +51,7 @@ const getTicketColorScheme = (index: number) => {
     {
       border: 'border-purple-500',
       bg: 'bg-purple-50',
+      bgCard: 'bg-purple-50/30',
       checkIcon: 'bg-purple-500',
       badge: 'bg-purple-200 text-purple-800',
       gradient: 'from-purple-600 to-purple-800'
@@ -68,6 +59,7 @@ const getTicketColorScheme = (index: number) => {
     {
       border: 'border-green-500',
       bg: 'bg-green-50',
+      bgCard: 'bg-green-50/30',
       checkIcon: 'bg-green-500',
       badge: 'bg-green-200 text-green-800',
       gradient: 'from-green-600 to-green-800'
@@ -75,6 +67,7 @@ const getTicketColorScheme = (index: number) => {
     {
       border: 'border-orange-500',
       bg: 'bg-orange-50',
+      bgCard: 'bg-orange-50/30',
       checkIcon: 'bg-orange-500',
       badge: 'bg-orange-200 text-orange-800',
       gradient: 'from-orange-600 to-orange-800'
@@ -82,6 +75,7 @@ const getTicketColorScheme = (index: number) => {
     {
       border: 'border-pink-500',
       bg: 'bg-pink-50',
+      bgCard: 'bg-pink-50/30',
       checkIcon: 'bg-pink-500',
       badge: 'bg-pink-200 text-pink-800',
       gradient: 'from-pink-600 to-pink-800'
@@ -92,7 +86,7 @@ const getTicketColorScheme = (index: number) => {
 
 const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const router = useRouter();
-  const resolvedParams = use(params); // Unwrap the Promise
+  const resolvedParams = use(params);
   const [event, setEvent] = useState<EventWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +102,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const eventId = parseInt(resolvedParams.id);
 
   useEffect(() => {
-    // Get current user
     const getCurrentUser = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUser(user);
@@ -124,38 +117,30 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     try {
       setLoading(true);
       setError(null);
-      console.log('🔍 Fetching event with ID:', eventId, 'Type:', typeof eventId);
 
-      // First, let's try a simple query without joins
       const { data: simpleEventData, error: simpleError } = await supabase
         .from('EVENTS')
         .select('*')
         .eq('id', eventId);
 
-      console.log('📊 Simple query result:', { simpleEventData, simpleError });
-
       if (simpleError) {
-        console.error('Simple query error:', simpleError);
         setError(`Database error: ${simpleError.message}`);
         return;
       }
 
       if (!simpleEventData || simpleEventData.length === 0) {
-        console.log('❌ No event found with ID:', eventId);
         setError('Event not found in database');
         return;
       }
 
       const eventData = simpleEventData[0];
 
-      // Fetch organizer data separately
       const { data: organizerData } = await supabase
         .from('USERS')
         .select('*')
         .eq('user_id', eventData.organizer_id)
         .single();
 
-      // Fetch organization data from ORGANIZER_KYC
       let organizationName = null;
       try {
         const { data: kycData } = await supabase
@@ -166,17 +151,15 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         
         organizationName = kycData?.organization_name || null;
       } catch (error) {
-        console.log('No organization data found for organizer:', eventData.organizer_id);
+        console.log('No organization data found');
       }
 
-      // Fetch ticket types
       const { data: ticketTypes } = await supabase
         .from('TICKET_TYPES')
         .select('*')
         .eq('event_id', eventId)
         .order('price', { ascending: true });
 
-      // Fetch comments with user details - Fixed the join
       const { data: comments } = await supabase
         .from('EVENT_COMMENTS')
         .select(`
@@ -219,7 +202,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
       if (error) throw error;
 
       setNewComment('');
-      await fetchEventDetails(); // Refresh comments
+      await fetchEventDetails();
     } catch (error) {
       console.error('Error adding comment:', error);
       alert('Failed to add comment');
@@ -231,7 +214,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const handleDeleteComment = async (commentId: number) => {
     if (!user || !event) return;
 
-    // Check if user is organizer or comment owner
     const comment = event.comments.find(c => c.id === commentId);
     const isOrganizer = event.organizer_id === user.id;
     const isCommentOwner = comment?.user_id === user.id;
@@ -246,7 +228,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
       if (error) throw error;
 
-      await fetchEventDetails(); // Refresh comments
+      await fetchEventDetails();
     } catch (error) {
       console.error('Error deleting comment:', error);
       alert('Failed to delete comment');
@@ -289,11 +271,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     setPurchasedTickets(tickets);
     setShowPaymentModal(false);
     setShowSuccessScreen(true);
-    // Reset selections
     setSelectedTicket(null);
     setTicketQuantity(1);
-    // Send email confirmation (this would be handled by your backend)
-    console.log('Email confirmation should be sent for tickets:', tickets);
   };
 
   const handleCloseSuccessScreen = () => {
@@ -301,13 +280,23 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     setPurchasedTickets([]);
   };
 
-  // Helper function to get organizer display name
   const getOrganizerDisplayName = () => {
     if (event?.organization_name) {
       return event.organization_name;
     }
     return event?.USERS?.name || 'Anonymous Organizer';
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading event...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (error || !event) {
     return (
@@ -326,12 +315,10 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     );
   }
   
-  // Define eventCurrency here, which will be the primary source for currency display
   const eventCurrency = event.currency;
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Back Button */}
       <div className="bg-white border-b">
         <div className="max-w-4xl mx-auto px-4 py-3">
           <button
@@ -348,7 +335,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          {/* Hero Image */}
           <div className="relative h-80 bg-gray-200">
             {event.images && event.images[0] ? (
               <Image
@@ -364,7 +350,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </svg>
               </div>
             )}
-            {/* Status Badge */}
             <div className="absolute top-4 right-4">
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                 event.event_status === 'active' ? 'bg-green-100 text-green-800' :
@@ -376,7 +361,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </span>
             </div>
 
-            {/* Share Button */}
             <button
               onClick={handleShare}
               className="absolute top-4 left-4 bg-white/80 backdrop-blur-sm p-2 rounded-full hover:bg-white"
@@ -388,7 +372,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
           </div>
 
           <div className="p-8">
-            {/* Event Header */}
             <div className="mb-8">
               <h1 className="text-3xl font-bold text-gray-900 mb-4">{event.title}</h1>
               <div className="flex flex-wrap gap-6 text-gray-600">
@@ -417,7 +400,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               )}
             </div>
 
-            {/* Event Description */}
             {event.description && (
               <div className="mb-8">
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">About This Event</h2>
@@ -427,7 +409,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             )}
 
-            {/* Organizer Info - Updated to show organization name */}
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Organizer</h2>
               <div className="flex items-center">
@@ -446,7 +427,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             </div>
 
-            {/* Tickets Section */}
             {event.ticketTypes.length > 0 && (
               <div className="mb-8">
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">Select Tickets</h2>
@@ -458,10 +438,10 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                     return (
                       <div
                         key={ticket.id}
-                        className={`relative border-2 rounded-2xl p-6 cursor-pointer transition-all duration-300 ${
+                        className={`relative border-2 rounded-2xl p-4 sm:p-6 cursor-pointer transition-all duration-300 ${
                           isSelected
-                            ? `${colorScheme.border} ${colorScheme.bg} shadow-lg transform scale-[1.02]`
-                            : 'border-gray-200 hover:border-gray-300 hover:shadow-md bg-white'
+                            ? `${colorScheme.border} bg-white shadow-xl transform scale-[1.01]`
+                            : `${colorScheme.bgCard} border-gray-300 shadow-sm hover:shadow-md`
                         }`}
                         onClick={() => setSelectedTicket(ticket)}
                       >
@@ -475,49 +455,57 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <h3 className="font-bold text-xl text-gray-900">{ticket.name}</h3>
-                              <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                isSelected
-                                  ? colorScheme.badge
-                                  : 'bg-gray-100 text-gray-600'
+                            <div className="flex items-center gap-2 sm:gap-3 mb-2">
+                              <h3 className={`font-bold ${isSelected ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'} text-gray-900`}>
+                                {ticket.name}
+                              </h3>
+                              <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-medium ${
+                                isSelected ? colorScheme.badge : 'bg-gray-100 text-gray-700'
                               }`}>
                                 {ticket.max_quatity} available
                               </span>
                             </div>
+
                             {ticket.description && (
-                              <p className="text-gray-600 text-sm mb-3 leading-relaxed">{ticket.description}</p>
+                              <p className="text-gray-700 text-xs sm:text-sm mb-3 leading-relaxed">
+                                {ticket.description}
+                              </p>
                             )}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-4">
-                                <span className={`text-2xl font-bold ${
-                                  isSelected ? 'bg-gradient-to-r ' + colorScheme.gradient + ' bg-clip-text text-transparent' : 'text-gray-900'
+
+                            <div className="flex items-center justify-between flex-wrap gap-3">
+                              <div className="flex items-center gap-2 sm:gap-4">
+                                <span className={`font-bold ${
+                                  isSelected
+                                    ? 'text-lg sm:text-2xl bg-gradient-to-r ' + colorScheme.gradient + ' bg-clip-text text-transparent'
+                                    : 'text-lg sm:text-2xl text-gray-900'
                                 }`}>
-                                  {/* FIX: Use formatCurrency with event.currency */}
                                   {formatCurrency(ticket.price, eventCurrency)}
                                 </span>
-                                <span className="text-sm text-gray-500">per ticket</span>
+                                <span className="text-[11px] sm:text-sm text-gray-600">per ticket</span>
                               </div>
+
                               {isSelected && (
-                                <div className="flex items-center gap-3">
-                                  <span className="text-sm font-medium text-gray-700">Quantity:</span>
-                                  <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                  <span className="text-[11px] sm:text-sm font-medium text-gray-700">Qty:</span>
+                                  <div className="flex items-center gap-1 sm:gap-2">
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setTicketQuantity(Math.max(1, ticketQuantity - 1));
                                       }}
-                                      className="w-8 h-8 rounded-full bg-white border-2 hover:bg-gray-50 flex items-center justify-center text-gray-600 font-bold shadow-sm"
+                                      className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-700 font-bold transition-colors text-sm sm:text-base"
                                     >
-                                      -
+                                      −
                                     </button>
-                                    <span className="w-8 text-center font-bold text-gray-900">{ticketQuantity}</span>
+                                    <span className="w-8 sm:w-10 text-center font-bold text-gray-900 text-sm sm:text-lg">
+                                      {ticketQuantity}
+                                    </span>
                                     <button
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setTicketQuantity(Math.min(ticket.max_quatity || 10, ticketQuantity + 1));
                                       }}
-                                      className="w-8 h-8 rounded-full bg-white border-2 hover:bg-gray-50 flex items-center justify-center text-gray-600 font-bold shadow-sm"
+                                      className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg bg-gray-100 hover:bg-gray-200 active:bg-gray-300 flex items-center justify-center text-gray-700 font-bold transition-colors text-sm sm:text-base"
                                     >
                                       +
                                     </button>
@@ -534,13 +522,11 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             )}
 
-            {/* Comments Section - Updated to show proper user names */}
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 Comments ({event.comments.length})
               </h2>
 
-              {/* Add Comment Form */}
               {user ? (
                 <div className="mb-6">
                   <div className="flex space-x-3">
@@ -575,7 +561,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </div>
               )}
 
-              {/* Comments List - Updated to show proper user names */}
               <div className="space-y-4">
                 {event.comments.map((comment) => (
                   <div key={comment.id} className="flex space-x-3">
@@ -627,68 +612,82 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         </div>
       </div>
 
-      {/* Bottom Summary Section - Fixed to bottom when ticket selected */}
       {selectedTicket && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t-2 border-gray-200 shadow-2xl z-50">
-          <div className="max-w-4xl mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                    <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900">{selectedTicket.name}</h3>
-                    <p className="text-sm text-gray-600">
-                      {ticketQuantity} ticket{ticketQuantity > 1 ? 's' : ''} × 
-                      {/* FIX: Use formatCurrency with event.currency */}
-                      {formatCurrency(selectedTicket.price, eventCurrency)}
-                    </p>
-                  </div>
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50">
+          <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-0">
+              <div className="flex items-center gap-3 flex-1 w-full sm:w-auto">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <svg className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
+                  </svg>
                 </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="text-right">
-                  <p className="text-sm text-gray-600">Total</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {/* FIX: Use formatCurrency with event.currency */}
-                    {formatCurrency((selectedTicket.price || 0) * ticketQuantity, eventCurrency)}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-base sm:text-lg text-gray-900 truncate">{selectedTicket.name}</h3>
+                  <p className="text-xs sm:text-sm text-gray-600">
+                    {ticketQuantity} ticket{ticketQuantity > 1 ? 's' : ''} × {formatCurrency(selectedTicket.price, eventCurrency)}
                   </p>
                 </div>
                 <button
-                  onClick={() => setShowPaymentModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-bold text-lg transition-all duration-200 shadow-lg hover:shadow-xl transform hover:scale-105"
+                  onClick={() => {
+                    setSelectedTicket(null);
+                    setTicketQuantity(1);
+                  }}
+                  className="text-gray-400 hover:text-gray-600 p-1 sm:hidden"
+                  aria-label="Close"
                 >
-                  Pay Now
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
                 </button>
+              </div>
+              <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4 w-full sm:w-auto">
+                <div className="text-left sm:text-right">
+                  <p className="text-xs sm:text-sm text-gray-600">Total</p>
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900">
+                    {formatCurrency((selectedTicket.price || 0) * ticketQuantity, eventCurrency)}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setSelectedTicket(null);
+                      setTicketQuantity(1);
+                    }}
+                    className="hidden sm:block text-gray-600 hover:text-gray-800 px-3 sm:px-4 py-2 sm:py-3 rounded-lg sm:rounded-xl font-medium text-sm sm:text-base transition-all duration-200 border border-gray-300 hover:border-gray-400"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setShowPaymentModal(true)}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg sm:rounded-xl font-bold text-sm sm:text-lg transition-all duration-200 shadow-lg hover:shadow-xl whitespace-nowrap"
+                  >
+                    Pay Now
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Payment Modal */}
       {selectedTicket && (
         <PaymentModal
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        selectedTicket={selectedTicket}
-        quantity={ticketQuantity}
-        user={user}
-        eventTitle={event.title}
-        eventDate={event.event_date} // Can be null
-        eventLocation={event.location_name} // Can be null
-        eventId={event.id}
-        eventImage={event.images?.[0]}
-        onPaymentSuccess={handlePaymentSuccess}
-        // Pass the event currency to the modal
-        eventCurrency={eventCurrency}
-      />
+          isOpen={showPaymentModal}
+          onClose={() => setShowPaymentModal(false)}
+          selectedTicket={selectedTicket}
+          quantity={ticketQuantity}
+          user={user}
+          eventTitle={event.title}
+          eventDate={event.event_date}
+          eventLocation={event.location_name}
+          eventId={event.id}
+          eventImage={event.images?.[0]}
+          onPaymentSuccess={handlePaymentSuccess}
+          eventCurrency={eventCurrency}
+        />
       )}
 
-      {/* Success Screen */}
       <PaymentSuccessScreen
         isOpen={showSuccessScreen}
         tickets={purchasedTickets}
