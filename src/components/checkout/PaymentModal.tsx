@@ -1,4 +1,3 @@
-// components/checkout/EnhancedPaymentModal.tsx - Fixed TypeScript Implementation
 'use client';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -7,18 +6,19 @@ import CheckoutButton from '@/components/CheckOutButton';
 import { User } from '@supabase/supabase-js';
 import { Database } from '@/types/database.types';
 import { EnhancedTicket } from '@/types/ticket';
-import { getCurrencyInfo } from '@/utils/currency'; // <-- ADDED
+import { getCurrencyInfo } from '@/utils/currency';
 import StripeCheckoutButton from '@/components/StripeCheckoutButton';
+import { supabase } from '@/lib/supabaseClient'; // ✅ ADD THIS IMPORT
 
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
 
-// Properly typed QRCode component props
+// ... (keep all the existing interfaces, QRCode component, TICKET_COLORS, etc.)
+
 interface QRCodeProps {
   value: string;
   size: number;
 }
 
-// Mock QRCode component with proper TypeScript typing
 const QRCode: React.FC<QRCodeProps> = ({ value, size }) => (
   <div 
     className="bg-gray-100 flex items-center justify-center text-xs text-gray-600 font-mono border-2 border-gray-300"
@@ -28,7 +28,6 @@ const QRCode: React.FC<QRCodeProps> = ({ value, size }) => (
   </div>
 );
 
-// Ticket colors
 const TICKET_COLORS = [
   { bg: '#E53E3E', accent: '#C53030' },
   { bg: '#D53F8C', accent: '#B83280' },
@@ -50,14 +49,12 @@ const generateRandomColor = (ticketId: string) => {
   return TICKET_COLORS[index];
 };
 
-// Currency formatting helper - uses getCurrencyInfo utility
 const formatCurrency = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
   const safeAmount = amount || 0;
   const currencyInfo = getCurrencyInfo(currencyCode || undefined);
   const symbol = currencyInfo?.symbol ?? '';
 
   try {
-    // No decimals per your original formatting
     return `${symbol}${safeAmount.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
   } catch (e) {
     return `${symbol}${safeAmount.toLocaleString()}`;
@@ -80,7 +77,6 @@ const formatTicketTime = (dateStr: string) => {
   });
 };
 
-// Properly typed TicketCard props
 interface TicketCardProps {
   ticket: EnhancedTicket;
   onDownload?: (ticket: EnhancedTicket) => Promise<void>;
@@ -88,7 +84,6 @@ interface TicketCardProps {
   onView?: (ticket: EnhancedTicket) => void;
 }
 
-// TicketCard Component for Modal with proper TypeScript
 const TicketCard: React.FC<TicketCardProps> = ({ ticket, onDownload, onShare, onView }) => {
   const [cardColors] = useState(() => generateRandomColor(ticket.id));
 
@@ -131,10 +126,8 @@ const TicketCard: React.FC<TicketCardProps> = ({ ticket, onDownload, onShare, on
         className="relative rounded-t-3xl rounded-b-lg overflow-hidden shadow-2xl text-white"
         style={{ backgroundColor: cardColors.bg }}
       >
-        {/* Decorative notch at top */}
         <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 w-12 h-12 bg-gray-100 rounded-full"></div>
 
-        {/* Header Section */}
         <div className="flex justify-between items-start p-4 pt-8">
           <div>
             <div className="text-xs font-medium opacity-90 mb-1">
@@ -229,9 +222,7 @@ type Country = {
   airtelSupported: boolean;
 };
 
-// Comprehensive list of MTN Mobile Money supported countries
 const COUNTRIES: Country[] = [
- 
   { code: 'CM', name: 'Cameroon', flag: '🇨🇲', dialCode: '237', mtnSupported: true, vodafoneSupported: false, airtelSupported: false },
   { code: 'GH', name: 'Ghana', flag: '🇬🇭', dialCode: '233', mtnSupported: true, vodafoneSupported: true, airtelSupported: true },
   { code: 'NG', name: 'Nigeria', flag: '🇳🇬', dialCode: '234', mtnSupported: true, vodafoneSupported: false, airtelSupported: true },
@@ -258,10 +249,9 @@ interface EnhancedPaymentModalProps {
   eventTitle: string;
   eventDate: string | null;
   eventLocation: string | null;
-  eventId?: number; // Add event ID
-  eventImage?: string; // Add event image
+  eventId?: number;
+  eventImage?: string;
   onPaymentSuccess?: (tickets: EnhancedTicket[]) => void;
-  // 💥 FIX: Add the eventCurrency prop to the interface 💥
   eventCurrency: string | null; 
 }
 
@@ -272,18 +262,17 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   quantity,
   user,
   eventTitle,
-  eventDate, // Receive event date
-  eventLocation, // Receive event location  
-  eventId, // Receive event ID
-  eventImage, // Receive event image
+  eventDate,
+  eventLocation,
+  eventId,
+  eventImage,
   onPaymentSuccess,
-  // 💥 FIX: Destructure the new prop 💥
   eventCurrency
 }) => {
   const [step, setStep] = useState<'method' | 'details' | 'success'>('method');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]);
+  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[1]); // Ghana as default
   const [provider, setProvider] = useState<'mtn' | 'vodafone' | 'airteltigo'>('mtn');
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [generatedTickets, setGeneratedTickets] = useState<EnhancedTicket[]>([]);
@@ -297,7 +286,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
   const handleBackToMethods = () => {
     if (step === 'success') {
-      // Reset everything when going back from success
       setStep('method');
       setPaymentMethod(null);
       setPhoneNumber('');
@@ -308,10 +296,50 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     }
   };
 
-  const handlePaymentSuccess = (tickets: EnhancedTicket[]) => {
+  // ✅ FIXED: Properly named and scoped function
+  const handlePaymentSuccess = async (tickets: EnhancedTicket[]) => {
     setGeneratedTickets(tickets);
     setStep('success');
-    
+
+    // Send email with tickets
+    try {
+      const isVirtual = eventLocation?.toLowerCase().includes('online') || 
+                       eventLocation?.toLowerCase().includes('virtual') || 
+                       eventLocation?.toLowerCase().includes('zoom');
+
+      const ticketsWithAccessCodes = tickets.map(ticket => ({
+        id: ticket.id,
+        orderId: ticket.orderId,
+        ticketType: ticket.ticketType,
+        qrCode: ticket.qrCode,
+        accessCode: ticket.qrCode.slice(-6)
+      }));
+
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      
+      console.log('Sending ticket email...');
+      
+      const emailResponse = await supabase.functions.invoke('send-ticket-email', {
+        body: {
+          userEmail: currentUser?.email,
+          userName: currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0],
+          tickets: ticketsWithAccessCodes,
+          eventTitle: eventTitle,
+          eventDate: eventDate || new Date().toISOString(),
+          eventLocation: eventLocation || 'TBA',
+          isVirtual
+        }
+      });
+
+      if (emailResponse.error) {
+        console.error('Email send error:', emailResponse.error);
+      } else {
+        console.log('Ticket email sent successfully');
+      }
+    } catch (emailError) {
+      console.error('Email send error:', emailError);
+    }
+
     // Call the external success handler if provided
     if (onPaymentSuccess) {
       onPaymentSuccess(tickets);
@@ -320,12 +348,10 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
   const handlePaymentError = (error: string) => {
     alert(`Payment failed: ${error}`);
-    // Stay on details page to retry
   };
 
   const handleCloseModal = () => {
     onClose();
-    // Reset modal state after closing
     setTimeout(() => {
       setStep('method');
       setPaymentMethod(null);
@@ -388,20 +414,17 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
   const handleTicketDownload = async (ticket: EnhancedTicket) => {
     console.log('Downloading ticket:', ticket.orderId);
-    // Implement actual download logic here
     alert(`Downloading ticket ${ticket.orderId}...`);
   };
 
   const handleTicketShare = async (ticket: EnhancedTicket) => {
     console.log('Sharing ticket:', ticket.orderId);
-    // Share logic is handled in TicketCard
   };
 
   const handleTicketView = (ticket: EnhancedTicket) => {
     console.log('Viewing ticket details:', ticket.orderId);
     alert(`Viewing details for ${ticket.orderId}`);
   };
-  
 
   return (
     <AnimatePresence>
@@ -420,7 +443,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
             className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 p-4 rounded-t-2xl z-10">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -448,7 +470,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
             </div>
 
             <div className="p-6">
-              {/* Order Summary - Show only for method and details steps */}
               {(step === 'method' || step === 'details') && (
                 <div className="bg-gray-50 rounded-xl p-4 mb-6">
                   <h3 className="font-semibold text-gray-900 mb-2">Order Summary</h3>
@@ -478,7 +499,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 </div>
               )}
 
-              {/* Payment Method Selection */}
               {step === 'method' && (
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
@@ -487,7 +507,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 >
                   <h3 className="font-semibold text-gray-900 mb-4">Choose Payment Method</h3>
                   
-                  {/* Mobile Money */}
                   <button
                     onClick={() => handleMethodSelect('mobile_money')}
                     className="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 text-left"
@@ -504,7 +523,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </div>
                   </button>
 
-                  {/* Credit Card */}
                   <button
                     onClick={() => handleMethodSelect('credit_card')}
                     className="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 text-left"
@@ -522,7 +540,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 </motion.div>
               )}
 
-              {/* Mobile Money Details */}
               {step === 'details' && paymentMethod === 'mobile_money' && (
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
@@ -531,7 +548,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 >
                   <h3 className="font-semibold text-gray-900">Mobile Money Details</h3>
                   
-                  {/* Country Selection */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-3">
                       Select Country
@@ -571,7 +587,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Provider Selection */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-3">
                       Select Provider
@@ -580,7 +595,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       {getAvailableProviders().map((p) => (
                         <button
                           key={p.id}
-                          onClick={() => setProvider(p.id as 'mtn')}
+                          onClick={() => setProvider(p.id as 'mtn' | 'vodafone' | 'airteltigo')}
                           className={`px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 flex-1 min-w-[80px] ${
                             provider === p.id
                               ? `border-2 ${p.color}`
@@ -593,7 +608,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Phone Number */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Phone Number
@@ -621,7 +635,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     )}
                   </div>
 
-                  {/* Checkout Button */}
                   <div className="pt-4">
                     <CheckoutButton
                       ticketId={selectedTicket.id}
@@ -642,7 +655,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                   </div>
                 </motion.div>
               )}
-
 
 {/* Credit Card Details */}
 {step === 'details' && paymentMethod === 'credit_card' && (

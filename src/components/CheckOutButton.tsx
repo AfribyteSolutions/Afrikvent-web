@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
+import { supabase } from "@/lib/supabaseClient";
 import {
   PaymentResult,
   EnhancedTicket,
@@ -22,7 +23,6 @@ interface CheckoutButtonProps {
   onError?: (error: string) => void;
   disabled?: boolean;
   className?: string;
-  // Event details
   eventTitle: string;
   eventDate: string | null;
   eventLocation: string | null;
@@ -75,7 +75,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
       const tickets = [{ ticket_id: ticketId, quantity }];
 
-      console.log("🚀 Starting checkout with:", {
+      console.log("Starting checkout with:", {
         userId,
         phone: cleanPhone,
         tickets,
@@ -98,59 +98,49 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error(`API error: ${response.statusText}`);
       }
 
-      // Parse raw JSON first
       let rawResult: unknown = await response.json();
-      console.log("💰 Raw payment result:", rawResult);
-      console.log("💰 Raw result type:", typeof rawResult);
+      console.log("Raw payment result:", rawResult);
 
-      // If the result is a string, parse it again (double-encoded JSON)
       if (typeof rawResult === "string") {
-        console.log("🔧 Result is string, parsing again...");
+        console.log("Result is string, parsing again...");
         try {
           rawResult = JSON.parse(rawResult);
-          console.log("✅ Successfully parsed string result:", rawResult);
+          console.log("Successfully parsed string result:", rawResult);
         } catch (parseError) {
-          console.error("❌ Failed to parse string result:", parseError);
+          console.error("Failed to parse string result:", parseError);
           throw new Error("Invalid JSON response format");
         }
       }
 
-      // Direct type assertion - the response should now be a proper object
       const result = rawResult as PaymentResult;
 
       if (result.error) {
         throw new Error(result.error);
       }
 
-      // FIXED: Simplified and more reliable ticket extraction
       let ticketsArray: DatabaseTicket[] = [];
       
-      console.log("🔍 Extracting tickets from result:", result);
-      console.log("🔍 Result type:", typeof result);
+      console.log("Extracting tickets from result:", result);
       
-      // Type-safe way to access the tickets property
       const resultWithTickets = result as PaymentResult & { tickets?: DatabaseTicket[] };
       
       if (resultWithTickets.tickets && Array.isArray(resultWithTickets.tickets)) {
         ticketsArray = resultWithTickets.tickets;
-        console.log("✅ Tickets extracted from result.tickets:", ticketsArray);
+        console.log("Tickets extracted from result.tickets:", ticketsArray);
       } else {
-        // Fallback: access rawResult directly with proper typing
         const rawWithTickets = rawResult as Record<string, unknown>;
-        console.log("🔍 Fallback - rawResult.tickets:", rawWithTickets.tickets);
-        console.log("🔍 Is array:", Array.isArray(rawWithTickets.tickets));
+        console.log("Fallback - rawResult.tickets:", rawWithTickets.tickets);
         
         if (rawWithTickets.tickets && Array.isArray(rawWithTickets.tickets)) {
           ticketsArray = rawWithTickets.tickets as DatabaseTicket[];
-          console.log("✅ Tickets extracted from rawResult.tickets:", ticketsArray);
+          console.log("Tickets extracted from rawResult.tickets:", ticketsArray);
         }
       }
 
-      console.log("✅ Tickets array extracted:", ticketsArray);
-      console.log("✅ Tickets length:", ticketsArray.length);
+      console.log("Tickets array extracted:", ticketsArray);
 
       if (ticketsArray.length === 0) {
-        console.error("❌ Payment failed - No tickets returned. Full result:", rawResult);
+        console.error("Payment failed - No tickets returned. Full result:", rawResult);
         
         let errorMsg = "Payment failed - no tickets were created";
         if (result.message) {
@@ -166,20 +156,17 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error(errorMsg);
       }
 
-      console.log("✅ Payment successful, processing tickets:", ticketsArray);
+      console.log("Payment successful, processing tickets:", ticketsArray);
 
       setSuccess(true);
 
-      // Enhanced ticket transformation with better error handling
       const enhancedTickets: EnhancedTicket[] = ticketsArray.map(
         (ticket: DatabaseTicket, index: number) => {
-          console.log("🎫 Processing ticket:", ticket);
+          console.log("Processing ticket:", ticket);
 
-          // Generate a more robust ticket ID
           const ticketId = ticket.id || `temp_${Date.now()}_${index}`;
           const transactionId = result.payment?.transaction_id || `TXN_${Date.now()}`;
 
-          // Ensure eventId is always a string
           const ticketEventId = eventId?.toString() || 
                                ticket.event_id?.toString() || 
                                ticket.ticket_type_id?.toString() || 
@@ -206,14 +193,54 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         }
       );
 
-      console.log("🎟️ Enhanced tickets created:", enhancedTickets);
+      console.log("Enhanced tickets created:", enhancedTickets);
+
+      // Send email with tickets
+      try {
+        const isVirtual = eventLocation?.toLowerCase().includes('online') || 
+                         eventLocation?.toLowerCase().includes('virtual') || 
+                         eventLocation?.toLowerCase().includes('zoom');
+
+        const ticketsWithAccessCodes = enhancedTickets.map(ticket => ({
+          id: ticket.id,
+          orderId: ticket.orderId,
+          ticketType: ticket.ticketType,
+          qrCode: ticket.qrCode,
+          accessCode: ticket.qrCode.slice(-6)
+        }));
+
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        console.log("Sending ticket email...");
+        
+        const emailResponse = await supabase.functions.invoke('send-ticket-email', {
+          body: {
+            userEmail: user?.email,
+            userName: user?.user_metadata?.name || user?.email?.split('@')[0],
+            tickets: ticketsWithAccessCodes,
+            eventTitle: eventTitle,
+            eventDate: eventDate || new Date().toISOString(),
+            eventLocation: eventLocation || 'TBA',
+            isVirtual
+          }
+        });
+
+        if (emailResponse.error) {
+          console.error("Email send error:", emailResponse.error);
+        } else {
+          console.log("Ticket email sent successfully");
+        }
+      } catch (emailError) {
+        console.error("Email send error:", emailError);
+        // Continue even if email fails - don't break the user flow
+      }
 
       setTimeout(() => {
         onSuccess(enhancedTickets);
         setSuccess(false);
       }, 1500);
     } catch (err) {
-      console.error("💥 Checkout error:", err);
+      console.error("Checkout error:", err);
 
       let errorMessage = "Payment failed. Please try again.";
       if (err instanceof Error) {
