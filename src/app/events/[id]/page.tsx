@@ -255,11 +255,21 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
   const formatTime = (timeString: string | null) => {
     if (!timeString) return 'Time TBA';
-    return new Date(`1970-01-01T${timeString}`).toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
+    
+    // Parse the time string directly without creating a full Date object
+    const timeMatch = timeString.match(/(\d{2}):(\d{2})/);
+    if (!timeMatch) return 'Time TBA';
+    
+    const [, hours, minutes] = timeMatch;
+    const hour = parseInt(hours, 10);
+    const minute = parseInt(minutes, 10);
+    
+    // Format the time
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+    const displayMinute = minute.toString().padStart(2, '0');
+    
+    return `${displayHour}:${displayMinute} ${period}`;
   };
 
   const handleShare = () => {

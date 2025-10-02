@@ -12,6 +12,7 @@ type Slide = {
 
 type VideoSliderProps = {
   slides: Slide[];
+  mobileVideoSrc?: string; // New prop for mobile vertical video
   interval?: number;
   transitionDuration?: number;
   pauseOnHover?: boolean;
@@ -23,6 +24,7 @@ type VideoSliderProps = {
 
 const VideoSlider: React.FC<VideoSliderProps> = ({
   slides,
+  mobileVideoSrc,
   interval = 4000,
   transitionDuration = 0.4,
   pauseOnHover = false,
@@ -33,26 +35,41 @@ const VideoSlider: React.FC<VideoSliderProps> = ({
 }) => {
   const [current, setCurrent] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  // Local state for search input to ensure it's always controlled
+  const [isMobile, setIsMobile] = useState(false);
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const total = slides.length;
   const videoRefs = useRef<Array<HTMLVideoElement | null>>([]);
+  const mobileVideoRef = useRef<HTMLVideoElement | null>(null);
+
+  // Detect mobile screen size
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768); // md breakpoint
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Sync local state with prop
   useEffect(() => {
     setLocalSearchQuery(searchQuery);
   }, [searchQuery]);
 
+  // Desktop slider logic
   useEffect(() => {
-    if (total <= 1 || isPaused) return;
+    if (isMobile || total <= 1 || isPaused) return;
     const id = setInterval(() => {
       setCurrent((prev) => (prev + 1) % total);
     }, interval);
     return () => clearInterval(id);
-  }, [interval, total, isPaused]);
+  }, [interval, total, isPaused, isMobile]);
 
-  // Play active video, pause others
+  // Play active video for desktop slider
   useEffect(() => {
+    if (isMobile) return;
+    
     videoRefs.current.forEach((v, i) => {
       if (!v) return;
       if (i === current) {
@@ -65,37 +82,40 @@ const VideoSlider: React.FC<VideoSliderProps> = ({
         v.pause();
       }
     });
-  }, [current]);
+  }, [current, isMobile]);
 
-  // Handle search - Fixed to use local state and prevent empty searches
+  // Auto-play mobile video
+  useEffect(() => {
+    if (isMobile && mobileVideoRef.current) {
+      const playPromise = mobileVideoRef.current.play();
+      if (playPromise && typeof playPromise.then === "function") {
+        playPromise.catch(() => {});
+      }
+    }
+  }, [isMobile]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedQuery = localSearchQuery.trim();
     if (trimmedQuery && onSearch) {
-      console.log('Searching for:', trimmedQuery); // Debug log
       onSearch(trimmedQuery);
-    } else {
-      console.log('Search query is empty or onSearch is not provided'); // Debug log
     }
   };
 
-  // Fixed input change handler
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    setLocalSearchQuery(value); // Update local state immediately
+    setLocalSearchQuery(value);
     if (onSearchQueryChange) {
-      onSearchQueryChange(value); // Also update parent state
+      onSearchQueryChange(value);
     }
   };
 
-  // Handle popular search clicks - Fixed to use proper state management
   const handlePopularSearchClick = (term: string) => {
     setLocalSearchQuery(term);
     if (onSearchQueryChange) {
       onSearchQueryChange(term);
     }
     if (onSearch) {
-      console.log('Popular search clicked:', term); // Debug log
       onSearch(term);
     }
   };
@@ -109,36 +129,53 @@ const VideoSlider: React.FC<VideoSliderProps> = ({
   return (
     <div
       className="relative w-full h-screen overflow-hidden"
-      onMouseEnter={() => pauseOnHover && setIsPaused(true)}
-      onMouseLeave={() => pauseOnHover && setIsPaused(false)}
+      onMouseEnter={() => pauseOnHover && !isMobile && setIsPaused(true)}
+      onMouseLeave={() => pauseOnHover && !isMobile && setIsPaused(false)}
       style={{ backgroundColor: "black" }}
     >
-      <div
-        className="flex w-full h-full z-0"
-        style={trackStyle}
-        role="list"
-        aria-roledescription="carousel"
-      >
-        {slides.map((s, i) => (
-          <div
-            key={s.src + i}
-            className="w-full h-screen flex-shrink-0"
-            role="listitem"
-            aria-hidden={i !== current}
-          >
-            <VideoSlide
-              ref={(el) => {
-                videoRefs.current[i] = el;
-              }}
-              src={s.src}
-              poster={s.poster}
-              title={s.title}
-              onEnded={() => setCurrent((prev) => (prev + 1) % total)}
-              loop={s.loop ?? false}
-            />
-          </div>
-        ))}
-      </div>
+      {/* Mobile: Single looping vertical video */}
+      {isMobile && mobileVideoSrc ? (
+        <div className="w-full h-full">
+          <video
+            ref={mobileVideoRef}
+            src={mobileVideoSrc}
+            muted
+            loop
+            playsInline
+            autoPlay
+            className="w-full h-full object-cover"
+            style={{ objectPosition: 'center' }}
+          />
+        </div>
+      ) : (
+        /* Desktop: Slider with multiple videos */
+        <div
+          className="flex w-full h-full z-0"
+          style={trackStyle}
+          role="list"
+          aria-roledescription="carousel"
+        >
+          {slides.map((s, i) => (
+            <div
+              key={s.src + i}
+              className="w-full h-screen flex-shrink-0"
+              role="listitem"
+              aria-hidden={i !== current}
+            >
+              <VideoSlide
+                ref={(el) => {
+                  videoRefs.current[i] = el;
+                }}
+                src={s.src}
+                poster={s.poster}
+                title={s.title}
+                onEnded={() => setCurrent((prev) => (prev + 1) % total)}
+                loop={s.loop ?? false}
+              />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Centered Overlay Content */}
       <div className="absolute inset-0 flex items-center justify-center z-20">
@@ -153,7 +190,7 @@ const VideoSlider: React.FC<VideoSliderProps> = ({
             </p>
           </div>
 
-          {/* Search Bar - Fixed with proper value binding */}
+          {/* Search Bar */}
           <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
             <div className="relative group">
               <div className="absolute inset-y-0 left-0 flex items-center pl-6 pointer-events-none">
@@ -163,7 +200,7 @@ const VideoSlider: React.FC<VideoSliderProps> = ({
                 type="text"
                 className="block w-full rounded-2xl border-2 border-gray-200 bg-white/95 backdrop-blur-sm pl-14 pr-32 py-4 text-lg placeholder-gray-500 focus:border-blue-400 focus:ring-4 focus:ring-blue-500/20 focus:bg-white transition-all duration-300 shadow-lg hover:shadow-xl"
                 placeholder="Search events, organizers, venues..."
-                value={localSearchQuery} // Use local state for immediate updates
+                value={localSearchQuery}
                 onChange={handleInputChange}
               />
               <div className="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -198,21 +235,23 @@ const VideoSlider: React.FC<VideoSliderProps> = ({
         </div>
       </div>
 
-      {/* Video Navigation Dots */}
-      <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-2 z-30">
-        {slides.map((_, index) => (
-          <button
-            key={index}
-            className={`w-3 h-3 rounded-full transition-all duration-200 ${
-              index === current 
-                ? 'bg-white shadow-lg' 
-                : 'bg-white/40 hover:bg-white/60'
-            }`}
-            onClick={() => setCurrent(index)}
-            aria-label={`Go to slide ${index + 1}`}
-          />
-        ))}
-      </div>
+      {/* Video Navigation Dots - Hide on mobile */}
+      {!isMobile && (
+        <div className="absolute bottom-6 left-1/2 transform -translate-x-1/2 flex space-x-2 z-30">
+          {slides.map((_, index) => (
+            <button
+              key={index}
+              className={`w-3 h-3 rounded-full transition-all duration-200 ${
+                index === current 
+                  ? 'bg-white shadow-lg' 
+                  : 'bg-white/40 hover:bg-white/60'
+              }`}
+              onClick={() => setCurrent(index)}
+              aria-label={`Go to slide ${index + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

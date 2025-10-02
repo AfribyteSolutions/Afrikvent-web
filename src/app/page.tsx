@@ -10,6 +10,7 @@ import PromotionalBannerSection from "@/components/promotionbanner/PromotionBann
 import SearchResults from "@/components/event/SearchResults";
 import EventFilters, { FilterState } from "@/components/event/EventFilters";
 
+// Desktop slides
 const slides = [
   { src: "/videos/video1.mp4" },
   { src: "/videos/video2.mp4" },
@@ -20,26 +21,8 @@ const slides = [
   { src: "/videos/video7.mp4" },
 ];
 
-// Example promotional banners (replace with API later)
-const examplePromotionalBanners = [
-  {
-    id: "banner-1",
-    imageUrl: "/images/promotions/tech-conference-banner.jpg",
-    altText: "TechCorp 2024 Conference - Innovation Summit",
-    href: "https://techcorp.com/conference-2024",
-    openInNewTab: true,
-    overlayText: {
-      title: "TechCorp Innovation Summit 2024",
-      subtitle: "Join 5000+ developers & entrepreneurs",
-      buttonText: "Register Now",
-    },
-    height: 250,
-    isActive: true,
-    priority: 10,
-    startDate: "2025-01-01",
-    endDate: "2025-12-31",
-  },
-];
+// Mobile vertical video (reel format)
+const mobileVideoSrc = "/videos/mobile-reel.mp4"; // Replace with your actual mobile video path
 
 export default function HomePage() {
   const router = useRouter();
@@ -55,7 +38,6 @@ export default function HomePage() {
     dateRange: ""
   });
 
-  // Hooks fetching from Supabase using the correct Event type
   const {
     events: recommendedEvents,
     loading: recommendedLoading,
@@ -74,30 +56,21 @@ export default function HomePage() {
     error: upcomingError,
   } = useUpcomingEvents(12);
 
-  // Search functionality - filter from existing events
   const performSearch = (searchFilters: FilterState) => {
-    console.log('performSearch called with filters:', searchFilters); // Debug log
-    
     setIsSearching(true);
     setSearchError(null);
 
-    // Combine all loaded events
     const allEvents = [
       ...recommendedEvents,
       ...sponsoredEvents,
       ...upcomingEvents
     ].filter((event, index, self) => 
-      // Remove duplicates by id
       index === self.findIndex(e => e.id === event.id)
     );
 
-    console.log('Total events to search through:', allEvents.length); // Debug log
-
-    // Filter events based on search criteria
     const filteredEvents = allEvents.filter(event => {
       let matches = true;
 
-      // Search query filter
       if (searchFilters.search) {
         const searchTerm = searchFilters.search.toLowerCase();
         const eventMatches = (
@@ -106,21 +79,17 @@ export default function HomePage() {
           event.location?.toLowerCase().includes(searchTerm) ||
           event.organizer?.toLowerCase().includes(searchTerm)
         );
-        console.log(`Event "${event.title}" matches search "${searchTerm}":`, eventMatches); // Debug log
         matches = matches && eventMatches;
       }
 
-      // Location filter
       if (searchFilters.location) {
         matches = matches && event.location?.toLowerCase().includes(searchFilters.location.toLowerCase());
       }
 
-      // Price filter
       if (searchFilters.priceRange) {
         matches = matches && filterByPrice(event, searchFilters.priceRange);
       }
 
-      // Date filter
       if (searchFilters.dateRange) {
         matches = matches && filterByDate(event, searchFilters.dateRange);
       }
@@ -128,14 +97,11 @@ export default function HomePage() {
       return matches;
     });
 
-    console.log('Filtered events count:', filteredEvents.length); // Debug log
-
     setSearchResults(filteredEvents);
     setShowSearchResults(true);
     setIsSearching(false);
   };
 
-  // Helper function to filter by price
   const filterByPrice = (event: Event, priceRange: string) => {
     const eventPrice = parseFloat(event.price?.toString() || '0');
     
@@ -153,7 +119,6 @@ export default function HomePage() {
     }
   };
 
-  // Helper function to filter by date
   const filterByDate = (event: Event, dateRange: string) => {
     const eventDate = new Date(event.date);
     const today = new Date();
@@ -161,7 +126,6 @@ export default function HomePage() {
     const weekFromNow = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
     const monthFromNow = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-    // Get weekend dates (Saturday and Sunday)
     const startOfWeek = new Date(today);
     const day = startOfWeek.getDay();
     const saturday = new Date(startOfWeek.getTime() + (6 - day) * 24 * 60 * 60 * 1000);
@@ -189,10 +153,7 @@ export default function HomePage() {
   };
 
   const handleSearch = (query: string) => {
-    console.log('handleSearch called with:', query); // Debug log
-    
     if (!query.trim()) {
-      console.log('Empty query, hiding search results'); // Debug log
       setShowSearchResults(false);
       setSearchQuery("");
       setFilters(prev => ({ ...prev, search: "" }));
@@ -202,28 +163,22 @@ export default function HomePage() {
     const trimmedQuery = query.trim();
     const searchFilters = { ...filters, search: trimmedQuery };
     
-    console.log('Updated filters:', searchFilters); // Debug log
-    
     setFilters(searchFilters);
     setSearchQuery(trimmedQuery);
     performSearch(searchFilters);
   };
 
-  // Handle filter changes from EventFilters component
   const handleFilterChange = (newFilters: FilterState) => {
     setFilters(newFilters);
     
-    // If there's any filter applied, perform search
     if (newFilters.search || newFilters.location || newFilters.priceRange || newFilters.dateRange) {
       performSearch(newFilters);
     } else {
-      // If all filters are cleared, hide search results
       setShowSearchResults(false);
       setSearchResults([]);
     }
   };
 
-  // Clear search and return to normal view
   const clearSearch = () => {
     setSearchQuery("");
     setSearchResults([]);
@@ -237,7 +192,6 @@ export default function HomePage() {
     });
   };
 
-  // Handle event clicks - now uses the correct Event type with string ID
   const handleEventClick = (event: Event) => {
     router.push(`/events/${event.id}`);
   };
@@ -246,7 +200,6 @@ export default function HomePage() {
     router.push("/events");
   };
 
-  // Skeleton loader for carousels - Force light theme
   const CarouselSkeleton = ({ title }: { title: string }) => (
     <section className="py-16 bg-white text-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -272,7 +225,6 @@ export default function HomePage() {
     </section>
   );
 
-  // Error UI for carousels - Force light theme
   const CarouselError = ({ error, title }: { error: string; title: string }) => (
     <section className="py-16 bg-white text-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -295,7 +247,6 @@ export default function HomePage() {
     </section>
   );
 
-  // Empty state component - Force light theme
   const EmptySection = ({ title, message }: { title: string; message: string }) => (
     <section className="py-16 bg-white text-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -312,7 +263,8 @@ export default function HomePage() {
       {/* Hero Section with Video Slider */}
       <section className="w-full h-screen">
         <VideoSlider 
-          slides={slides} 
+          slides={slides}
+          mobileVideoSrc={mobileVideoSrc} // Pass mobile video here
           interval={4000} 
           onSearch={handleSearch}
           searchQuery={searchQuery}
@@ -321,17 +273,12 @@ export default function HomePage() {
         />
       </section>
 
-      {/* Conditional Content: Search Results or Normal Sections */}
+      {/* Rest of the content remains the same */}
       {showSearchResults ? (
         <div className="bg-white">
-          {/* Event Filters */}
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-            <EventFilters
-              onFilterChange={handleFilterChange}
-            />
+            <EventFilters onFilterChange={handleFilterChange} />
           </div>
-          
-          {/* Search Results */}
           <SearchResults
             query={filters.search || searchQuery}
             results={searchResults}
@@ -344,7 +291,6 @@ export default function HomePage() {
         </div>
       ) : (
         <>
-          {/* Recommended Events */}
           {recommendedLoading ? (
             <CarouselSkeleton title="Recommended Events" />
           ) : recommendedError ? (
@@ -364,7 +310,6 @@ export default function HomePage() {
             />
           )}
 
-          {/* Sponsored Events */}
           {sponsoredLoading ? (
             <CarouselSkeleton title="Sponsored Events" />
           ) : sponsoredError ? (
@@ -379,7 +324,6 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          {/* Upcoming Events */}
           {upcomingLoading ? (
             <CarouselSkeleton title="Upcoming Events" />
           ) : upcomingError ? (
@@ -394,7 +338,6 @@ export default function HomePage() {
             </div>
           ) : null}
 
-          {/* Call to Action */}
           <section className="py-16 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
             <div className="container mx-auto px-4 text-center">
               <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Find Your Next Event?</h2>
@@ -411,15 +354,6 @@ export default function HomePage() {
           </section>
         </>
       )}
-      
-      {/* Promotional Banner */}
-      {/* <div className="bg-white">
-        <PromotionalBannerSection
-          maxBanners={1}
-          className="bg-white"
-          banners={examplePromotionalBanners}
-        />
-      </div> */}
     </main>
   );
 }
