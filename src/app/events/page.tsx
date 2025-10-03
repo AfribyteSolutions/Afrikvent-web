@@ -27,6 +27,7 @@ export default function MyEvents() {
   const [allEvents, setAllEvents] = useState<TransformedEvent[]>([]);
   const [filteredEvents, setFilteredEvents] = useState<TransformedEvent[]>([]);
   const [userTickets, setUserTickets] = useState<UserTicket[]>([]);
+  const [deduplicatedTicketCount, setDeduplicatedTicketCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<FilterState>({
@@ -45,7 +46,6 @@ export default function MyEvents() {
         return;
       }
       if (data?.user) {
-        // Transform to match TicketUser interface (name is required, not optional)
         setCurrentUser({
           id: data.user.id,
           name: (data.user.user_metadata?.name as string) || data.user.email || "User",
@@ -58,7 +58,7 @@ export default function MyEvents() {
     getCurrentUser();
   }, []);
 
-  // Fetch events - Transform to match the TransformedEvent type
+  // Fetch events
   useEffect(() => {
     const fetchEvents = async () => {
       try {
@@ -80,21 +80,17 @@ export default function MyEvents() {
           throw eventsError;
         }
 
-        // Define the nested structure type for better type safety
         interface EventWithRelations extends EventRow {
           TICKET_TYPES: TicketTypeRow[];
           USERS: { name: string; email: string }[];
         }
 
-        // Transform to match the TransformedEvent interface from eventService
         const transformedEvents: TransformedEvent[] = await Promise.all(
           (eventsData || []).map(async (row: EventWithRelations) => {
-            // Get organizer name from joined USERS data
             const userName = row.USERS && row.USERS.length > 0 
               ? row.USERS[0].name 
               : 'Event Organizer';
 
-            // Fetch organization data separately to avoid join issues
             let organizationName = null;
             try {
               const { data: kycData } = await supabase
@@ -105,32 +101,27 @@ export default function MyEvents() {
               
               organizationName = kycData?.organization_name || null;
             } catch (error) {
-              // Silently handle if no KYC data exists
               console.log('No organization data found for organizer:', row.organizer_id);
             }
 
-            // Use organization name if available, otherwise fall back to user name
             const organizerName = organizationName || userName;
 
-            // Get minimum ticket price from joined TICKET_TYPES data
             const minPrice = row.TICKET_TYPES && row.TICKET_TYPES.length > 0
               ? Math.min(...row.TICKET_TYPES.map(ticket => ticket.price || 0))
               : 0;
 
-            // Get primary image
             const primaryImage = row.images && row.images.length > 0 ? row.images[0] : '/placeholder-event.jpg';
 
-            // Transform ticket types to match your TicketOption interface
             const ticketOptions = row.TICKET_TYPES?.map(ticket => ({
               type: 'Regular' as const,
-              price: String(ticket.price || 0), // ✅ Ensure price is a string
-              currency: 'GHS',
-              currency_symbol: '₵', // ✅ Add currency symbol
+              price: String(ticket.price || 0),
+              currency: 'CFA',
+              currency_symbol: 'CFA',
               availability: 'Available'
             })) || [];
 
             return {
-              id: row.id.toString(), // Convert to string to match Event interface
+              id: row.id.toString(),
               title: row.title,
               date: row.event_date || 'TBD',
               time: row.start_time || 'TBD',
@@ -138,15 +129,15 @@ export default function MyEvents() {
               location: row.address || row.location_name || 'Location TBD',
               image: primaryImage,
               organizer: organizerName || 'Event Organizer',
-              organizer_name: organizerName || 'Event Organizer', // Add this required property
-              organization_name: organizationName || undefined, // Add organization name from ORGANIZER_KYC
+              organizer_name: organizerName || 'Event Organizer',
+              organization_name: organizationName || undefined,
               description: row.description || 'No description available',
               ticketOptions: ticketOptions,
-              tags: [], // You might want to add tags to your database
+              tags: [],
               isSponsored: row.is_sponsored || false,
-              price: minPrice > 0 ? String(minPrice) : 'Free', // ✅ Ensure price is a string
-              currency: 'GHS', // ✅ Add required currency
-              currency_symbol: '₵', // ✅ Add required currency symbol
+              price: minPrice > 0 ? String(minPrice) : 'Free',
+              currency: 'CFA',
+              currency_symbol: 'CFA',
             };
           })
         );
@@ -164,13 +155,11 @@ export default function MyEvents() {
     fetchEvents();
   }, []);
 
-  // New useEffect to handle filtering logic
+  // Apply filters
   useEffect(() => {
-    // A function to apply all filters to the event list
     const applyFilters = () => {
       let tempEvents = [...allEvents];
 
-      // Filter by search term
       if (filters.search) {
         const searchTerm = filters.search.toLowerCase();
         tempEvents = tempEvents.filter(
@@ -181,14 +170,12 @@ export default function MyEvents() {
         );
       }
 
-      // Filter by location
       if (filters.location) {
         tempEvents = tempEvents.filter(
           (event) => event.location.toLowerCase().includes(filters.location.toLowerCase())
         );
       }
 
-      // Filter by price range
       if (filters.priceRange) {
         tempEvents = tempEvents.filter((event) => {
           const isFree = event.price.toLowerCase().includes('free');
@@ -196,7 +183,6 @@ export default function MyEvents() {
         });
       }
 
-      // Filter by date range (simplified for this example)
       if (filters.dateRange) {
           const today = new Date();
           tempEvents = tempEvents.filter((event) => {
@@ -220,18 +206,21 @@ export default function MyEvents() {
     };
 
     applyFilters();
-  }, [filters, allEvents]); // Re-run this effect whenever filters or allEvents change
+  }, [filters, allEvents]);
 
-  // Fetch user tickets when switching to tickets tab
+  // Fetch user tickets ONLY when tickets tab is active
   useEffect(() => {
     const fetchUserTickets = async () => {
-      if (!currentUser || activeTab !== "tickets") return;
+      if (!currentUser || activeTab !== "tickets") {
+        return;
+      }
 
       try {
         setLoading(true);
         setError(null);
 
-        // Fetch tickets for the user
+        console.log('=== FETCHING TICKETS ===');
+        
         const { data: ticketsData, error: ticketsError } = await supabase
           .from("TICKETS")
           .select(`
@@ -249,23 +238,26 @@ export default function MyEvents() {
           throw ticketsError;
         }
 
-        // Define the nested structure type for better type safety
+        console.log('Raw tickets fetched:', ticketsData?.length);
+
         interface TicketWithRelations extends TicketRow {
           TICKET_TYPES: TicketTypeRow & { 
             EVENTS: EventRow 
           };
         }
 
+        // Transform ALL tickets - let TicketSection handle deduplication
         const transformedTickets: UserTicket[] = (ticketsData || []).map(
           (ticket: TicketWithRelations) => {
             const ticketType = ticket.TICKET_TYPES;
             const event = ticketType?.EVENTS;
 
             return {
-              id: ticket.id.toString(), // Convert to string to match UserTicket interface
-              eventId: event?.id.toString() || "0", // Convert to string
+              id: ticket.id.toString(),
+              eventId: event?.id.toString() || "0",
               eventTitle: event?.title || "Unknown Event",
               eventDate: event?.event_date || "",
+              eventTime: event?.start_time || "",
               eventLocation: event?.location_name || "",
               ticketType: ticketType?.name || "General",
               quantity: parseInt(ticket.quantity || "1"),
@@ -273,14 +265,18 @@ export default function MyEvents() {
               purchaseDate: ticket.created_at,
               status: (ticket.ticket_status as UserTicket["status"]) || "confirmed",
               userId: ticket.user_id || "",
+              qrCodeData: ticket.qr_code_data || undefined,
             };
           }
         );
 
+        console.log(`Sending ${transformedTickets.length} tickets to TicketSection (will deduplicate there)`);
         setUserTickets(transformedTickets);
+        
       } catch (err) {
         console.error("Error fetching user tickets:", err);
         setError("Failed to load tickets");
+        setUserTickets([]);
       } finally {
         setLoading(false);
       }
@@ -293,18 +289,15 @@ export default function MyEvents() {
     router.push(`/events/${event.id}`);
   };
 
-  // Tab switching function
   const handleTabChange = (tab: "events" | "tickets") => {
     setActiveTab(tab);
     setError(null);
   };
 
-  // Handle ticket sub-tab changes
   const handleTicketSubTabChange = (subTab: 'active' | 'expired') => {
     console.log('Ticket sub-tab changed to:', subTab);
   };
 
-  // Add a function to update the filters state from the child component
   const handleFilterChange = (newFilters: FilterState) => {
     setFilters(newFilters);
   };
@@ -331,7 +324,7 @@ export default function MyEvents() {
         {/* Page Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">All Events</h1>
-          <p className="text-gray-600 mt-2">view all events and Check your tickets</p>
+          <p className="text-gray-600 mt-2">View all events and Check your tickets</p>
         </div>
 
         {/* Tab Navigation */}
@@ -360,7 +353,7 @@ export default function MyEvents() {
             >
               My Tickets
               <span className="ml-2 bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs">
-                {userTickets.length}
+                {deduplicatedTicketCount}
               </span>
             </button>
           </div>
@@ -369,7 +362,6 @@ export default function MyEvents() {
         {/* Content */}
         {activeTab === "events" ? (
           <div className="relative z-10">
-            {/* Add the new filter component here with high z-index */}
             <div className="relative z-50">
               <EventFilters onFilterChange={handleFilterChange} />
             </div>
@@ -415,6 +407,7 @@ export default function MyEvents() {
               userTickets={userTickets}
               user={currentUser || undefined}
               onTabChange={handleTicketSubTabChange}
+              onTicketCountChange={setDeduplicatedTicketCount}
               isLoading={loading}
               error={error}
               userId={currentUser?.id}

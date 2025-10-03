@@ -72,6 +72,36 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   const [isSharing, setIsSharing] = useState(false);
   const [cardColors, setCardColors] = useState({ bg: '#0BBCD6', accent: '#FFFFFF' });
 
+// Add this helper function at the top of your TicketCard component (after imports)
+const getEventTime = (time?: string): string => {
+  if (!time || time === "TBD") return "TBD";
+  
+  // If it's already in HH:MM format, return as is
+  if (time.match(/^\d{2}:\d{2}$/)) return time;
+  
+  if (time.includes(":")) {
+    try {
+      // Extract time part if it's a full datetime string
+      const timePart = time.includes("T") ? time.split("T")[1] : time;
+      const timeOnly = timePart.split(".")[0]; // Remove milliseconds if present
+      
+      // Parse hours and minutes directly without creating a Date object
+      const [hours, minutes] = timeOnly.split(":").map(str => parseInt(str, 10));
+      
+      // Format manually to avoid timezone issues
+      const hour12 = hours % 12 || 12;
+      const ampm = hours >= 12 ? "PM" : "AM";
+      const minuteStr = minutes.toString().padStart(2, "0");
+      
+      return `${hour12}:${minuteStr} ${ampm}`;
+    } catch {
+      return "TBD";
+    }
+  }
+  
+  return "TBD";
+};
+
   // Set random colors based on ticket ID for consistency
   useEffect(() => {
     const colors = generateRandomColor(ticket.id);
@@ -171,7 +201,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
               {formatTicketDate(ticket.eventDate)}
             </div>
             <div className="text-sm font-bold">
-              {formatTicketTime(ticket.eventDate)}
+              {getEventTime(ticket.eventTime)}
             </div>
           </div>
           

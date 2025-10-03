@@ -21,6 +21,7 @@ export interface UserTicket {
   status: 'confirmed' | 'pending' | 'cancelled';
   userId?: string;
   qrCodeData?: string; // ADDED: QR code data from database
+  eventTime?: string;
 }
 
 export interface EnhancedTicket extends UserTicket {

@@ -21,9 +21,10 @@ interface TicketFilterState {
 }
 
 interface TicketsSectionProps {
-  userTickets?: UserTicket[]; // optional prop-level tickets (client-provided)
+  userTickets?: UserTicket[];
   user?: TicketUser;
   onTabChange?: (tab: "active" | "expired") => void;
+  onTicketCountChange?: (count: number) => void;
   isLoading?: boolean;
   error?: string | null;
   userId?: string;
@@ -38,47 +39,28 @@ const TICKET_TEMPLATES = [
   { id: "random", name: "Random" },
 ];
 
-/**
- * Convert a UserTicket -> EnhancedTicket (only fields that exist in EnhancedTicket)
- * Fixed: Properly determine active/expired status based on event date
- * Fixed: Use actual qrCodeData from database instead of generating fake data
- */
-/**
- * Convert a UserTicket -> EnhancedTicket with proper QR code handling
- * Uses short database code for QR generation but keeps full data available
- */
 const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
-  // Ensure eventDate is an ISO string
   const eventDateIso = ticket.eventDate || new Date().toISOString();
-  
-  // Create a simple deterministic orderId
   const orderId = `ORD-${ticket.id.toString().padStart(6, "0")}`;
   
-  // Use the short database QR code for scanning (what organizers will use)
   let qrCode: string;
-  
   if (ticket.qrCodeData && ticket.qrCodeData.trim() !== '') {
-    // Use the short database QR code (e.g., "rTPRfg")
     qrCode = ticket.qrCodeData;
-    console.log(`Using database short QR code for ticket ${ticket.id}: ${qrCode}`);
   } else {
-    // Fallback: generate a short code if none exists
     qrCode = `TKT${ticket.id.toString().padStart(3, "0")}`;
-    console.log(`Generated fallback short QR code for ticket ${ticket.id}: ${qrCode}`);
   }
 
-  // Determine active/expired based on event date
   const eventDate = new Date(eventDateIso);
   const now = new Date();
   const isEventInFuture = eventDate.getTime() > now.getTime();
   const ticketStatus = isEventInFuture ? "active" : "expired";
 
-  // Create enhanced ticket with short QR code
   const enhanced: EnhancedTicket = {
     id: ticket.id.toString(),
     eventId: ticket.eventId?.toString() || "",
     eventTitle: ticket.eventTitle || "Untitled Event",
     eventDate: eventDateIso,
+    eventTime: ticket.eventTime || "TBD",
     eventLocation: ticket.eventLocation || "Location TBA",
     ticketType: ticket.ticketType || "General Admission",
     quantity: ticket.quantity,
@@ -86,23 +68,18 @@ const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
     purchaseDate: ticket.purchaseDate,
     status: ticket.status,
     userId: ticket.userId ?? "",
-    qrCode, // Short code for QR generation (e.g., "rTPRfg")
+    qrCode,
     orderId,
     ticketStatus,
-    qrCodeData: ticket.qrCodeData, // Keep original for reference
-    // Add validation code as a separate field for easy access
+    qrCodeData: ticket.qrCodeData,
     validationCode: qrCode,
   };
 
   return enhanced;
 };
 
-/**
- * Filtering helper - uses computed values from eventDate string (no new fields on EnhancedTicket)
- */
 const filterTickets = (tickets: EnhancedTicket[], filters: TicketFilterState): EnhancedTicket[] => {
   return tickets.filter((ticket) => {
-    // Search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
       const matchesSearch =
@@ -113,7 +90,6 @@ const filterTickets = (tickets: EnhancedTicket[], filters: TicketFilterState): E
       if (!matchesSearch) return false;
     }
 
-    // Date range filter (compute from ticket.eventDate string)
     if (filters.dateRange && filters.dateRange !== "all") {
       const now = new Date();
       const eventDate = ticket.eventDate ? new Date(ticket.eventDate) : new Date(0);
@@ -145,53 +121,29 @@ const filterTickets = (tickets: EnhancedTicket[], filters: TicketFilterState): E
   });
 };
 
-/**
- * Remove duplicate tickets based on ticket ID
- * Enhanced with better logging and multiple deduplication strategies
- */
 const deduplicateTickets = (tickets: UserTicket[]): UserTicket[] => {
-  console.log(`Starting deduplication with ${tickets.length} tickets`);
-  
-  // Log all ticket IDs to see what we're working with
-  const ticketIds = tickets.map(t => t.id);
-  console.log('All ticket IDs:', ticketIds);
-  
-  // Count duplicates
-  const idCounts = ticketIds.reduce((acc, id) => {
-    acc[id] = (acc[id] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  
-  const duplicateIds = Object.entries(idCounts).filter(([_, count]) => count > 1);
-  if (duplicateIds.length > 0) {
-    console.warn('Found duplicate ticket IDs:', duplicateIds);
-  }
-
-  // Primary deduplication by ID
   const seenIds = new Set<string>();
   const deduplicatedById = tickets.filter((ticket) => {
     const key = ticket.id.toString();
     if (seenIds.has(key)) {
-      console.warn(`Duplicate ticket ID found: ${key}, skipping...`);
       return false;
     }
     seenIds.add(key);
     return true;
   });
 
-  // Secondary deduplication by event + user + ticket type (in case IDs differ but tickets are logically the same)
   const seenCombos = new Set<string>();
   const finalDeduplication = deduplicatedById.filter((ticket) => {
     const comboKey = `${ticket.eventId}-${ticket.userId}-${ticket.ticketType}-${ticket.quantity}-${ticket.totalPrice}`;
     if (seenCombos.has(comboKey)) {
-      console.warn(`Duplicate ticket combo found: ${comboKey}, skipping ticket ${ticket.id}`);
+      console.log(`Duplicate ticket combo: ${comboKey}, skipping ticket ${ticket.id}`);
       return false;
     }
     seenCombos.add(comboKey);
     return true;
   });
 
-  console.log(`Deduplication complete: ${tickets.length} -> ${finalDeduplication.length} tickets`);
+  console.log(`TicketSection deduplication: ${tickets.length} → ${finalDeduplication.length} tickets`);
   return finalDeduplication;
 };
 
@@ -199,48 +151,44 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
   userTickets: propUserTickets = [],
   user,
   onTabChange,
+  onTicketCountChange,
   isLoading: propIsLoading = false,
   error: propError = null,
   userId,
 }) => {
-  // UI state
   const [ticketFilter, setTicketFilter] = useState<"active" | "expired">("active");
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [selectedTemplate, setSelectedTemplate] = useState<string>("random");
-  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
-
-  // DB state (used only when propUserTickets is empty but userId is provided)
   const [dbUserTickets, setDbUserTickets] = useState<UserTicket[]>([]);
+  
+  const [viewMode, setViewMode] = useState<"grid" | "list">(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768 ? "list" : "grid";
+    }
+    return "grid";
+  });
   const [dbLoading, setDbLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [copyFeedback, setCopyFeedback] = useState("");
 
-  // Decide data source - only fetch from DB if no tickets provided AND userId exists
   const shouldFetchFromDb = Boolean(userId) && propUserTickets.length === 0;
   const rawUserTickets = shouldFetchFromDb ? dbUserTickets : propUserTickets;
   
-  // Log the data source being used
-  console.log('TicketsSection data source:', {
-    shouldFetchFromDb,
-    propUserTicketsCount: propUserTickets.length,
-    dbUserTicketsCount: dbUserTickets.length,
-    rawUserTicketsCount: rawUserTickets.length,
-    userId: userId || 'none'
-  });
-  
-  // Fix: Deduplicate tickets
   const userTickets = useMemo(() => {
-    console.log(`Processing ${rawUserTickets.length} raw tickets for deduplication`);
     const deduplicated = deduplicateTickets(rawUserTickets);
-    console.log(`After deduplication: ${deduplicated.length} tickets`);
     return deduplicated;
   }, [rawUserTickets]);
+
+  useEffect(() => {
+    if (onTicketCountChange) {
+      onTicketCountChange(userTickets.length);
+    }
+  }, [userTickets.length, onTicketCountChange]);
   
   const isLoading = shouldFetchFromDb ? dbLoading : propIsLoading;
   const error = shouldFetchFromDb ? dbError : propError;
 
-  // Fetch from Supabase when needed
   useEffect(() => {
     const fetchUserTickets = async (): Promise<void> => {
       if (!shouldFetchFromDb || !userId) return;
@@ -249,10 +197,9 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
         setDbLoading(true);
         setDbError(null);
 
-        // FIXED: Include qr_code_data in the ticket selection
         const { data: tickets, error: ticketsError } = await supabase
           .from("TICKETS")
-          .select("*, qr_code_data") // FIXED: Make sure to select the QR code data
+          .select("*, qr_code_data")
           .eq("user_id", userId)
           .order("created_at", { ascending: false });
 
@@ -266,10 +213,8 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
           return;
         }
 
-        // Get unique ticket type IDs
         const ticketTypeIds = [...new Set(tickets.map(t => t.ticket_type_id).filter(Boolean))];
         
-        // Get ticket types with events
         const { data: ticketTypes, error: typesError } = await supabase
           .from("TICKET_TYPES")
           .select(`
@@ -280,7 +225,8 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
               id,
               title,
               event_date,
-              location_name
+              location_name,
+              start_time
             )
           `)
           .in("id", ticketTypeIds);
@@ -290,13 +236,25 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
           throw typesError;
         }
 
-        // Create a map for quick lookup
-        const typeMap = new Map();
+        interface EventData {
+          id?: number;
+          title?: string;
+          event_date?: string;
+          location_name?: string;
+          start_time?: string;
+        }
+
+        interface TypeData {
+          name: string;
+          event: EventData;
+        }
+
+        const typeMap = new Map<number, TypeData>();
         ticketTypes?.forEach(type => {
           if (type.EVENTS && !Array.isArray(type.EVENTS)) {
             typeMap.set(type.id, {
-              name: type.name,
-              event: type.EVENTS
+              name: type.name || "General",
+              event: type.EVENTS as EventData
             });
           }
         });
@@ -306,7 +264,6 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
             const typeData = typeMap.get(ticket.ticket_type_id);
             
             if (!typeData) {
-              console.warn(`No type data found for ticket ${ticket.id}`);
               return null;
             }
 
@@ -315,6 +272,7 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
               eventId: typeData.event.id?.toString() ?? "",
               eventTitle: typeData.event.title ?? "Unknown Event",
               eventDate: typeData.event.event_date ?? "",
+              eventTime: typeData.event.start_time ?? "TBD",
               eventLocation: typeData.event.location_name ?? "",
               ticketType: typeData.name ?? "General",
               quantity: parseInt(ticket.quantity ?? "1", 10),
@@ -322,15 +280,13 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
               purchaseDate: ticket.created_at ?? new Date().toISOString(),
               status: (ticket.ticket_status as UserTicket["status"]) ?? "confirmed",
               userId: ticket.user_id ?? "",
-              qrCodeData: ticket.qr_code_data ?? undefined, // FIXED: Include QR code data
+              qrCodeData: ticket.qr_code_data ?? undefined,
             };
 
             return mapped;
           })
           .filter((ticket): ticket is UserTicket => ticket !== null);
 
-        console.log(`Transformed ${transformedTickets.length} tickets with QR codes:`, 
-          transformedTickets.map(t => ({ id: t.id, qrCodeData: t.qrCodeData })));
         setDbUserTickets(transformedTickets);
       } catch (err) {
         console.error("Error fetching user tickets:", err);
@@ -343,41 +299,34 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
     fetchUserTickets();
   }, [userId, shouldFetchFromDb]);
 
-  // Convert to EnhancedTicket (stable mapping)
   const enhancedTickets = useMemo(() => {
-    const enhanced = userTickets.map(enhanceTicket);
-    console.log(`Enhanced ${enhanced.length} tickets with QR codes:`, 
-      enhanced.map(t => ({ 
-        id: t.id, 
-        eventTitle: t.eventTitle, 
-        eventDate: t.eventDate, 
-        ticketStatus: t.ticketStatus,
-        qrCode: t.qrCode.substring(0, 50) + '...' // Log first 50 chars of QR code
-      })));
-    return enhanced;
+    return userTickets.map(enhanceTicket);
   }, [userTickets]);
 
-  // Prepare filtered tickets based on UI filters
   const filteredTickets = useMemo(() => {
     const statusFiltered = enhancedTickets.filter((t) => t.ticketStatus === ticketFilter);
-    console.log(`After status filter (${ticketFilter}): ${statusFiltered.length} tickets`);
-    
-    const finalFiltered = filterTickets(statusFiltered, {
+    return filterTickets(statusFiltered, {
       search: searchTerm,
       dateRange: dateFilter,
       status: ticketFilter,
     });
-    
-    console.log(`After all filters: ${finalFiltered.length} tickets`);
-    return finalFiltered;
   }, [enhancedTickets, ticketFilter, searchTerm, dateFilter]);
 
-  // Keep parent informed
   useEffect(() => {
     if (onTabChange) onTabChange(ticketFilter);
   }, [ticketFilter, onTabChange]);
 
-  // Actions
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setViewMode("list");
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
   const handleDownload = async (ticket: EnhancedTicket) => {
     console.log("Downloading ticket:", ticket.orderId);
     alert(`Downloading ticket ${ticket.orderId} for ${ticket.eventTitle}`);
@@ -412,25 +361,19 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
     alert(`Viewing details for ticket: ${ticket.orderId}\nEvent: ${ticket.eventTitle}\nDate: ${new Date(ticket.eventDate).toLocaleDateString()}\nStatus: ${ticket.ticketStatus}\nQR Code: ${ticket.qrCode.substring(0, 20)}...`);
   };
 
-  // Derive counts for UI
   const activeTickets = enhancedTickets.filter((t) => t.ticketStatus === "active");
   const expiredTickets = enhancedTickets.filter((t) => t.ticketStatus === "expired");
 
-  console.log(`Active tickets: ${activeTickets.length}, Expired tickets: ${expiredTickets.length}`);
-
-  // Loading state
   if (isLoading) {
     return (
       <div className="space-y-6 p-6">
         <div className="flex justify-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
         </div>
-
         <div className="text-center">
           <div className="text-lg font-semibold text-gray-900 mb-2">Loading Your Tickets</div>
           <div className="text-gray-600">Please wait while we fetch your tickets...</div>
         </div>
-
         <div className={`grid ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1"} gap-6`}>
           {[1, 2, 3].map((i) => (
             <div key={i} className="bg-white rounded-lg shadow-md p-6 animate-pulse">
@@ -450,7 +393,6 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
     );
   }
 
-  // Error state
   if (error) {
     return (
       <div className="text-center py-12">
@@ -473,7 +415,6 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
     );
   }
 
-  // Empty state
   if (userTickets.length === 0) {
     return (
       <div className="text-center py-12">
@@ -498,14 +439,12 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Copy feedback */}
       {copyFeedback && (
         <div className="fixed top-4 right-4 bg-green-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
           {copyFeedback}
         </div>
       )}
 
-      {/* Controls */}
       <div className="space-y-4">
         <div className="flex bg-gray-100 rounded-lg p-1">
           <button
@@ -600,9 +539,12 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
         </div>
       </div>
 
-      {/* Tickets grid/list */}
       {filteredTickets.length > 0 ? (
-        <div className={`grid ${viewMode === "grid" ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" : "grid-cols-1 max-w-md mx-auto"} gap-6`}>
+        <div className={`grid gap-6 ${
+          viewMode === "grid" 
+            ? "grid-cols-1 md:grid-cols-2 lg:grid-cols-3" 
+            : "grid-cols-1"
+        }`}>
           {filteredTickets.map((ticket) => (
             <TicketCard
               key={ticket.id}
@@ -613,7 +555,7 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
               onCopy={handleCopy}
               onView={handleView}
               user={user}
-              className={viewMode === "list" ? "w-full" : ""}
+              className={viewMode === "list" ? "w-full max-w-2xl mx-auto" : ""}
             />
           ))}
         </div>
