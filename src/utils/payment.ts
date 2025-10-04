@@ -1,4 +1,4 @@
-// utils/payment.ts - Fixed version
+// utils/payment.ts - Fixed version with correct endpoint
 import { PaymentResult } from '@/types/ticket';
 
 interface TicketRequest {
@@ -20,7 +20,8 @@ export async function buyTicket(
       tickets
     });
 
-    const response = await fetch('/api/initiate-payment', {
+    // FIXED: Changed to /api/initiate-payment-url
+    const response = await fetch('/api/initiate-payment-url', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -35,7 +36,6 @@ export async function buyTicket(
 
     if (!response.ok) {
       let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-      
       try {
         const errorData = await response.json();
         console.error('Payment API error response:', errorData);
@@ -44,27 +44,22 @@ export async function buyTicket(
         // If we can't parse JSON, it might be an HTML error page (404, 500, etc.)
         const responseText = await response.text();
         console.error('Non-JSON error response:', responseText.substring(0, 200));
-        
         if (response.status === 404) {
           errorMessage = 'Payment API endpoint not found. Please check your API route configuration.';
         } else if (response.status === 500) {
           errorMessage = 'Internal server error. Please try again later.';
         }
       }
-      
       throw new Error(errorMessage);
     }
 
     const data = await response.json();
     console.log('Payment API returned:', data);
 
-    // **FIX: Return the data directly instead of trying to destructure it**
-    // The API already returns the correct structure with payment and tickets
+    // Return the data directly - it contains checkout_url, payment, tickets
     return data as PaymentResult;
-
   } catch (error) {
     console.error('Payment request failed:', error);
-    
     // Re-throw the error with better context
     if (error instanceof Error) {
       throw error;

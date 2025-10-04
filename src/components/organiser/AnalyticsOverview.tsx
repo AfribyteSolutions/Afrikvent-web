@@ -160,8 +160,6 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
 
       const totalEvents = eventsData?.length || 0;
       const primaryCurrency = getPrimaryCurrency((eventsData as EventWithCurrency[]) || []);
-
-      // Fetch tickets data with payments and events (including currency)
       const { data: ticketsData } = await supabase
         .from('TICKETS')
         .select(`

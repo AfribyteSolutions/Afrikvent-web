@@ -14,7 +14,7 @@ type EventRow = Database["public"]["Tables"]["EVENTS"]["Row"];
 // App types
 import { UserTicket, EnhancedTicket, User as TicketUser } from "@/types/ticket";
 
-interface TicketFilterState {
+interface TicketFilterState { 
   search: string;
   dateRange: string;
   status: "active" | "expired";

@@ -641,7 +641,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       userId={user?.id || ''}
                       phone={getFullPhoneNumber()}
                       quantity={quantity}
-                      onSuccess={handlePaymentSuccess}
                       onError={handlePaymentError}
                       disabled={!isPhoneNumberValid()}
                       className="w-full"

@@ -1,16 +1,9 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import { supabase } from "@/lib/supabaseClient";
-import {
-  PaymentResult,
-  EnhancedTicket,
-  DatabaseTicket,
-} from "@/types/ticket";
 import {
   Loader2,
   CreditCard,
-  CheckCircle,
   AlertCircle,
 } from "lucide-react";
 
@@ -19,7 +12,6 @@ interface CheckoutButtonProps {
   userId: string;
   phone: string;
   quantity?: number;
-  onSuccess: (enhancedTickets: EnhancedTicket[]) => void;
   onError?: (error: string) => void;
   disabled?: boolean;
   className?: string;
@@ -29,7 +21,6 @@ interface CheckoutButtonProps {
   ticketTypeName: string | null;
   eventId?: number;
   eventImage?: string;
-  eventCategory?: string;
 }
 
 const CheckoutButton: React.FC<CheckoutButtonProps> = ({
@@ -37,7 +28,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   userId,
   phone,
   quantity = 1,
-  onSuccess,
   onError,
   disabled = false,
   className = "",
@@ -47,17 +37,14 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   ticketTypeName,
   eventId,
   eventImage,
-  eventCategory,
 }) => {
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleCheckout = async () => {
     if (loading || disabled) return;
 
     setLoading(true);
-    setSuccess(false);
     setError(null);
 
     try {
@@ -83,7 +70,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         quantity,
       });
 
-      const response = await fetch("/api/initiate-payment", {
+      // Call the new initiate-payment-url endpoint
+      const response = await fetch("/api/initiate-payment-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -98,147 +86,31 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error(`API error: ${response.statusText}`);
       }
 
-      let rawResult: unknown = await response.json();
-      console.log("Raw payment result:", rawResult);
+      const result = await response.json();
+      console.log("Payment URL result:", result);
+      console.log("Result type:", typeof result);
+      console.log("Result keys:", Object.keys(result));
+      console.log("checkout_url value:", result.checkout_url);
+      console.log("Has checkout_url?", 'checkout_url' in result);
 
-      if (typeof rawResult === "string") {
-        console.log("Result is string, parsing again...");
-        try {
-          rawResult = JSON.parse(rawResult);
-          console.log("Successfully parsed string result:", rawResult);
-        } catch (parseError) {
-          console.error("Failed to parse string result:", parseError);
-          throw new Error("Invalid JSON response format");
-        }
-      }
-
-      const result = rawResult as PaymentResult;
-
+      // Check for errors first
       if (result.error) {
         throw new Error(result.error);
       }
 
-      let ticketsArray: DatabaseTicket[] = [];
-      
-      console.log("Extracting tickets from result:", result);
-      
-      const resultWithTickets = result as PaymentResult & { tickets?: DatabaseTicket[] };
-      
-      if (resultWithTickets.tickets && Array.isArray(resultWithTickets.tickets)) {
-        ticketsArray = resultWithTickets.tickets;
-        console.log("Tickets extracted from result.tickets:", ticketsArray);
-      } else {
-        const rawWithTickets = rawResult as Record<string, unknown>;
-        console.log("Fallback - rawResult.tickets:", rawWithTickets.tickets);
-        
-        if (rawWithTickets.tickets && Array.isArray(rawWithTickets.tickets)) {
-          ticketsArray = rawWithTickets.tickets as DatabaseTicket[];
-          console.log("Tickets extracted from rawResult.tickets:", ticketsArray);
-        }
+      // Check if we have a checkout URL
+      const checkoutUrl = result.checkout_url || result.data?.checkout_url;
+      if (!checkoutUrl) {
+        console.error("No checkout_url in result:", result);
+        console.error("Full result stringified:", JSON.stringify(result, null, 2));
+        throw new Error("No checkout URL received from payment service");
       }
 
-      console.log("Tickets array extracted:", ticketsArray);
+      console.log("Redirecting to checkout URL:", checkoutUrl);
 
-      if (ticketsArray.length === 0) {
-        console.error("Payment failed - No tickets returned. Full result:", rawResult);
-        
-        let errorMsg = "Payment failed - no tickets were created";
-        if (result.message) {
-          const msg = result.message.toLowerCase();
-          if (
-            msg.includes("fail") ||
-            msg.includes("error") ||
-            msg.includes("decline")
-          ) {
-            errorMsg = result.message;
-          }
-        }
-        throw new Error(errorMsg);
-      }
+      // Redirect user to Fapshi payment page
+      window.location.href = checkoutUrl;
 
-      console.log("Payment successful, processing tickets:", ticketsArray);
-
-      setSuccess(true);
-
-      const enhancedTickets: EnhancedTicket[] = ticketsArray.map(
-        (ticket: DatabaseTicket, index: number) => {
-          console.log("Processing ticket:", ticket);
-
-          const ticketId = ticket.id || `temp_${Date.now()}_${index}`;
-          const transactionId = result.payment?.transaction_id || `TXN_${Date.now()}`;
-
-          const ticketEventId = eventId?.toString() || 
-                               ticket.event_id?.toString() || 
-                               ticket.ticket_type_id?.toString() || 
-                               ticketId.toString();
-
-          return {
-            id: `${transactionId}-${ticketId}-${index}`,
-            eventId: ticketEventId,
-            eventTitle: eventTitle || "Event",
-            eventDate: eventDate || new Date().toISOString(),
-            eventLocation: eventLocation || "Location TBA",
-            ticketType: ticketTypeName || "General Admission",
-            quantity: parseInt(ticket.quantity?.toString() || "1"),
-            totalPrice: Number(ticket.total || ticket.unit_price || 0),
-            purchaseDate: new Date().toISOString(),
-            status: "confirmed" as const,
-            userId,
-            qrCode: ticket.qr_code_data || `QR_${ticketId}`,
-            orderId: transactionId,
-            ticketStatus: "active" as const,
-            eventImage,
-            eventCategory,
-          };
-        }
-      );
-
-      console.log("Enhanced tickets created:", enhancedTickets);
-
-      // Send email with tickets
-      try {
-        const isVirtual = eventLocation?.toLowerCase().includes('online') || 
-                         eventLocation?.toLowerCase().includes('virtual') || 
-                         eventLocation?.toLowerCase().includes('zoom');
-
-        const ticketsWithAccessCodes = enhancedTickets.map(ticket => ({
-          id: ticket.id,
-          orderId: ticket.orderId,
-          ticketType: ticket.ticketType,
-          qrCode: ticket.qrCode,
-          accessCode: ticket.qrCode.slice(-6)
-        }));
-
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        console.log("Sending ticket email...");
-        
-        const emailResponse = await supabase.functions.invoke('send-ticket-email', {
-          body: {
-            userEmail: user?.email,
-            userName: user?.user_metadata?.name || user?.email?.split('@')[0],
-            tickets: ticketsWithAccessCodes,
-            eventTitle: eventTitle,
-            eventDate: eventDate || new Date().toISOString(),
-            eventLocation: eventLocation || 'TBA',
-            isVirtual
-          }
-        });
-
-        if (emailResponse.error) {
-          console.error("Email send error:", emailResponse.error);
-        } else {
-          console.log("Ticket email sent successfully");
-        }
-      } catch (emailError) {
-        console.error("Email send error:", emailError);
-        // Continue even if email fails - don't break the user flow
-      }
-
-      setTimeout(() => {
-        onSuccess(enhancedTickets);
-        setSuccess(false);
-      }, 1500);
     } catch (err) {
       console.error("Checkout error:", err);
 
@@ -249,7 +121,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
       setError(errorMessage);
       if (onError) onError(errorMessage);
-    } finally {
       setLoading(false);
     }
   };
@@ -264,20 +135,11 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   const buttonVariants = {
     idle: { scale: 1 },
     loading: { scale: 0.98 },
-    success: { scale: 1.02 },
     error: { scale: 1, x: [-2, 2, -2, 2, 0] },
     tap: { scale: 0.95 },
   };
 
   const getButtonContent = () => {
-    if (success) {
-      return (
-        <>
-          <CheckCircle className="w-4 h-4 mr-2" />
-          Payment Successful!
-        </>
-      );
-    }
     if (error) {
       return (
         <>
@@ -290,7 +152,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       return (
         <>
           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          Processing Payment...
+          Redirecting to Payment...
         </>
       );
     }
@@ -303,14 +165,12 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   };
 
   const getButtonColor = () => {
-    if (success) return "bg-green-600 hover:bg-green-700";
     if (error) return "bg-red-600 hover:bg-red-700";
     if (loading) return "bg-blue-500";
     return "bg-blue-600 hover:bg-blue-700 active:bg-blue-800";
   };
 
   const getAnimationState = () => {
-    if (success) return "success";
     if (error) return "error";
     if (loading) return "loading";
     return "idle";

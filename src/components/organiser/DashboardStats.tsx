@@ -11,12 +11,9 @@ type TicketRow = Database['public']['Tables']['TICKETS']['Row'];
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 type UserRow = Database['public']['Tables']['USERS']['Row'];
 
+// Updated interface to correctly access the nested currency
 interface TicketWithRelations extends TicketRow {
     EVENTS: Pick<EventRow, 'organizer_id' | 'currency'>[];
-    USERS: Pick<UserRow, 'name' | 'email'>[];
-}
-
-interface EventWithRelations extends EventRow {
     USERS: Pick<UserRow, 'name' | 'email'>[];
 }
 
@@ -27,8 +24,10 @@ interface DashboardStatsProps {
 interface StatsData {
     totalEvents: number;
     activeEvents: number;
+    // These hold ALL-TIME totals
     totalRevenueByCurrency: Record<string, number>;
     totalTicketsSoldByCurrency: Record<string, number>;
+    // Changes still represent month-over-month
     eventChange: string;
     activeEventChange: string;
     revenueChange: string;
@@ -36,22 +35,69 @@ interface StatsData {
     loading: boolean;
 }
 
+// --- START: Helper Functions ---
+
+// Helper function to sum a Record<string, number>
+const getSum = (data: Record<string, number>): number => {
+    return Object.values(data).reduce((sum, value) => sum + value, 0);
+};
+
+const calculateRevenue = (ticketsData: TicketWithRelations[] | null) => {
+    // ESLint fix: Changed to const
+    const revenueByCurrency: Record<string, number> = {}; 
+    
+    const paidTickets = ticketsData?.filter(ticket =>
+        // Only count successfully paid/used tickets
+        ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
+    ) || [];
+    
+    paidTickets.forEach(ticket => {
+        // FIX: Default to 'XOF' (CFA Franc) if event currency is missing
+        const currency = ticket.EVENTS?.[0]?.currency || 'XOF'; 
+        const total = ticket.total || 0;
+        revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + total;
+    });
+    return revenueByCurrency;
+};
+
+const calculateTicketsSold = (ticketsData: TicketWithRelations[] | null) => {
+    // ESLint fix: Changed to const
+    const ticketsSoldByCurrency: Record<string, number> = {}; 
+    
+    const paidTickets = ticketsData?.filter(ticket =>
+        ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
+    ) || [];
+    
+    paidTickets.forEach(ticket => {
+        // FIX: Default to 'XOF' (CFA Franc) if event currency is missing
+        const currency = ticket.EVENTS?.[0]?.currency || 'XOF';
+        // Ensure quantity is parsed to a number, defaulting to 1
+        const quantity = parseInt(ticket.quantity || '1', 10); 
+        ticketsSoldByCurrency[currency] = (ticketsSoldByCurrency[currency] || 0) + quantity;
+    });
+    return ticketsSoldByCurrency;
+};
+
+// --- END: Helper Functions ---
+
 const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
     const [stats, setStats] = useState<StatsData>({
         totalEvents: 0,
         activeEvents: 0,
         totalRevenueByCurrency: {},
         totalTicketsSoldByCurrency: {},
-        eventChange: 'New',
-        activeEventChange: 'New',
-        revenueChange: 'New',
-        ticketsSoldChange: 'New',
+        eventChange: 'N/A',
+        activeEventChange: 'N/A',
+        revenueChange: 'N/A',
+        ticketsSoldChange: 'N/A',
         loading: true
     });
 
     useEffect(() => {
         if (user) {
             fetchDashboardStats();
+        } else {
+            setStats(prev => ({ ...prev, loading: false }));
         }
     }, [user]);
 
@@ -62,35 +108,24 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         const change = ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
         return `${change > 0 ? '+' : ''}${change.toFixed(2)}%`;
     };
-
-    const getSum = (data: Record<string, number>): number => {
-        return Object.values(data).reduce((sum, value) => sum + value, 0);
+    
+    const formatCurrency = (currency: string, value: number) => {
+        // Use Intl.NumberFormat for robust currency display
+        const currencyCode = currency || 'USD'; 
+        
+        try {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: currencyCode,
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0 
+            }).format(value);
+        } catch (e) {
+            // Fallback
+            return `${currencyCode} ${value.toLocaleString()}`;
+        }
     };
 
-    const calculateRevenue = (ticketsData: TicketWithRelations[] | null) => {
-        const revenueByCurrency: Record<string, number> = {};
-        const paidTickets = ticketsData?.filter(ticket =>
-            ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
-        ) || [];
-        paidTickets.forEach(ticket => {
-            const currency = ticket.EVENTS?.[0]?.currency || 'GHS';
-            const total = ticket.total || 0;
-            revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + total;
-        });
-        return revenueByCurrency;
-    };
-
-    const calculateTicketsSold = (ticketsData: TicketWithRelations[] | null) => {
-        const ticketsSoldByCurrency: Record<string, number> = {};
-        const paidTickets = ticketsData?.filter(ticket =>
-            ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
-        ) || [];
-        paidTickets.forEach(ticket => {
-            const currency = ticket.EVENTS?.[0]?.currency || 'GHS';
-            ticketsSoldByCurrency[currency] = (ticketsSoldByCurrency[currency] || 0) + 1;
-        });
-        return ticketsSoldByCurrency;
-    };
 
     const fetchDashboardStats = async () => {
         if (!user) return;
@@ -98,32 +133,27 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         try {
             setStats(prev => ({ ...prev, loading: true }));
 
+            // --- Date Range Setup ---
             const today = new Date();
-            const oneMonthAgo = new Date();
-            oneMonthAgo.setMonth(today.getMonth() - 1);
-            const twoMonthsAgo = new Date();
-            twoMonthsAgo.setMonth(today.getMonth() - 2);
+            const startOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
 
+            const startOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1, 0, 0, 0, 0);
+
+            // 1. Fetch All Events
             const { data: allEventsData, error: eventsError } = await supabase
                 .from('EVENTS')
                 .select('id, event_status, created_at')
                 .eq('organizer_id', user.id);
 
             if (eventsError) throw eventsError;
-
             const allEvents = allEventsData || [];
 
-            const currentMonthEvents = allEvents.filter(event =>
-                new Date(event.created_at) >= oneMonthAgo
-            );
-            const previousMonthEvents = allEvents.filter(event =>
-                new Date(event.created_at) >= twoMonthsAgo && new Date(event.created_at) < oneMonthAgo
-            );
-
+            // 2. Fetch All Tickets
             const { data: allTicketsData, error: ticketsError } = await supabase
                 .from('TICKETS')
                 .select(`
                     total,
+                    quantity,
                     ticket_status,
                     created_at,
                     EVENTS!inner(organizer_id, currency)
@@ -134,13 +164,27 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
 
             const allTickets = allTicketsData || [];
 
-            const currentMonthTickets = allTickets.filter(ticket =>
-                new Date(ticket.created_at) >= oneMonthAgo
+            // --- Data Segmentation for Change Calculation ---
+            
+            // Current Month
+            const currentMonthEvents = allEvents.filter(event =>
+                new Date(event.created_at) >= startOfCurrentMonth
             );
-            const previousMonthTickets = allTickets.filter(ticket =>
-                new Date(ticket.created_at) >= twoMonthsAgo && new Date(ticket.created_at) < oneMonthAgo
+            const currentMonthTickets = allTickets.filter(ticket =>
+                new Date(ticket.created_at) >= startOfCurrentMonth
             );
 
+            // Previous Month 
+            const previousMonthEvents = allEvents.filter(event =>
+                new Date(event.created_at) >= startOfPreviousMonth && new Date(event.created_at) < startOfCurrentMonth
+            );
+            const previousMonthTickets = allTickets.filter(ticket =>
+                new Date(ticket.created_at) >= startOfPreviousMonth && new Date(ticket.created_at) < startOfCurrentMonth
+            );
+            
+            // --- Calculations ---
+
+            // Current Totals (for Change Calc)
             const currentTotalEvents = currentMonthEvents.length;
             const currentActiveEvents = currentMonthEvents.filter(event =>
                 event.event_status === 'active' || event.event_status === 'published'
@@ -148,6 +192,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
             const currentRevenue = calculateRevenue(currentMonthTickets as TicketWithRelations[]);
             const currentTicketsSold = calculateTicketsSold(currentMonthTickets as TicketWithRelations[]);
 
+            // Previous Totals (for Change Calc)
             const previousTotalEvents = previousMonthEvents.length;
             const previousActiveEvents = previousMonthEvents.filter(event =>
                 event.event_status === 'active' || event.event_status === 'published'
@@ -155,16 +200,23 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
             const previousRevenue = calculateRevenue(previousMonthTickets as TicketWithRelations[]);
             const previousTicketsSold = calculateTicketsSold(previousMonthTickets as TicketWithRelations[]);
             
+            // All-Time Totals (for dashboard display)
+            const totalRevenueAllTime = calculateRevenue(allTickets as TicketWithRelations[]);
+            const totalTicketsSoldAllTime = calculateTicketsSold(allTickets as TicketWithRelations[]);
+
+
+            // Change Metrics
             const eventChange = calculateChange(currentTotalEvents, previousTotalEvents);
             const activeEventChange = calculateChange(currentActiveEvents, previousActiveEvents);
             const revenueChange = calculateChange(getSum(currentRevenue), getSum(previousRevenue));
             const ticketsSoldChange = calculateChange(getSum(currentTicketsSold), getSum(previousTicketsSold));
 
+            // Set all-time totals for main display metrics
             setStats({
-                totalEvents: currentTotalEvents,
-                activeEvents: currentActiveEvents,
-                totalRevenueByCurrency: currentRevenue,
-                totalTicketsSoldByCurrency: currentTicketsSold,
+                totalEvents: allEvents.length, 
+                activeEvents: allEvents.filter(e => e.event_status === 'active' || e.event_status === 'published').length, 
+                totalRevenueByCurrency: totalRevenueAllTime, 
+                totalTicketsSoldByCurrency: totalTicketsSoldAllTime,
                 eventChange,
                 activeEventChange,
                 revenueChange,
@@ -178,109 +230,137 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         }
     };
 
-    const formatCurrency = (currency: string, value: number) => {
-        const symbol = currency === 'GHS' ? '₵' : 'CFA';
-        return `${symbol}${value.toLocaleString()}`;
-    };
-
+    // --- Stats Configuration ---
     const statsConfig = [
         {
             name: 'Total Events',
-            value: stats.totalEvents.toLocaleString(),
+            value: stats.totalEvents.toLocaleString(), // Convert to string here
             change: stats.eventChange,
             icon: '🎪',
             color: 'bg-blue-500',
-            changeType: stats.eventChange.includes('+') ? 'positive' : 'negative'
+            changeType: stats.eventChange.includes('+') ? 'positive' : (stats.eventChange.includes('-') ? 'negative' : 'neutral')
         },
         {
             name: 'Active Events',
-            value: stats.activeEvents.toLocaleString(),
+            value: stats.activeEvents.toLocaleString(), // Convert to string here
             change: stats.activeEventChange,
-            icon: '🟢',
+            icon: '🔥',
             color: 'bg-green-500',
-            changeType: stats.activeEventChange.includes('+') ? 'positive' : 'negative'
+            changeType: stats.activeEventChange.includes('+') ? 'positive' : (stats.activeEventChange.includes('-') ? 'negative' : 'neutral')
         },
         {
             name: 'Total Revenue',
-            value: stats.totalRevenueByCurrency,
+            value: stats.totalRevenueByCurrency, // Remains as Record<string, number> for formatting
             change: stats.revenueChange,
             icon: '💰',
             color: 'bg-yellow-500',
-            changeType: stats.revenueChange.includes('+') ? 'positive' : 'negative'
+            changeType: stats.revenueChange.includes('+') ? 'positive' : (stats.revenueChange.includes('-') ? 'negative' : 'neutral')
         },
         {
             name: 'Tickets Sold',
-            value: stats.totalTicketsSoldByCurrency,
+            value: stats.totalTicketsSoldByCurrency, // Remains as Record<string, number> for formatting
             change: stats.ticketsSoldChange,
             icon: '🎫',
             color: 'bg-purple-500',
-            changeType: stats.ticketsSoldChange.includes('+') ? 'positive' : 'negative'
+            changeType: stats.ticketsSoldChange.includes('+') ? 'positive' : (stats.ticketsSoldChange.includes('-') ? 'negative' : 'neutral')
         }
     ];
 
+    // --- Fix for TS2322 (ReactNode type check) ---
     const renderValue = (name: string, value: string | Record<string, number>): ReactNode => {
+        
         if (name === 'Total Revenue' && typeof value === 'object') {
             const revenueEntries = Object.entries(value);
-            if (revenueEntries.length === 0) {
+            if (revenueEntries.length === 0 || getSum(value) === 0) {
                 return <span className="text-2xl font-normal text-gray-500">No revenue yet</span>;
             }
-            return revenueEntries.map(([currency, total], i) => (
-                <span key={i} className="block text-2xl">
-                    {formatCurrency(currency, total)}
-                </span>
-            ));
-        }
-        if (name === 'Tickets Sold' && typeof value === 'object') {
-            const ticketsEntries = Object.entries(value);
-            if (ticketsEntries.length === 0) {
-                return <span className="text-2xl font-normal text-gray-500">No tickets sold</span>;
-            }
-            return ticketsEntries.map(([currency, total], i) => (
-                <span key={i} className="block text-2xl">
-                    {total.toLocaleString()} <span className="text-base text-gray-500">{currency}</span>
-                </span>
-            ));
+            // Display revenue for all currencies found
+            return (
+                <div>
+                    {revenueEntries.map(([currency, total], i) => (
+                        <span key={i} className="block text-3xl md:text-3xl font-bold">
+                            {formatCurrency(currency, total)}
+                        </span>
+                    ))}
+                </div>
+            );
         }
         
-        // Final return must be a valid ReactNode
-        return <>{value}</>;
+        if (name === 'Tickets Sold' && typeof value === 'object') {
+            const ticketsEntries = Object.entries(value);
+            const totalTickets = getSum(value);
+
+            if (ticketsEntries.length === 0 || totalTickets === 0) {
+                return <span className="text-2xl font-normal text-gray-500">No tickets sold</span>;
+            }
+            
+            // Display total tickets sold across all currencies
+            return (
+                <span className="block text-3xl md:text-3xl font-bold">
+                    {totalTickets.toLocaleString()}
+                </span>
+            );
+        }
+        
+        // Final Fix: Handle the string values explicitly for Events count
+        if (typeof value === 'string') {
+            return <span className="text-3xl md:text-3xl font-bold">{value}</span>;
+        }
+
+        // Fallback
+        return null;
     };
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {statsConfig.map((stat, index) => (
-                <div key={index} className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                            <p className="text-3xl font-bold text-gray-900 mt-2">
-                                {stats.loading ? (
-                                    <div className="animate-pulse bg-gray-200 h-8 w-16 rounded"></div>
-                                ) : (
-                                    renderValue(stat.name, stat.value)
-                                )}
-                            </p>
+            {statsConfig.map((stat, index) => {
+                const isNew = stat.change === 'New';
+                const isNop = stat.change === 'N/A';
+                const changeTextColor = isNew 
+                    ? 'text-green-600'
+                    : stat.changeType === 'positive' 
+                    ? 'text-green-600' 
+                    : stat.changeType === 'negative' 
+                    ? 'text-red-600' 
+                    : 'text-gray-500';
+
+                return (
+                    <div key={index} className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-gray-600">{stat.name}</p>
+                                <div className="mt-2">
+                                    {stats.loading ? (
+                                        <div className="animate-pulse bg-gray-200 h-8 w-24 rounded"></div>
+                                    ) : (
+                                        renderValue(stat.name, stat.value)
+                                    )}
+                                </div>
+                            </div>
+                            <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center text-white text-xl`}>
+                                {stat.icon}
+                            </div>
                         </div>
-                        <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center text-white text-xl`}>
-                            {stat.icon}
+                        <div className="mt-4 flex items-center">
+                            {!isNop && (
+                                <>
+                                    <span className={`text-sm font-medium ${changeTextColor}`}>
+                                        {stat.change}
+                                    </span>
+                                    <span className="text-sm text-gray-500 ml-2">
+                                        {isNew ? 'in total' : 'from last month'}
+                                    </span>
+                                </>
+                            )}
+                            {isNop && (
+                                <span className="text-sm text-gray-500">
+                                    {stat.change === 'New' ? 'Just started' : 'No data available'}
+                                </span>
+                            )}
                         </div>
                     </div>
-                    <div className="mt-4 flex items-center">
-                        {stat.change !== 'N/A' && (
-                            <>
-                                <span className={`text-sm font-medium ${
-                                    stat.changeType === 'positive' ? 'text-green-600' : 'text-red-600'
-                                }`}>
-                                    {stat.change}
-                                </span>
-                                <span className="text-sm text-gray-500 ml-2">
-                                    {stat.change === 'New' ? 'in total' : 'from last month'}
-                                </span>
-                            </>
-                        )}
-                    </div>
-                </div>
-            ))}
+                );
+            })}
         </div>
     );
 };
