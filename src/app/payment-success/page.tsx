@@ -1,302 +1,356 @@
-'use client';
-import { useEffect, useState, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
-import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
-import { motion } from 'framer-motion';
-import { Loader2, AlertCircle } from 'lucide-react';
-import { EnhancedTicket } from '@/types/ticket';
+// app/api/verify-payment/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 
-interface TicketData {
-  id: number;
-  event_id: number;
-  user_id: string;
-  ticket_type_id: number;
-  quantity: string;
-  total: number;
-  unit_price: number;
-  qr_code_data: string;
-  ticket_status: string;
-  created_at: string;
-  EVENTS: {
-    id: number;
-    title: string;
-    event_date: string;
-    location_name?: string;
-    address?: string;
-    images?: string[];
-  };
-  TICKET_TYPES: {
-    id: number;
-    name: string;
-    price: number;
-  };
+interface InvocationResponse {
+  data: {
+    success?: boolean;
+    emailId?: string;
+  } | null;
+  error: Error | null;
 }
 
-function PaymentSuccessContent() {
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [tickets, setTickets] = useState<EnhancedTicket[]>([]);
-  const [attempt, setAttempt] = useState(0);
+export async function POST(request: NextRequest) {
+  try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  useEffect(() => {
-    const sessionId = searchParams.get('session_id');
-    
-    console.log('Payment Success Page - Session ID:', sessionId);
-    
-    if (!sessionId) {
-      console.error('No session_id in URL');
-      setError('No session ID found');
-      setIsLoading(false);
-      return;
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
+      console.error('Missing Supabase credentials');
+      return NextResponse.json({
+        success: false,
+        error: 'Server configuration error'
+      }, { status: 500 });
     }
 
-    let retries = 0;
-    const maxRetries = 25;
-    let timeoutId: NodeJS.Timeout;
-
-    const checkPayment = async () => {
-      try {
-        setAttempt(retries + 1);
-        
-        console.log(`Attempt ${retries + 1}: Verifying payment for session:`, sessionId);
-        
-        const res = await fetch('/api/verify-payment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId })
-        });
-
-        console.log('Response status:', res.status);
-        console.log('Response Content-Type:', res.headers.get('content-type'));
-
-        if (!res.ok) {
-          console.error('API response not OK:', res.status, res.statusText);
-          throw new Error(`API returned ${res.status}`);
-        }
-
-        // Get the raw text first to debug
-        const rawText = await res.text();
-        console.log('Raw response (first 200 chars):', rawText.substring(0, 200));
-
-        // Parse the JSON
-        let data;
-        try {
-          data = JSON.parse(rawText);
-        } catch (parseError) {
-          console.error('JSON Parse Error:', parseError);
-          console.error('Full raw response:', rawText);
-          throw new Error('Invalid JSON response from server');
-        }
-        
-        console.log('API Response:', {
-          success: data?.success,
-          status: data?.status,
-          hasTickets: !!data?.tickets,
-          ticketsIsArray: Array.isArray(data?.tickets),
-          ticketsLength: data?.tickets?.length,
-          ticketsType: typeof data?.tickets,
-          firstTicket: data?.tickets?.[0]
-        });
-
-        // Check if we have a successful response with tickets
-        if (data.success === true && data.tickets && Array.isArray(data.tickets) && data.tickets.length > 0) {
-          console.log('SUCCESS! Transforming tickets:', data.tickets.length);
-          
-          // Transform tickets
-          const transformed: EnhancedTicket[] = data.tickets.map((t: TicketData) => {
-            console.log('Transforming ticket:', t.id, t.EVENTS?.title);
-            return {
-              id: t.id.toString(),
-              eventId: t.event_id.toString(),
-              eventTitle: t.EVENTS?.title || 'Event',
-              eventDate: t.EVENTS?.event_date || new Date().toISOString(),
-              eventLocation: t.EVENTS?.location_name || t.EVENTS?.address || 'Location',
-              ticketType: t.TICKET_TYPES?.name || 'Ticket',
-              quantity: parseInt(t.quantity) || 1,
-              totalPrice: t.total || 0,
-              purchaseDate: t.created_at,
-              status: 'confirmed',
-              userId: t.user_id,
-              qrCode: t.qr_code_data,
-              orderId: data.payment?.id?.toString() || 'N/A',
-              ticketStatus: 'active'
-            };
-          });
-          
-          console.log('Transformed tickets:', transformed);
-          setTickets(transformed);
-          setIsLoading(false);
-          return;
-        }
-
-        // Check for specific error statuses
-        if (data.status === 'not_found') {
-          console.log('Payment not found yet, will retry...');
-        } else if (data.status === 'pending') {
-          console.log('Payment is pending, will retry...');
-        } else if (data.status === 'no_tickets') {
-          console.log('No tickets found yet, will retry...');
-        } else if (data.status === 'failed') {
-          console.error('Payment failed:', data.payment_status);
-          setError('Payment was not successful. Please contact support.');
-          setIsLoading(false);
-          return;
-        } else {
-          console.log('Unexpected status:', data.status);
-        }
-
-        // Retry if not at max attempts
-        if (retries < maxRetries) {
-          retries++;
-          console.log(`Will retry in 2 seconds... (${retries}/${maxRetries})`);
-          timeoutId = setTimeout(checkPayment, 2000);
-        } else {
-          console.error('Max retries reached');
-          setError('Payment is processing. Please check "My Tickets" in a moment.');
-          setIsLoading(false);
-        }
-      } catch (err) {
-        console.error('Error in checkPayment:', err);
-        
-        if (retries < maxRetries) {
-          retries++;
-          console.log(`Error occurred, will retry... (${retries}/${maxRetries})`);
-          timeoutId = setTimeout(checkPayment, 2000);
-        } else {
-          console.error('Max retries reached after error');
-          setError('Unable to verify payment. Please check "My Tickets" or contact support.');
-          setIsLoading(false);
-        }
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
       }
-    };
+    });
 
-    checkPayment();
+    const { session_id } = await request.json();
+
+    if (!session_id) {
+      console.error('No session_id provided');
+      return NextResponse.json({
+        success: false,
+        error: 'Session ID required'
+      }, { status: 400 });
+    }
+
+    console.log('Verifying payment for session:', session_id);
+
+    // 1. Find payment by transaction_id
+    const { data: payment, error: paymentError } = await supabase
+      .from('PAYMENTS')
+      .select('*')
+      .eq('transaction_id', session_id)
+      .single();
+
+    if (paymentError || !payment) {
+      console.log('Payment not found yet:', paymentError?.message);
+      return NextResponse.json({
+        success: false,
+        status: 'not_found',
+        message: 'Payment record not found yet. It may still be processing.'
+      });
+    }
+
+    console.log('Payment found:', {
+      id: payment.id,
+      status: payment.payment_status,
+      amount: payment.amount,
+    });
+
+    // 2. Check payment status
+    const normalizedStatus = payment.payment_status?.toUpperCase().trim();
     
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
+    console.log('Normalized payment status:', normalizedStatus);
+    
+    if (normalizedStatus === 'PENDING') {
+      console.log('Payment is still pending');
+      return NextResponse.json({
+        success: false,
+        status: 'pending',
+        payment_status: payment.payment_status,
+        message: 'Payment is being processed'
+      });
+    }
+
+    const successfulStatuses = ['SUCCESSFUL', 'COMPLETED', 'ACTIVE', 'PAID'];
+    if (!successfulStatuses.includes(normalizedStatus)) {
+      console.log('Payment has non-successful status:', payment.payment_status);
+      return NextResponse.json({
+        success: false,
+        status: 'failed',
+        payment_status: payment.payment_status,
+        message: 'Payment was not successful'
+      });
+    }
+
+    console.log('Payment status is valid');
+
+    // 3. Get associated tickets
+    const { data: paymentTickets, error: ptError } = await supabase
+      .from('PAYMENT_TICKETS')
+      .select('ticket_id')
+      .eq('payment_id', payment.id);
+
+    if (ptError) {
+      console.error('Error fetching payment_tickets:', ptError);
+      return NextResponse.json({
+        success: false,
+        status: 'tickets_error',
+        message: 'Error fetching ticket associations'
+      });
+    }
+
+    if (!paymentTickets || paymentTickets.length === 0) {
+      console.log('No tickets found in PAYMENT_TICKETS for payment_id:', payment.id);
+      return NextResponse.json({
+        success: false,
+        status: 'no_tickets',
+        message: 'No tickets found for this payment'
+      });
+    }
+
+    const ticketIds = paymentTickets.map(pt => pt.ticket_id);
+    console.log('Found ticket IDs:', ticketIds);
+
+    // 4. Fetch full ticket details with format field
+    const { data: ticketsData, error: ticketsError } = await supabase
+      .from('TICKETS')
+      .select(`
+        *,
+        EVENTS!inner (
+          id,
+          title,
+          event_date,
+          location_name,
+          address,
+          images,
+          description
+        ),
+        TICKET_TYPES!inner (
+          id,
+          name,
+          price,
+          description,
+          format
+        )
+      `)
+      .in('id', ticketIds);
+
+    if (ticketsError) {
+      console.error('Error fetching ticket details:', ticketsError);
+      return NextResponse.json({
+        success: false,
+        status: 'tickets_error',
+        message: 'Error fetching ticket details',
+        error: ticketsError.message
+      });
+    }
+
+    console.log('Raw tickets fetched:', ticketsData?.length || 0);
+
+    if (!ticketsData || ticketsData.length === 0) {
+      console.error('No ticket data returned for IDs:', ticketIds);
+      return NextResponse.json({
+        success: false,
+        status: 'no_tickets',
+        message: 'Ticket data not found'
+      });
+    }
+
+    // Filter valid tickets
+    const validTickets = ticketsData.filter(ticket => {
+      const ticketStatus = ticket.ticket_status?.toUpperCase().trim();
+      return ['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID', 'PENDING'].includes(ticketStatus);
+    });
+
+    console.log('Valid tickets after filtering:', validTickets.length);
+
+    if (validTickets.length === 0) {
+      console.log('No valid tickets found. Statuses:', ticketsData.map(t => t.ticket_status));
+      return NextResponse.json({
+        success: false,
+        status: 'no_valid_tickets',
+        message: 'No valid tickets found for this payment'
+      });
+    }
+
+    console.log('Successfully verified payment with', validTickets.length, 'tickets');
+
+    // ============= EMAIL SENDING WITH DETAILED LOGGING =============
+    let emailStatus = 'pending';
+    let emailId = null;
+    const emailLogs: string[] = [];
+
+    // Get user data
+    console.log('[EMAIL] Step 1: Fetching user data...');
+    emailLogs.push('Fetching user data');
+    
+    const { data: userData, error: userError } = await supabase
+      .from('USERS')
+      .select('email, name')
+      .eq('id', validTickets[0].user_id)
+      .single();
+
+    if (userError || !userData?.email) {
+      console.error('[EMAIL] ERROR: Failed to get user data:', userError);
+      emailLogs.push(`ERROR: ${userError?.message || 'No email found'}`);
+      emailStatus = 'failed';
+    } else {
+      console.log('[EMAIL] User email:', userData.email);
+      emailLogs.push(`User: ${userData.email}`);
+
+      const isVirtual = validTickets[0].TICKET_TYPES?.format === 'online';
+      
+      const emailPayload = {
+        userEmail: userData.email,
+        userName: userData.name,
+        tickets: validTickets.map(t => ({
+          orderId: t.id.toString(),
+          ticketType: t.TICKET_TYPES.name,
+          qrCode: t.qr_code_data,
+          accessCode: t.qr_code_data?.substring(0, 6).toUpperCase() || 'N/A',
+          format: t.TICKET_TYPES?.format || 'in-person'
+        })),
+        eventTitle: validTickets[0].EVENTS.title,
+        eventDate: validTickets[0].EVENTS.event_date,
+        eventLocation: isVirtual 
+          ? 'Virtual Event' 
+          : (validTickets[0].EVENTS.location_name || validTickets[0].EVENTS.address),
+        isVirtual: isVirtual
+      };
+
+      console.log('[EMAIL] Step 2: Payload prepared for event:', emailPayload.eventTitle);
+      emailLogs.push(`Event: ${emailPayload.eventTitle}`);
+
+      // Try sending email immediately
+      console.log('[EMAIL] Step 3: Attempting to send email via Supabase function...');
+      emailLogs.push('Calling send-ticket-email function');
+
+      try {
+        const functionResult = await supabase.functions.invoke('send-ticket-email', {
+          body: emailPayload
+        });
+
+        console.log('[EMAIL] Function result:', JSON.stringify(functionResult, null, 2));
+
+        if (functionResult.error) {
+          console.error('[EMAIL] Function returned error:', functionResult.error);
+          emailLogs.push(`Function error: ${functionResult.error.message}`);
+          throw functionResult.error;
+        }
+
+        if (functionResult.data?.success) {
+          console.log('[EMAIL] ✓ SUCCESS! Email sent with ID:', functionResult.data.emailId);
+          emailStatus = 'sent';
+          emailId = functionResult.data.emailId;
+          emailLogs.push(`SUCCESS: Email sent (${emailId})`);
+
+          // Record in queue as sent
+          try {
+            await supabase.from('EMAIL_QUEUE').insert({
+              user_id: validTickets[0].user_id,
+              email_type: 'ticket_confirmation',
+              payload: emailPayload,
+              status: 'sent',
+              recipient_email: userData.email,
+              created_at: new Date().toISOString(),
+              sent_at: new Date().toISOString(),
+              external_id: emailId,
+              retry_count: 0
+            });
+            emailLogs.push('Recorded in EMAIL_QUEUE');
+          } catch (queueErr) {
+            console.log('[EMAIL] Note: Could not record in queue (table may not exist)');
+            emailLogs.push('Queue table not available');
+          }
+        } else {
+          throw new Error('Function returned no success flag');
+        }
+
+      } catch (sendError) {
+        console.error('[EMAIL] Failed to send:', sendError);
+        emailLogs.push(`Send failed: ${sendError instanceof Error ? sendError.message : 'Unknown'}`);
+        emailStatus = 'failed';
+
+        // Try to queue for retry
+        console.log('[EMAIL] Step 4: Attempting to queue for retry...');
+        try {
+          await supabase.from('EMAIL_QUEUE').insert({
+            user_id: validTickets[0].user_id,
+            email_type: 'ticket_confirmation',
+            payload: emailPayload,
+            status: 'pending',
+            recipient_email: userData.email,
+            created_at: new Date().toISOString(),
+            retry_count: 0,
+            max_retries: 5,
+            next_retry_at: new Date().toISOString(),
+            error_message: sendError instanceof Error ? sendError.message : 'Failed to send'
+          });
+          emailLogs.push('Queued for retry');
+          emailStatus = 'queued';
+        } catch (queueError) {
+          console.error('[EMAIL] ERROR: Could not queue email:', queueError);
+          emailLogs.push(`Queue failed: ${queueError instanceof Error ? queueError.message : 'Unknown'}`);
+        }
+      }
+    }
+
+    console.log('[EMAIL] Final status:', emailStatus);
+    console.log('[EMAIL] Complete log:', emailLogs.join(' → '));
+
+    // 5. Return success with all data + email debug info
+    const response = {
+      success: true,
+      status: 'completed',
+      payment: {
+        id: payment.id,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: payment.payment_status,
+        created_at: payment.created_at
+      },
+      tickets: validTickets,
+      email: {
+        status: emailStatus,
+        emailId: emailId,
+        message: emailStatus === 'sent' 
+          ? 'Confirmation email has been sent to your inbox'
+          : emailStatus === 'queued'
+          ? 'Email queued for delivery'
+          : 'Email delivery in progress - check your inbox shortly',
+        logs: emailLogs
       }
     };
-  }, [searchParams]);
+    
+    console.log('Returning successful response with', validTickets.length, 'tickets');
+    
+    return NextResponse.json(response, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-  if (isLoading) {
-    return (
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-50 z-50 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-12 text-center"
-        >
-          <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            Verifying Payment
-          </h1>
-          <p className="text-gray-600">Please wait while we confirm your purchase...</p>
-          {attempt > 3 && (
-            <p className="text-sm text-gray-500 mt-4">
-              This is taking longer than usual. Attempt {attempt} of 25.
-            </p>
-          )}
-        </motion.div>
-      </div>
-    );
+  } catch (error) {
+    console.error('Verify payment error:', error);
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      status: 'error'
+    }, { status: 500 });
   }
-
-  if (error) {
-    return (
-      <div className="fixed inset-0 bg-gradient-to-br from-red-50 to-orange-50 z-50 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-12 text-center"
-        >
-          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertCircle className="w-10 h-10 text-red-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            Payment Processing
-          </h1>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => router.push('/my-tickets')}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-            >
-              View My Tickets
-            </button>
-            <button
-              onClick={() => router.push('/')}
-              className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-            >
-              Go Home
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  if (tickets.length === 0) {
-    console.error('Reached end of flow with no tickets and no error');
-    return (
-      <div className="fixed inset-0 bg-gradient-to-br from-red-50 to-orange-50 z-50 flex items-center justify-center p-4">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-12 text-center"
-        >
-          <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <AlertCircle className="w-10 h-10 text-red-600" />
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            Payment Issue
-          </h1>
-          <p className="text-gray-600 mb-6">
-            Tickets not found. Please contact support.
-          </p>
-          <div className="flex flex-col gap-3">
-            <button
-              onClick={() => router.push('/events')}
-              className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-            >
-              View My Tickets
-            </button>
-            <button
-              onClick={() => router.push('/')}
-              className="px-6 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-            >
-              Go Home
-            </button>
-          </div>
-        </motion.div>
-      </div>
-    );
-  }
-
-  return (
-    <PaymentSuccessScreen
-      isOpen={true}
-      tickets={tickets}
-      eventTitle={tickets[0]?.eventTitle || 'Event'}
-      eventDate={tickets[0]?.eventDate || new Date().toISOString()}
-      eventLocation={tickets[0]?.eventLocation || 'Location'}
-      onClose={() => router.push('/')}
-    />
-  );
 }
 
-export default function PaymentSuccessPage() {
-  return (
-    <Suspense fallback={
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-50 z-50 flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-      </div>
-    }>
-      <PaymentSuccessContent />
-    </Suspense>
-  );
+export async function GET() {
+  return NextResponse.json({
+    error: 'Method not allowed. Use POST.'
+  }, { status: 405 });
 }
