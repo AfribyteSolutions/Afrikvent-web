@@ -21,8 +21,9 @@ interface TicketData {
     id: number;
     title: string;
     event_date: string;
-    location: string;
-    image_url?: string;
+    location_name?: string;
+    address?: string;
+    images?: string[];
   };
   TICKET_TYPES: {
     id: number;
@@ -90,11 +91,13 @@ function PaymentSuccessContent() {
         }
         
         console.log('API Response:', {
-          success: data.success,
-          status: data.status,
-          hasTickets: !!data.tickets,
-          ticketsLength: data.tickets?.length,
-          fullData: data
+          success: data?.success,
+          status: data?.status,
+          hasTickets: !!data?.tickets,
+          ticketsIsArray: Array.isArray(data?.tickets),
+          ticketsLength: data?.tickets?.length,
+          ticketsType: typeof data?.tickets,
+          firstTicket: data?.tickets?.[0]
         });
 
         // Check if we have a successful response with tickets
@@ -109,7 +112,7 @@ function PaymentSuccessContent() {
               eventId: t.event_id.toString(),
               eventTitle: t.EVENTS?.title || 'Event',
               eventDate: t.EVENTS?.event_date || new Date().toISOString(),
-              eventLocation: t.EVENTS?.location || 'Location',
+              eventLocation: t.EVENTS?.location_name || t.EVENTS?.address || 'Location',
               ticketType: t.TICKET_TYPES?.name || 'Ticket',
               quantity: parseInt(t.quantity) || 1,
               totalPrice: t.total || 0,
