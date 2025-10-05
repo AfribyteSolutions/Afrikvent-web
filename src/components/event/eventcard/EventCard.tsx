@@ -16,8 +16,8 @@ interface Event {
   organization_name?: string;
   organizer_name?: string;
   price: string;
-  currency: string; // Add this
-  currency_symbol: string; // Add this
+  currency: string;
+  currency_symbol: string;
   tags: string[];
   isSponsored?: boolean;
   ticketOptions?: TicketOption[];
@@ -59,7 +59,8 @@ const EventCard: React.FC<EventCardProps> = ({
 
   // Immediate fallback exchange rates for instant UX (updated regularly)
   const INSTANT_RATES: { [key: string]: { [key: string]: number } } = {
-    XOF: { // CFA Franc to other currencies (updated Dec 2024)
+    XOF: {
+      // CFA Franc to other currencies (updated Dec 2024)
       USD: 0.0016,
       EUR: 0.0015,
       GBP: 0.0013,
@@ -97,23 +98,21 @@ const EventCard: React.FC<EventCardProps> = ({
     BR: { currency: "BRL", symbol: "R$" },
     MX: { currency: "MXN", symbol: "$" },
     SN: { currency: "XOF", symbol: "CFA" },
-    // Add more West African countries that use CFA
-    BF: { currency: "XOF", symbol: "CFA" }, // Burkina Faso
-    CI: { currency: "XOF", symbol: "CFA" }, // Côte d'Ivoire
-    GW: { currency: "XOF", symbol: "CFA" }, // Guinea-Bissau
-    ML: { currency: "XOF", symbol: "CFA" }, // Mali
-    NE: { currency: "XOF", symbol: "CFA" }, // Niger
-    TG: { currency: "XOF", symbol: "CFA" }, // Togo
+    BF: { currency: "XOF", symbol: "CFA" },
+    CI: { currency: "XOF", symbol: "CFA" },
+    GW: { currency: "XOF", symbol: "CFA" },
+    ML: { currency: "XOF", symbol: "CFA" },
+    NE: { currency: "XOF", symbol: "CFA" },
+    TG: { currency: "XOF", symbol: "CFA" },
   };
 
-  // Get user location with immediate timezone detection
+  // Get user location
   useEffect(() => {
     const getUserLocationFast = () => {
-      // INSTANT: Get timezone-based location first (no network needed)
       try {
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
         const countryFromTimezone = getCountryFromTimezone(timezone);
-        
+
         if (countryFromTimezone && currencyMap[countryFromTimezone]) {
           setUserLocation({
             country: countryFromTimezone,
@@ -121,10 +120,10 @@ const EventCard: React.FC<EventCardProps> = ({
             currencySymbol: currencyMap[countryFromTimezone].symbol,
           });
         } else {
-          // INSTANT: Language-based fallback
-          const language = navigator.language || navigator.languages?.[0] || 'en-US';
+          const language =
+            navigator.language || navigator.languages?.[0] || "en-US";
           const countryFromLang = getCountryFromLanguage(language);
-          
+
           if (countryFromLang && currencyMap[countryFromLang]) {
             setUserLocation({
               country: countryFromLang,
@@ -132,7 +131,6 @@ const EventCard: React.FC<EventCardProps> = ({
               currencySymbol: currencyMap[countryFromLang].symbol,
             });
           } else {
-            // Final fallback to CFA
             setUserLocation({
               country: "SN",
               currency: "XOF",
@@ -140,8 +138,7 @@ const EventCard: React.FC<EventCardProps> = ({
             });
           }
         }
-      } catch (error) {
-        // Immediate fallback to CFA
+      } catch {
         setUserLocation({
           country: "SN",
           currency: "XOF",
@@ -149,31 +146,26 @@ const EventCard: React.FC<EventCardProps> = ({
         });
       }
 
-      // BACKGROUND: Try to get more accurate location (non-blocking)
       setTimeout(() => {
         getUserLocationFromIP();
       }, 100);
     };
 
     const getUserLocationFromIP = async () => {
-      const ipServices = [
-        "https://api.country.is",
-        "https://ipinfo.io/json",
-      ];
+      const ipServices = ["https://api.country.is", "https://ipinfo.io/json"];
 
       for (const service of ipServices) {
         try {
-          const response = await fetch(service, { 
-            signal: AbortSignal.timeout(3000) // 3 second timeout
+          const response = await fetch(service, {
+            signal: AbortSignal.timeout(3000),
           });
-          
+
           if (response.ok) {
             const data = await response.json();
             const countryCode = data.country || data.country_code;
 
             if (countryCode && currencyMap[countryCode]) {
-              // Only update if it's different from current location
-              setUserLocation(current => {
+              setUserLocation((current) => {
                 if (current?.country !== countryCode) {
                   return {
                     country: countryCode,
@@ -183,11 +175,11 @@ const EventCard: React.FC<EventCardProps> = ({
                 }
                 return current;
               });
-              return; // Success, stop trying other services
+              return;
             }
           }
-        } catch (error) {
-          continue; // Try next service
+        } catch {
+          continue;
         }
       }
     };
@@ -195,112 +187,103 @@ const EventCard: React.FC<EventCardProps> = ({
     getUserLocationFast();
   }, []);
 
-  // Helper function to get country from timezone
   const getCountryFromTimezone = (timezone: string): string | null => {
     const timezoneToCountry: { [key: string]: string } = {
-      'America/New_York': 'US',
-      'America/Los_Angeles': 'US',
-      'America/Chicago': 'US',
-      'America/Denver': 'US',
-      'America/Toronto': 'CA',
-      'America/Vancouver': 'CA',
-      'Europe/London': 'GB',
-      'Europe/Paris': 'FR',
-      'Europe/Berlin': 'DE',
-      'Europe/Rome': 'IT',
-      'Europe/Madrid': 'ES',
-      'Asia/Tokyo': 'JP',
-      'Asia/Shanghai': 'CN',
-      'Asia/Kolkata': 'IN',
-      'Australia/Sydney': 'AU',
-      'Australia/Melbourne': 'AU',
-      'Africa/Accra': 'GH',
-      'Africa/Lagos': 'NG',
-      'Africa/Nairobi': 'KE',
-      'Africa/Johannesburg': 'ZA',
-      'Africa/Dakar': 'SN',
-      'America/Sao_Paulo': 'BR',
-      'America/Mexico_City': 'MX',
+      "America/New_York": "US",
+      "America/Los_Angeles": "US",
+      "America/Chicago": "US",
+      "America/Denver": "US",
+      "America/Toronto": "CA",
+      "America/Vancouver": "CA",
+      "Europe/London": "GB",
+      "Europe/Paris": "FR",
+      "Europe/Berlin": "DE",
+      "Europe/Rome": "IT",
+      "Europe/Madrid": "ES",
+      "Asia/Tokyo": "JP",
+      "Asia/Shanghai": "CN",
+      "Asia/Kolkata": "IN",
+      "Australia/Sydney": "AU",
+      "Australia/Melbourne": "AU",
+      "Africa/Accra": "GH",
+      "Africa/Lagos": "NG",
+      "Africa/Nairobi": "KE",
+      "Africa/Johannesburg": "ZA",
+      "Africa/Dakar": "SN",
+      "America/Sao_Paulo": "BR",
+      "America/Mexico_City": "MX",
     };
 
     return timezoneToCountry[timezone] || null;
   };
 
-  // Helper function to get country from language
   const getCountryFromLanguage = (language: string): string | null => {
     const langToCountry: { [key: string]: string } = {
-      'en-US': 'US',
-      'en-GB': 'GB',
-      'en-CA': 'CA',
-      'en-AU': 'AU',
-      'fr-FR': 'FR',
-      'de-DE': 'DE',
-      'it-IT': 'IT',
-      'es-ES': 'ES',
-      'ja-JP': 'JP',
-      'zh-CN': 'CN',
-      'hi-IN': 'IN',
-      'pt-BR': 'BR',
-      'es-MX': 'MX',
+      "en-US": "US",
+      "en-GB": "GB",
+      "en-CA": "CA",
+      "en-AU": "AU",
+      "fr-FR": "FR",
+      "de-DE": "DE",
+      "it-IT": "IT",
+      "es-ES": "ES",
+      "ja-JP": "JP",
+      "zh-CN": "CN",
+      "hi-IN": "IN",
+      "pt-BR": "BR",
+      "es-MX": "MX",
     };
 
-    return langToCountry[language] || langToCountry[language.split('-')[0]] || null;
+    return (
+      langToCountry[language] ||
+      langToCountry[language.split("-")[0]] ||
+      null
+    );
   };
 
-  // Get exchange rates with instant fallback and background updates
+  // Get exchange rates (always from CFA → user currency)
   useEffect(() => {
-    if (!userLocation || !event.currency) return;
-    if (userLocation.currency === "XOF") return; // No conversion needed for CFA users
+    if (!userLocation) return;
+    if (userLocation.currency === "XOF") return;
 
-    // INSTANT: Use cached rates immediately
-    if (INSTANT_RATES[event.currency] && INSTANT_RATES[event.currency][userLocation.currency]) {
+    if (
+      INSTANT_RATES["XOF"] &&
+      INSTANT_RATES["XOF"][userLocation.currency]
+    ) {
       setExchangeRates({
-        [userLocation.currency]: INSTANT_RATES[event.currency][userLocation.currency]
+        [userLocation.currency]: INSTANT_RATES["XOF"][userLocation.currency],
       });
     }
 
-    // BACKGROUND: Get live rates (non-blocking)
     const getLiveRates = async () => {
       setIsLoadingRates(true);
-      
-      const exchangeServices = [
-        `https://api.exchangerate-api.com/v4/latest/${event.currency}`,
-      ];
-
-      for (const service of exchangeServices) {
-        try {
-          const response = await fetch(service, {
-            signal: AbortSignal.timeout(5000) // 5 second timeout
-          });
-          
-          if (response.ok) {
-            const data = await response.json();
-            if (data.rates && data.rates[userLocation.currency]) {
-              // Update with live rates
-              setExchangeRates(prev => ({
-                ...prev,
-                [userLocation.currency]: data.rates[userLocation.currency]
-              }));
-              setIsLoadingRates(false);
-              return;
-            }
+      try {
+        const response = await fetch(
+          `https://api.exchangerate-api.com/v4/latest/XOF`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        if (response.ok) {
+          const data = await response.json();
+          if (data.rates && data.rates[userLocation.currency]) {
+            setExchangeRates({
+              [userLocation.currency]: data.rates[userLocation.currency],
+            });
           }
-        } catch (error) {
-          continue;
         }
+      } catch {
+        // silently fail
+      } finally {
+        setIsLoadingRates(false);
       }
-      
-      setIsLoadingRates(false);
     };
 
-    // Delay live rate fetching to not block UI
     setTimeout(getLiveRates, 200);
-  }, [userLocation, event.currency]);
+  }, [userLocation]);
 
-  // Convert price instantly with cached rates
+  // Convert from CFA → user currency
   useEffect(() => {
-    if (!userLocation || !event.price || !event.currency) return;
-    if (userLocation.currency === "XOF") return; // Don't convert for CFA users
+    if (!userLocation || !event.price) return;
+    if (userLocation.currency === "XOF") return;
     if (event.price.toLowerCase() === "free") return;
 
     const priceMatch = event.price.match(/[\d,]+\.?\d*/);
@@ -309,7 +292,8 @@ const EventCard: React.FC<EventCardProps> = ({
     const numericPrice = parseFloat(priceMatch[0].replace(",", ""));
 
     if (exchangeRates[userLocation.currency]) {
-      const convertedAmount = numericPrice * exchangeRates[userLocation.currency];
+      const convertedAmount =
+        numericPrice * exchangeRates[userLocation.currency];
       const formatted = new Intl.NumberFormat("en-US", {
         minimumFractionDigits: 0,
         maximumFractionDigits: 2,
@@ -317,7 +301,7 @@ const EventCard: React.FC<EventCardProps> = ({
 
       setConvertedPrice(`${userLocation.currencySymbol}${formatted}`);
     }
-  }, [userLocation, exchangeRates, event.price, event.currency]);
+  }, [userLocation, exchangeRates, event.price]);
 
   const handleClick = () => {
     if (onClick) {
@@ -326,23 +310,22 @@ const EventCard: React.FC<EventCardProps> = ({
   };
 
   const getOrganizerName = () =>
-    event.organization_name || event.organizer_name || event.organizer || "Event Organizer";
+    event.organization_name ||
+    event.organizer_name ||
+    event.organizer ||
+    "Event Organizer";
 
   const getPriceDisplay = () => {
-    // Handle free events
     if (event.price.toLowerCase() === "free") {
       return { primary: "Free", secondary: null };
     }
 
-    // Always use CFA as primary currency for display
     const cfaPrice = `CFA ${event.price}`;
 
-    // If user is from a different country (not CFA region), show their currency as secondary
     if (
       convertedPrice &&
       userLocation &&
-      userLocation.currency !== "XOF" && // User is not in CFA region
-      event.currency !== userLocation.currency
+      userLocation.currency !== "XOF"
     ) {
       return { primary: cfaPrice, secondary: `≈ ${convertedPrice}` };
     }
@@ -351,30 +334,19 @@ const EventCard: React.FC<EventCardProps> = ({
   };
 
   const getEventTime = () => {
-    if (!event.time || event.time === "TBD") {
-      return "TBD";
-    }
-
-    // Handle different time formats
+    if (!event.time || event.time === "TBD") return "TBD";
     if (typeof event.time === "string") {
-      // If it's already in HH:MM format
-      if (event.time.match(/^\d{2}:\d{2}$/)) {
-        return event.time;
-      }
-      
-      // If it contains time info, try to parse it
+      if (event.time.match(/^\d{2}:\d{2}$/)) return event.time;
       if (event.time.includes(":")) {
         try {
-          // Extract time part if it's a full datetime string
-          const timePart = event.time.includes("T") ? event.time.split("T")[1] : event.time;
-          const timeOnly = timePart.split(".")[0]; // Remove milliseconds if present
-          
-          // Create a date object to format the time
+          const timePart = event.time.includes("T")
+            ? event.time.split("T")[1]
+            : event.time;
+          const timeOnly = timePart.split(".")[0];
           const [hours, minutes] = timeOnly.split(":");
           const date = new Date();
           date.setHours(parseInt(hours, 10));
           date.setMinutes(parseInt(minutes, 10));
-          
           return date.toLocaleTimeString("en-US", {
             hour: "numeric",
             minute: "2-digit",
@@ -384,8 +356,6 @@ const EventCard: React.FC<EventCardProps> = ({
           return "TBD";
         }
       }
-
-      // Try to parse as full datetime
       try {
         const startTime = new Date(event.time);
         if (!isNaN(startTime.getTime())) {
@@ -399,40 +369,31 @@ const EventCard: React.FC<EventCardProps> = ({
         return "TBD";
       }
     }
-
     return "TBD";
   };
 
   const getEventDate = () => {
-    if (!event.date || event.date === "TBD") {
-      return "TBD";
-    }
-
-    // Handle different date formats
+    if (!event.date || event.date === "TBD") return "TBD";
     if (typeof event.date === "string") {
-      // If it's already formatted (contains / or -)
-      if (event.date.includes("/") || event.date.includes("-") || event.date.includes(" ")) {
+      if (event.date.includes("/") || event.date.includes("-")) {
         try {
-          const eventDate = new Date(event.date);
-          if (!isNaN(eventDate.getTime())) {
-            return eventDate.toLocaleDateString("en-US", {
+          const d = new Date(event.date);
+          if (!isNaN(d.getTime())) {
+            return d.toLocaleDateString("en-US", {
               month: "short",
               day: "numeric",
               year: "numeric",
             });
           }
-          // If parsing fails, return as is if it looks like a date
           return event.date;
         } catch {
           return event.date;
         }
       }
-
-      // Try to parse as ISO string or other formats
       try {
-        const eventDate = new Date(event.date);
-        if (!isNaN(eventDate.getTime())) {
-          return eventDate.toLocaleDateString("en-US", {
+        const d = new Date(event.date);
+        if (!isNaN(d.getTime())) {
+          return d.toLocaleDateString("en-US", {
             month: "short",
             day: "numeric",
             year: "numeric",
@@ -442,7 +403,6 @@ const EventCard: React.FC<EventCardProps> = ({
         return "TBD";
       }
     }
-
     return "TBD";
   };
 

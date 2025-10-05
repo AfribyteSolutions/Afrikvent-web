@@ -3,19 +3,6 @@
 import React, { useState, useEffect, ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
-import { Database } from '@/types/database.types';
-import { PostgrestError } from '@supabase/supabase-js';
-
-// Define the types for the data returned from the Supabase query
-type TicketRow = Database['public']['Tables']['TICKETS']['Row'];
-type EventRow = Database['public']['Tables']['EVENTS']['Row'];
-type UserRow = Database['public']['Tables']['USERS']['Row'];
-
-// Updated interface to correctly access the nested currency
-interface TicketWithRelations extends TicketRow {
-    EVENTS: Pick<EventRow, 'organizer_id' | 'currency'>[];
-    USERS: Pick<UserRow, 'name' | 'email'>[];
-}
 
 interface DashboardStatsProps {
     user: User | null;
@@ -24,10 +11,8 @@ interface DashboardStatsProps {
 interface StatsData {
     totalEvents: number;
     activeEvents: number;
-    // These hold ALL-TIME totals
     totalRevenueByCurrency: Record<string, number>;
     totalTicketsSoldByCurrency: Record<string, number>;
-    // Changes still represent month-over-month
     eventChange: string;
     activeEventChange: string;
     revenueChange: string;
@@ -35,50 +20,20 @@ interface StatsData {
     loading: boolean;
 }
 
-// --- START: Helper Functions ---
+interface TicketWithEvent {
+    total: number | null;
+    quantity: string | null;
+    ticket_status: string | null;
+    created_at: string;
+    event_id: string;
+    EVENTS: {
+        currency: string | null;
+    }[];
+}
 
-// Helper function to sum a Record<string, number>
 const getSum = (data: Record<string, number>): number => {
     return Object.values(data).reduce((sum, value) => sum + value, 0);
 };
-
-const calculateRevenue = (ticketsData: TicketWithRelations[] | null) => {
-    // ESLint fix: Changed to const
-    const revenueByCurrency: Record<string, number> = {}; 
-    
-    const paidTickets = ticketsData?.filter(ticket =>
-        // Only count successfully paid/used tickets
-        ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
-    ) || [];
-    
-    paidTickets.forEach(ticket => {
-        // FIX: Default to 'XOF' (CFA Franc) if event currency is missing
-        const currency = ticket.EVENTS?.[0]?.currency || 'XOF'; 
-        const total = ticket.total || 0;
-        revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + total;
-    });
-    return revenueByCurrency;
-};
-
-const calculateTicketsSold = (ticketsData: TicketWithRelations[] | null) => {
-    // ESLint fix: Changed to const
-    const ticketsSoldByCurrency: Record<string, number> = {}; 
-    
-    const paidTickets = ticketsData?.filter(ticket =>
-        ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
-    ) || [];
-    
-    paidTickets.forEach(ticket => {
-        // FIX: Default to 'XOF' (CFA Franc) if event currency is missing
-        const currency = ticket.EVENTS?.[0]?.currency || 'XOF';
-        // Ensure quantity is parsed to a number, defaulting to 1
-        const quantity = parseInt(ticket.quantity || '1', 10); 
-        ticketsSoldByCurrency[currency] = (ticketsSoldByCurrency[currency] || 0) + quantity;
-    });
-    return ticketsSoldByCurrency;
-};
-
-// --- END: Helper Functions ---
 
 const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
     const [stats, setStats] = useState<StatsData>({
@@ -96,6 +51,26 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
     useEffect(() => {
         if (user) {
             fetchDashboardStats();
+            
+            // Real-time subscription for ticket updates
+            const ticketsSubscription = supabase
+                .channel('dashboard-tickets')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'TICKETS'
+                    },
+                    () => {
+                        fetchDashboardStats();
+                    }
+                )
+                .subscribe();
+
+            return () => {
+                ticketsSubscription.unsubscribe();
+            };
         } else {
             setStats(prev => ({ ...prev, loading: false }));
         }
@@ -110,7 +85,6 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
     };
     
     const formatCurrency = (currency: string, value: number) => {
-        // Use Intl.NumberFormat for robust currency display
         const currencyCode = currency || 'USD'; 
         
         try {
@@ -121,11 +95,9 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
                 maximumFractionDigits: 0 
             }).format(value);
         } catch (e) {
-            // Fallback
             return `${currencyCode} ${value.toLocaleString()}`;
         }
     };
-
 
     const fetchDashboardStats = async () => {
         if (!user) return;
@@ -133,10 +105,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         try {
             setStats(prev => ({ ...prev, loading: true }));
 
-            // --- Date Range Setup ---
             const today = new Date();
             const startOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
-
             const startOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1, 0, 0, 0, 0);
 
             // 1. Fetch All Events
@@ -148,7 +118,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
             if (eventsError) throw eventsError;
             const allEvents = allEventsData || [];
 
-            // 2. Fetch All Tickets
+            // 2. Fetch All Successful Tickets (paid/used/completed)
             const { data: allTicketsData, error: ticketsError } = await supabase
                 .from('TICKETS')
                 .select(`
@@ -156,65 +126,85 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
                     quantity,
                     ticket_status,
                     created_at,
-                    EVENTS!inner(organizer_id, currency)
+                    event_id,
+                    EVENTS!inner(currency)
                 `)
-                .eq('EVENTS.organizer_id', user.id);
+                .eq('EVENTS.organizer_id', user.id)
+                .in('ticket_status', ['paid', 'used', 'completed', 'success']);
             
             if (ticketsError) throw ticketsError;
+            const allSuccessTickets: TicketWithEvent[] = allTicketsData || [];
 
-            const allTickets = allTicketsData || [];
-
-            // --- Data Segmentation for Change Calculation ---
+            // --- Calculate Revenue and Tickets Sold ---
             
-            // Current Month
+            // Helper: Calculate revenue from tickets
+            const calculateRevenue = (tickets: TicketWithEvent[]) => {
+                const revenueByCurrency: Record<string, number> = {};
+                tickets.forEach(ticket => {
+                    const currency = ticket.EVENTS[0]?.currency || 'XOF';
+                    const total = Number(ticket.total) || 0;
+                    revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + total;
+                });
+                return revenueByCurrency;
+            };
+
+            // Helper: Calculate tickets sold from tickets
+            const calculateTicketsSold = (tickets: TicketWithEvent[]) => {
+                const ticketsByCurrency: Record<string, number> = {};
+                tickets.forEach(ticket => {
+                    const currency = ticket.EVENTS[0]?.currency || 'XOF';
+                    const quantity = parseInt(String(ticket.quantity || '1'), 10);
+                    ticketsByCurrency[currency] = (ticketsByCurrency[currency] || 0) + quantity;
+                });
+                return ticketsByCurrency;
+            };
+
+            // --- All-Time Totals ---
+            const totalRevenueAllTime = calculateRevenue(allSuccessTickets);
+            const totalTicketsSoldAllTime = calculateTicketsSold(allSuccessTickets);
+
+            // --- Current Month ---
             const currentMonthEvents = allEvents.filter(event =>
                 new Date(event.created_at) >= startOfCurrentMonth
             );
-            const currentMonthTickets = allTickets.filter(ticket =>
+            const currentMonthTickets = allSuccessTickets.filter(ticket =>
                 new Date(ticket.created_at) >= startOfCurrentMonth
             );
-
-            // Previous Month 
-            const previousMonthEvents = allEvents.filter(event =>
-                new Date(event.created_at) >= startOfPreviousMonth && new Date(event.created_at) < startOfCurrentMonth
-            );
-            const previousMonthTickets = allTickets.filter(ticket =>
-                new Date(ticket.created_at) >= startOfPreviousMonth && new Date(ticket.created_at) < startOfCurrentMonth
-            );
-            
-            // --- Calculations ---
-
-            // Current Totals (for Change Calc)
             const currentTotalEvents = currentMonthEvents.length;
             const currentActiveEvents = currentMonthEvents.filter(event =>
                 event.event_status === 'active' || event.event_status === 'published'
             ).length;
-            const currentRevenue = calculateRevenue(currentMonthTickets as TicketWithRelations[]);
-            const currentTicketsSold = calculateTicketsSold(currentMonthTickets as TicketWithRelations[]);
+            const currentRevenue = calculateRevenue(currentMonthTickets);
+            const currentTicketsSold = calculateTicketsSold(currentMonthTickets);
 
-            // Previous Totals (for Change Calc)
+            // --- Previous Month ---
+            const previousMonthEvents = allEvents.filter(event => {
+                const eventDate = new Date(event.created_at);
+                return eventDate >= startOfPreviousMonth && eventDate < startOfCurrentMonth;
+            });
+            const previousMonthTickets = allSuccessTickets.filter(ticket => {
+                const ticketDate = new Date(ticket.created_at);
+                return ticketDate >= startOfPreviousMonth && ticketDate < startOfCurrentMonth;
+            });
             const previousTotalEvents = previousMonthEvents.length;
             const previousActiveEvents = previousMonthEvents.filter(event =>
                 event.event_status === 'active' || event.event_status === 'published'
             ).length;
-            const previousRevenue = calculateRevenue(previousMonthTickets as TicketWithRelations[]);
-            const previousTicketsSold = calculateTicketsSold(previousMonthTickets as TicketWithRelations[]);
-            
-            // All-Time Totals (for dashboard display)
-            const totalRevenueAllTime = calculateRevenue(allTickets as TicketWithRelations[]);
-            const totalTicketsSoldAllTime = calculateTicketsSold(allTickets as TicketWithRelations[]);
+            const previousRevenue = calculateRevenue(previousMonthTickets);
+            const previousTicketsSold = calculateTicketsSold(previousMonthTickets);
 
-
-            // Change Metrics
+            // --- Calculate Changes ---
             const eventChange = calculateChange(currentTotalEvents, previousTotalEvents);
             const activeEventChange = calculateChange(currentActiveEvents, previousActiveEvents);
             const revenueChange = calculateChange(getSum(currentRevenue), getSum(previousRevenue));
             const ticketsSoldChange = calculateChange(getSum(currentTicketsSold), getSum(previousTicketsSold));
 
-            // Set all-time totals for main display metrics
+            // --- Set State ---
             setStats({
                 totalEvents: allEvents.length, 
-                activeEvents: allEvents.filter(e => e.event_status === 'active' || e.event_status === 'published').length, 
+                activeEvents: allEvents.filter(e => 
+                    e.event_status === 'active' || e.event_status === 'published'
+                ).length, 
                 totalRevenueByCurrency: totalRevenueAllTime, 
                 totalTicketsSoldByCurrency: totalTicketsSoldAllTime,
                 eventChange,
@@ -230,11 +220,10 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         }
     };
 
-    // --- Stats Configuration ---
     const statsConfig = [
         {
             name: 'Total Events',
-            value: stats.totalEvents.toLocaleString(), // Convert to string here
+            value: stats.totalEvents.toLocaleString(),
             change: stats.eventChange,
             icon: '🎪',
             color: 'bg-blue-500',
@@ -242,7 +231,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         },
         {
             name: 'Active Events',
-            value: stats.activeEvents.toLocaleString(), // Convert to string here
+            value: stats.activeEvents.toLocaleString(),
             change: stats.activeEventChange,
             icon: '🔥',
             color: 'bg-green-500',
@@ -250,7 +239,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         },
         {
             name: 'Total Revenue',
-            value: stats.totalRevenueByCurrency, // Remains as Record<string, number> for formatting
+            value: stats.totalRevenueByCurrency,
             change: stats.revenueChange,
             icon: '💰',
             color: 'bg-yellow-500',
@@ -258,7 +247,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         },
         {
             name: 'Tickets Sold',
-            value: stats.totalTicketsSoldByCurrency, // Remains as Record<string, number> for formatting
+            value: stats.totalTicketsSoldByCurrency,
             change: stats.ticketsSoldChange,
             icon: '🎫',
             color: 'bg-purple-500',
@@ -266,15 +255,12 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         }
     ];
 
-    // --- Fix for TS2322 (ReactNode type check) ---
     const renderValue = (name: string, value: string | Record<string, number>): ReactNode => {
-        
         if (name === 'Total Revenue' && typeof value === 'object') {
             const revenueEntries = Object.entries(value);
             if (revenueEntries.length === 0 || getSum(value) === 0) {
                 return <span className="text-2xl font-normal text-gray-500">No revenue yet</span>;
             }
-            // Display revenue for all currencies found
             return (
                 <div>
                     {revenueEntries.map(([currency, total], i) => (
@@ -287,14 +273,10 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         }
         
         if (name === 'Tickets Sold' && typeof value === 'object') {
-            const ticketsEntries = Object.entries(value);
             const totalTickets = getSum(value);
-
-            if (ticketsEntries.length === 0 || totalTickets === 0) {
+            if (totalTickets === 0) {
                 return <span className="text-2xl font-normal text-gray-500">No tickets sold</span>;
             }
-            
-            // Display total tickets sold across all currencies
             return (
                 <span className="block text-3xl md:text-3xl font-bold">
                     {totalTickets.toLocaleString()}
@@ -302,12 +284,10 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
             );
         }
         
-        // Final Fix: Handle the string values explicitly for Events count
         if (typeof value === 'string') {
             return <span className="text-3xl md:text-3xl font-bold">{value}</span>;
         }
 
-        // Fallback
         return null;
     };
 
@@ -327,7 +307,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
                 return (
                     <div key={index} className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
                         <div className="flex items-center justify-between">
-                            <div>
+                            <div className="flex-1">
                                 <p className="text-sm font-medium text-gray-600">{stat.name}</p>
                                 <div className="mt-2">
                                     {stats.loading ? (
@@ -337,10 +317,11 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
                                     )}
                                 </div>
                             </div>
-                            <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center text-white text-xl`}>
+                            <div className={`w-12 h-12 ${stat.color} rounded-lg flex items-center justify-center text-white text-xl flex-shrink-0`}>
                                 {stat.icon}
                             </div>
                         </div>
+                        
                         <div className="mt-4 flex items-center">
                             {!isNop && (
                                 <>
@@ -354,7 +335,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
                             )}
                             {isNop && (
                                 <span className="text-sm text-gray-500">
-                                    {stat.change === 'New' ? 'Just started' : 'No data available'}
+                                    No data available
                                 </span>
                             )}
                         </div>
