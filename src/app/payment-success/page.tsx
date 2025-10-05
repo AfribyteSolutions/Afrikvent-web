@@ -260,7 +260,7 @@ function PaymentSuccessContent() {
           </p>
           <div className="flex flex-col gap-3">
             <button
-              onClick={() => router.push('/my-tickets')}
+              onClick={() => router.push('/events')}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
             >
               View My Tickets
