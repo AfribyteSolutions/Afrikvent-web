@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
 
-
 interface EditEventModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -42,6 +41,7 @@ interface TicketTypeData {
   currency_symbol: string;
   tickets_sold: number;
   is_active: boolean;
+  format: string; // ✅ Added format field
 }
 
 interface EventFormData {
@@ -120,10 +120,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
   ];
 
   const currencies: Currency[] = [
-    // West African CFA Franc (primary default)
     { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc', flag: '🇸🇳' },
-
-    // Other major African currencies
     { code: 'GHS', symbol: '₵', name: 'Ghanaian Cedi', flag: '🇬🇭' },
     { code: 'NGN', symbol: '₦', name: 'Nigerian Naira', flag: '🇳🇬' },
     { code: 'XAF', symbol: 'FCFA', name: 'Central African CFA Franc', flag: '🇨🇲' },
@@ -135,8 +132,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     { code: 'EGP', symbol: '£', name: 'Egyptian Pound', flag: '🇪🇬' },
     { code: 'MAD', symbol: 'DH', name: 'Moroccan Dirham', flag: '🇲🇦' },
     { code: 'BWP', symbol: 'P', name: 'Botswanan Pula', flag: '🇧🇼' },
-
-    // International currencies
     { code: 'USD', symbol: '$', name: 'US Dollar', flag: '🇺🇸' },
     { code: 'EUR', symbol: '€', name: 'Euro', flag: '🇪🇺' },
     { code: 'GBP', symbol: '£', name: 'British Pound', flag: '🇬🇧' }
@@ -144,14 +139,12 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
 
   const selectedCurrency = currencies.find(c => c.code === formData.currency) || currencies[0];
 
-  // Load event data when modal opens
   useEffect(() => {
     if (isOpen && eventId && user) {
       loadEventData();
     }
   }, [isOpen, eventId, user]);
 
-  // Track unsaved changes
   useEffect(() => {
     if (eventData) {
       const hasChanges = checkForUnsavedChanges();
@@ -166,7 +159,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     setError('');
 
     try {
-      // Load event details
       const { data: event, error: eventError } = await supabase
         .from('EVENTS')
         .select('*')
@@ -184,7 +176,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
 
       setEventData(event);
 
-      // Load ticket types
+      // ✅ Fetch ticket types with format field
       const { data: tickets, error: ticketsError } = await supabase
         .from('TICKET_TYPES')
         .select('*')
@@ -196,10 +188,10 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
 
       setOriginalTickets(tickets || []);
 
-      // Populate form with event data
       const eventDate = new Date(event.event_date);
       const formattedDate = eventDate.toISOString().split('T')[0];
 
+      // ✅ Map tickets with format field
       setFormData({
         title: event.title || '',
         description: event.description || '',
@@ -217,7 +209,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
           price: ticket.price,
           quantity: ticket.max_quatity,
           description: ticket.description || '',
-          format: 'in-person' as const,
+          format: (ticket.format as 'in-person' | 'online') || 'in-person', // ✅ Fetch format
           ticketsSold: ticket.tickets_sold || 0,
           isNew: false
         })),
@@ -255,7 +247,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
         price: ticket.price,
         quantity: ticket.max_quatity,
         description: ticket.description || '',
-        format: 'in-person' as const,
+        format: (ticket.format as 'in-person' | 'online') || 'in-person', // ✅ Include format in comparison
         ticketsSold: ticket.tickets_sold || 0,
         isNew: false
       })))
@@ -310,7 +302,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     }));
   };
 
-  // Step validation functions
   const isStepValid = (): boolean => {
     switch (currentStep) {
       case 1:
@@ -322,14 +313,13 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
                formData.time.trim() !== '' &&
                formData.location.trim() !== '';
       case 3:
-        // Tickets are optional, but if present, name, price, and quantity must be valid
         return formData.ticketTypes.every(ticket => 
           ticket.name.trim() !== '' && 
           ticket.price >= 0 && 
           ticket.quantity > 0
         );
       case 4:
-        return true; // Just choosing publish status
+        return true;
       default:
         return false;
     }
@@ -340,7 +330,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
       setCurrentStep(currentStep + 1);
       setError('');
     } else if (!isStepValid()) {
-        setError('Please complete all required fields for this step before proceeding.');
+      setError('Please complete all required fields for this step before proceeding.');
     }
   };
 
@@ -356,11 +346,10 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
 
     try {
       const fileExt = formData.image.name.split('.').pop();
-      // Use event ID and a random string to ensure unique path on update
       const fileName = `event-${eventId}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
       const filePath = `${user.id}/${fileName}`;
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('event-images')
         .upload(filePath, formData.image, {
           cacheControl: '3600',
@@ -369,7 +358,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
 
       if (uploadError) {
         console.error('Image upload error:', uploadError);
-        // Fallback to existing image if upload fails
         return formData.existingImageUrl || null;
       }
 
@@ -395,11 +383,8 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     setError('');
 
     try {
-      // Combine date and time - Use proper ISO format
-      // Note: Time is in HH:MM format, combining with YYYY-MM-DD creates local time ISO
       const eventDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
 
-      // Upload new image if provided
       let imageUrl = formData.existingImageUrl;
       if (formData.image) {
         const uploadedUrl = await uploadEventImage();
@@ -408,11 +393,9 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
         }
       }
 
-      // Find the currency symbol for the selected currency code
       const currentCurrency = currencies.find(c => c.code === formData.currency) || currencies[0];
       const currencySymbol = currentCurrency.symbol;
 
-      // Update the event
       const { error: eventError } = await supabase
         .from('EVENTS')
         .update({
@@ -436,10 +419,9 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
         throw new Error(`Failed to update event details: ${eventError.message}`);
       }
 
-      // Handle ticket types updates
+      // ✅ Handle ticket types with format field
       const ticketUpdates = formData.ticketTypes.map(async (ticketType) => {
         if (ticketType.isNew) {
-          // Create new ticket type
           const { error: ticketError } = await supabase
             .from('TICKET_TYPES')
             .insert([{
@@ -449,42 +431,39 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
               price: ticketType.price,
               max_quatity: ticketType.quantity,
               currency: formData.currency,
-              currency_symbol: currencySymbol
+              currency_symbol: currencySymbol,
+              format: ticketType.format // ✅ Save format for new tickets
             }]);
 
           if (ticketError) {
             console.error('Error creating ticket type:', ticketError);
-            // Non-critical error, log and continue
           }
         } else {
-          // Update existing ticket type
           const { error: ticketError } = await supabase
             .from('TICKET_TYPES')
             .update({
               name: ticketType.name,
               description: ticketType.description,
               price: ticketType.price,
-              // Only allow increasing quantity, not decreasing below tickets sold
               max_quatity: Math.max(ticketType.quantity, ticketType.ticketsSold || 0),
               currency: formData.currency,
-              currency_symbol: currencySymbol
+              currency_symbol: currencySymbol,
+              format: ticketType.format // ✅ Update format for existing tickets
             })
             .eq('id', ticketType.id);
 
           if (ticketError) {
             console.error('Error updating ticket type:', ticketError);
-            // Non-critical error, log and continue
           }
         }
       });
 
       await Promise.all(ticketUpdates);
 
-      // Handle deleted ticket types (not in current formData but were in original)
       const deletedTicketIds = originalTickets
         .filter(original => 
           !formData.ticketTypes.find(current => current.id === original.id) &&
-          (original.tickets_sold === 0 || original.tickets_sold === null) // Safety check: only delete if 0 sold
+          (original.tickets_sold === 0 || original.tickets_sold === null)
         )
         .map(ticket => ticket.id);
 
@@ -496,7 +475,6 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
 
         if (deleteError) {
           console.error('Error deleting ticket types:', deleteError);
-          // Non-critical error, log and continue
         }
       }
 
@@ -539,6 +517,7 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     );
   }
 
+  // ... rest of your return JSX
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen px-4">

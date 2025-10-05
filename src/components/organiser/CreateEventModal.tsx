@@ -211,10 +211,10 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
       setError('User not authenticated');
       return;
     }
-
+  
     setIsLoading(true);
     setError('');
-
+  
     try {
       // Combine date and time - Use proper ISO format
       const eventDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
@@ -226,44 +226,44 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
           title: formData.title,
           description: formData.description,
           event_date: eventDateTime,
-          start_time: formData.time, // Save time separately for easier parsing
+          start_time: formData.time,
           location_name: formData.location,
           address: formData.venue,
           organizer_id: user.id,
           event_status: formData.eventStatus,
-          currency: formData.currency, // Save selected currency
-          currency_symbol: selectedCurrency.symbol, // Save currency symbol
+          currency: formData.currency,
+          currency_symbol: selectedCurrency.symbol,
           is_featured: false,
           is_sponsored: false
         }])
         .select()
         .single();
-
+  
       if (eventError) {
         throw new Error(eventError.message);
       }
-
+  
       const eventId = eventData.id;
-
+  
       // Upload image if provided
       let imageUrl: string | null = null;
       if (formData.image) {
         imageUrl = await uploadEventImage(eventId);
       }
-
+  
       // Update event with image URL if uploaded
       if (imageUrl) {
         const { error: updateError } = await supabase
           .from('EVENTS')
           .update({ images: [imageUrl] })
           .eq('id', eventId);
-
+  
         if (updateError) {
           console.warn('Error updating event with image:', updateError);
         }
       }
-
-      // Create ticket types with proper currency information
+  
+      // Create ticket types with format field
       for (const ticketType of formData.ticketTypes) {
         const { error: ticketError } = await supabase
           .from('TICKET_TYPES')
@@ -273,16 +273,16 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
             description: ticketType.description,
             price: ticketType.price,
             max_quatity: ticketType.quantity,
-            currency: formData.currency, // Use event's currency
-            currency_symbol: selectedCurrency.symbol // Use event's currency symbol
+            currency: formData.currency,
+            currency_symbol: selectedCurrency.symbol,
+            format: ticketType.format // ✅ NOW SAVING FORMAT
           }]);
-
+  
         if (ticketError) {
           console.error('Error creating ticket type:', ticketError);
-          // Don't throw here, just log - we don't want to fail the entire event creation
         }
       }
-
+  
       // Reset form
       setFormData({
         title: '',
@@ -292,15 +292,15 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
         location: '',
         venue: '',
         category: '',
-        currency: 'XOF', // Reset to default CFA
+        currency: 'XOF',
         image: null,
         ticketTypes: [],
         eventStatus: 'draft'
       });
-
+  
       setCurrentStep(1);
       onSuccess();
-
+  
     } catch (error) {
       console.error('Error creating event:', error);
       setError(error instanceof Error ? error.message : 'Failed to create event');
@@ -308,7 +308,6 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
       setIsLoading(false);
     }
   };
-
   if (!isOpen) return null;
 
   return (

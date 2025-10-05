@@ -370,6 +370,7 @@ export type Database = {
           ticket_image_url: string | null
           currency: string | null  // Added
           currency_symbol: string | null  // Added
+          format: string | null 
         }
         Insert: {
           created_at?: string
