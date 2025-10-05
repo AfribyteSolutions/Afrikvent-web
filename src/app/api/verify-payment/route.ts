@@ -2,6 +2,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+interface InvocationResponse {
+  data: {
+    success?: boolean;
+    emailId?: string;
+  } | null;
+  error: Error | null;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -175,9 +183,9 @@ export async function POST(request: NextRequest) {
 
     console.log('Successfully verified payment with', validTickets.length, 'tickets');
 
-    // Send ticket email with improved error handling
+    // Queue email for background processing (Production approach)
     try {
-      console.log('Starting email send process...');
+      console.log('Fetching user data for email queue...');
       
       const { data: userData, error: userError } = await supabase
         .from('USERS')
@@ -218,44 +226,96 @@ export async function POST(request: NextRequest) {
         isVirtual: isVirtual
       };
 
-      console.log('About to invoke edge function with:', {
-        userEmail: emailPayload.userEmail,
-        ticketCount: emailPayload.tickets.length,
-        isVirtual: emailPayload.isVirtual
-      });
+      console.log('Queueing email for background processing...');
 
-      // Create dedicated client for function invocation
-      const functionClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      });
-
-      const { data: emailResult, error: emailError } = await functionClient.functions.invoke(
-        'send-ticket-email',
-        { body: emailPayload }
-      );
-
-      if (emailError) {
-        console.error('Edge function invocation error:', {
-          message: emailError.message,
-          context: emailError.context,
-          name: emailError.name
+      // Insert into EMAIL_QUEUE for background processing
+      const { error: queueError } = await supabase
+        .from('EMAIL_QUEUE')
+        .insert({
+          user_id: validTickets[0].user_id,
+          email_type: 'ticket_confirmation',
+          payload: emailPayload,
+          status: 'pending',
+          recipient_email: userData.email,
+          created_at: new Date().toISOString(),
+          retry_count: 0
         });
-        throw emailError;
+
+      if (queueError) {
+        console.error('Error queueing email:', queueError);
+        throw queueError;
       }
 
-      console.log('Edge function response:', emailResult);
-      console.log('Email sent successfully to:', userData.email);
+      console.log('Email queued successfully for background processing');
+
+      // Optional: Try immediate send with timeout as fallback
+      // If it fails, the background worker will retry
+      try {
+        console.log('Attempting immediate email send...');
+        
+        const functionClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+          auth: {
+            autoRefreshToken: false,
+            persistSession: false
+          },
+          global: {
+            headers: {
+              'x-request-timeout': '30000' // 30 seconds for immediate attempt
+            }
+          }
+        });
+
+        const invokeWithTimeout = async (timeout: number = 30000): Promise<InvocationResponse> => {
+          const timeoutPromise = new Promise<InvocationResponse>((_, reject) => {
+            setTimeout(() => reject(new Error('Email function timeout')), timeout);
+          });
+
+          const invokePromise = functionClient.functions.invoke(
+            'send-ticket-email',
+            { body: emailPayload }
+          ) as Promise<InvocationResponse>;
+
+          return Promise.race([invokePromise, timeoutPromise]);
+        };
+
+        const emailResult = await invokeWithTimeout(30000);
+
+        if (emailResult.error) {
+          console.error('Immediate email send failed, will be retried by background worker:', emailResult.error.message);
+        } else {
+          console.log('Email sent immediately:', emailResult.data?.emailId);
+          
+          // Mark as sent in queue
+          await supabase
+            .from('EMAIL_QUEUE')
+            .update({ 
+              status: 'sent',
+              sent_at: new Date().toISOString(),
+              external_id: emailResult.data?.emailId
+            })
+            .eq('user_id', validTickets[0].user_id)
+            .eq('email_type', 'ticket_confirmation')
+            .eq('status', 'pending')
+            .order('created_at', { ascending: false })
+            .limit(1);
+        }
+
+      } catch (immediateEmailError) {
+        console.error('Immediate email send failed:', immediateEmailError);
+        console.log('Email will be processed by background worker');
+        // Not throwing - email is queued for background processing
+      }
 
     } catch (emailError) {
-      console.error('Email send failed:', emailError);
+      console.error('Email processing error:', emailError);
       console.error('Error details:', {
         message: emailError instanceof Error ? emailError.message : 'Unknown error',
-        stack: emailError instanceof Error ? emailError.stack : undefined
+        stack: emailError instanceof Error ? emailError.stack : undefined,
+        type: emailError instanceof Error ? emailError.constructor.name : typeof emailError
       });
-      console.error('WARNING: Payment verified but email NOT sent');
+      
+      console.error('WARNING: Payment verified but email NOT queued');
+      // Continue - payment is still successful
     }
 
     // 5. Return success with all data
