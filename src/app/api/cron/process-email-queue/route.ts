@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// This should be called by a cron job (e.g., Vercel Cron)
+
 // Runs every 2 minutes to process queued emails
 
 interface EmailQueueItem {
