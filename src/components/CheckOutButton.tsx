@@ -5,11 +5,13 @@ import {
   Loader2,
   CreditCard,
   AlertCircle,
+  Smartphone,
 } from "lucide-react";
 
 interface CheckoutButtonProps {
   ticketId: number;
   userId: string;
+  userEmail: string; // Add email for Stripe
   phone: string;
   quantity?: number;
   onError?: (error: string) => void;
@@ -21,11 +23,13 @@ interface CheckoutButtonProps {
   ticketTypeName: string | null;
   eventId?: number;
   eventImage?: string;
+  paymentMethod?: 'mobile_money' | 'stripe'; // Allow choosing payment method
 }
 
 const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   ticketId,
   userId,
+  userEmail,
   phone,
   quantity = 1,
   onError,
@@ -37,16 +41,13 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   ticketTypeName,
   eventId,
   eventImage,
+  paymentMethod = 'stripe', // Default to Stripe
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<'mobile_money' | 'stripe'>(paymentMethod);
 
-  const handleCheckout = async () => {
-    if (loading || disabled) return;
-
-    setLoading(true);
-    setError(null);
-
+  const handleMobileMoneyCheckout = async () => {
     try {
       if (!userId || !phone || !ticketId) {
         throw new Error("Missing required information: userId, phone, or ticketId");
@@ -62,15 +63,12 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
       const tickets = [{ ticket_id: ticketId, quantity }];
 
-      console.log("Starting checkout with:", {
+      console.log("Starting mobile money checkout with:", {
         userId,
         phone: cleanPhone,
         tickets,
-        ticketId,
-        quantity,
       });
 
-      // Call the new initiate-payment-url endpoint
       const response = await fetch("/api/initiate-payment-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -87,30 +85,101 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       }
 
       const result = await response.json();
-      console.log("Payment URL result:", result);
-      console.log("Result type:", typeof result);
-      console.log("Result keys:", Object.keys(result));
-      console.log("checkout_url value:", result.checkout_url);
-      console.log("Has checkout_url?", 'checkout_url' in result);
+      console.log("Mobile money payment result:", result);
 
-      // Check for errors first
       if (result.error) {
         throw new Error(result.error);
       }
 
-      // Check if we have a checkout URL
       const checkoutUrl = result.checkout_url || result.data?.checkout_url;
       if (!checkoutUrl) {
-        console.error("No checkout_url in result:", result);
-        console.error("Full result stringified:", JSON.stringify(result, null, 2));
         throw new Error("No checkout URL received from payment service");
       }
 
-      console.log("Redirecting to checkout URL:", checkoutUrl);
-
-      // Redirect user to Fapshi payment page
+      console.log("Redirecting to mobile money checkout:", checkoutUrl);
       window.location.href = checkoutUrl;
 
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const handleStripeCheckout = async () => {
+    try {
+      if (!userId || !userEmail || !ticketId) {
+        throw new Error("Missing required information: userId, email, or ticketId");
+      }
+
+      // Validate email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(userEmail)) {
+        throw new Error("Please provide a valid email address");
+      }
+
+      const tickets = [{ ticket_id: ticketId, quantity }];
+
+      console.log("Starting Stripe checkout with:", {
+        userId,
+        email: userEmail,
+        tickets,
+      });
+
+      const response = await fetch("/api/initiate-stripe-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customer_email: userEmail,
+          user_id: userId,
+          tickets,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || `API error: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log("Stripe payment result:", result);
+
+      if (!result.success) {
+        throw new Error(result.error || "Failed to create Stripe payment session");
+      }
+
+      const checkoutUrl = result.checkout_url;
+      if (!checkoutUrl) {
+        console.error("No checkout URL in result:", result);
+        throw new Error("No checkout URL received from Stripe");
+      }
+
+      console.log("Redirecting to Stripe checkout:", checkoutUrl);
+      
+      // Store session info for verification later
+      if (result.session_id) {
+        sessionStorage.setItem('stripe_session_id', result.session_id);
+        sessionStorage.setItem('payment_id', result.payment_id?.toString() || '');
+      }
+
+      // Redirect to Stripe checkout
+      window.location.href = checkoutUrl;
+
+    } catch (err) {
+      throw err;
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (loading || disabled) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (selectedMethod === 'mobile_money') {
+        await handleMobileMoneyCheckout();
+      } else {
+        await handleStripeCheckout();
+      }
     } catch (err) {
       console.error("Checkout error:", err);
 
@@ -152,13 +221,17 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       return (
         <>
           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          Redirecting to Payment...
+          Redirecting to {selectedMethod === 'mobile_money' ? 'Mobile Money' : 'Stripe'}...
         </>
       );
     }
     return (
       <>
-        <CreditCard className="w-4 h-4 mr-2" />
+        {selectedMethod === 'mobile_money' ? (
+          <Smartphone className="w-4 h-4 mr-2" />
+        ) : (
+          <CreditCard className="w-4 h-4 mr-2" />
+        )}
         Buy {quantity > 1 ? `${quantity} Tickets` : "Ticket"}
       </>
     );
@@ -177,7 +250,44 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      {/* Payment Method Selector */}
+      <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+        <button
+          type="button"
+          onClick={() => setSelectedMethod('stripe')}
+          disabled={loading}
+          className={`
+            flex-1 px-4 py-2 rounded-md font-medium text-sm transition-all
+            ${selectedMethod === 'stripe' 
+              ? 'bg-white text-blue-600 shadow-sm' 
+              : 'text-gray-600 hover:text-gray-900'
+            }
+            disabled:opacity-50 disabled:cursor-not-allowed
+          `}
+        >
+          <CreditCard className="w-4 h-4 inline mr-2" />
+          Card Payment
+        </button>
+        <button
+          type="button"
+          onClick={() => setSelectedMethod('mobile_money')}
+          disabled={loading}
+          className={`
+            flex-1 px-4 py-2 rounded-md font-medium text-sm transition-all
+            ${selectedMethod === 'mobile_money' 
+              ? 'bg-white text-blue-600 shadow-sm' 
+              : 'text-gray-600 hover:text-gray-900'
+            }
+            disabled:opacity-50 disabled:cursor-not-allowed
+          `}
+        >
+          <Smartphone className="w-4 h-4 inline mr-2" />
+          Mobile Money
+        </button>
+      </div>
+
+      {/* Checkout Button */}
       <motion.button
         onClick={handleCheckout}
         disabled={loading || disabled}
@@ -198,17 +308,30 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         {getButtonContent()}
       </motion.button>
 
+      {/* Error Message */}
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -10 }}
-          className="text-red-600 text-sm text-center bg-red-50 p-2 rounded-md border border-red-200"
+          className="text-red-600 text-sm text-center bg-red-50 p-3 rounded-md border border-red-200"
         >
           {error}
         </motion.div>
       )}
 
+      {/* Payment Method Info */}
+      {!loading && (
+        <div className="text-xs text-gray-500 text-center">
+          {selectedMethod === 'stripe' ? (
+            <span>💳 Secure payment with Stripe</span>
+          ) : (
+            <span>📱 Pay with MTN, Orange, or other mobile money</span>
+          )}
+        </div>
+      )}
+
+      {/* Debug Info (Development Only) */}
       {process.env.NODE_ENV === "development" && (
         <details className="text-xs text-gray-500 mt-2">
           <summary className="cursor-pointer hover:text-gray-700">
@@ -217,9 +340,10 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
           <pre className="mt-1 p-2 bg-gray-100 rounded text-xs overflow-auto max-h-32">
             {JSON.stringify(
               {
-                phone_number: phone.replace(/\d(?=\d{4})/g, "*"),
-                payment_method: "mobile money",
+                payment_method: selectedMethod,
                 user_id: userId,
+                email: userEmail,
+                phone_number: phone.replace(/\d(?=\d{4})/g, "*"),
                 tickets: [{ ticket_id: ticketId, quantity }],
                 event_details: {
                   eventTitle,

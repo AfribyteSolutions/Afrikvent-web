@@ -160,7 +160,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         .eq('event_id', eventId)
         .order('price', { ascending: true });
 
-        const { data: comments } = await supabase
+      const { data: comments } = await supabase
         .from('EVENT_COMMENTS')
         .select(`
           *,
@@ -213,33 +213,48 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
   const handleDeleteComment = async (commentId: number) => {
     if (!user || !event) return;
-  
+
     const comment = event.comments.find(c => c.id === commentId);
+    if (!comment) {
+      alert('Comment not found');
+      return;
+    }
+
     const isOrganizer = event.organizer_id === user.id;
-    const isCommentOwner = comment?.user_id === user.id;
-  
+    const isCommentOwner = comment.user_id === user.id;
+
     if (!isOrganizer && !isCommentOwner) {
       alert('You do not have permission to delete this comment');
       return;
     }
-  
+
     if (!confirm('Are you sure you want to delete this comment?')) return;
-  
+
     try {
       const { error } = await supabase
         .from('EVENT_COMMENTS')
         .update({ is_deleted: true })
         .eq('id', commentId);
-  
+
       if (error) {
         console.error('Delete error:', error);
         throw error;
       }
-  
-      await fetchEventDetails();
+
+      // Optimistically update the UI without full page reload
+      setEvent(prevEvent => {
+        if (!prevEvent) return null;
+        return {
+          ...prevEvent,
+          comments: prevEvent.comments.filter(c => c.id !== commentId)
+        };
+      });
+
     } catch (error) {
       console.error('Error deleting comment:', error);
       alert('Failed to delete comment. Please try again.');
+      // Refetch on error to ensure consistency
+      await fetchEventDetails();
     }
   };
 
