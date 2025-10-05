@@ -640,6 +640,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       ticketId={selectedTicket.id}
                       userId={user?.id || ''}
                       phone={getFullPhoneNumber()}
+                      userEmail={user?.email ?? ''}  
                       quantity={quantity}
                       onError={handlePaymentError}
                       disabled={!isPhoneNumberValid()}
