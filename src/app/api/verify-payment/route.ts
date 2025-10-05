@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
     const ticketIds = paymentTickets.map(pt => pt.ticket_id);
     console.log('Found ticket IDs:', ticketIds);
 
-    // 4. Fetch full ticket details with related data - FIXED COLUMN NAMES
+    // 4. Fetch full ticket details with related data INCLUDING format field
     const { data: ticketsData, error: ticketsError } = await supabase
       .from('TICKETS')
       .select(`
@@ -124,7 +124,8 @@ export async function POST(request: NextRequest) {
           id,
           name,
           price,
-          description
+          description,
+          format
         )
       `)
       .in('id', ticketIds);
@@ -157,7 +158,6 @@ export async function POST(request: NextRequest) {
     // Filter tickets to accept both SUCCESSFUL and pending statuses
     const validTickets = ticketsData.filter(ticket => {
       const ticketStatus = ticket.ticket_status?.toUpperCase().trim();
-      // Accept SUCCESSFUL, ACTIVE, CONFIRMED, VALID, and PENDING
       return ['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID', 'PENDING'].includes(ticketStatus);
     });
 
@@ -175,6 +175,44 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Successfully verified payment with', validTickets.length, 'tickets');
+
+    // Send ticket email
+    try {
+      const { data: userData } = await supabase
+        .from('USERS')
+        .select('email, name')
+        .eq('id', validTickets[0].user_id)
+        .single();
+
+      if (userData?.email) {
+        // Determine if this is a virtual event based on ticket format
+        const isVirtual = validTickets[0].TICKET_TYPES?.format === 'online';
+        
+        await supabase.functions.invoke('send-ticket-email', {
+          body: {
+            userEmail: userData.email,
+            userName: userData.name,
+            tickets: validTickets.map(t => ({
+              orderId: t.id.toString(),
+              ticketType: t.TICKET_TYPES.name,
+              qrCode: t.qr_code_data,
+              accessCode: t.qr_code_data?.substring(0, 6).toUpperCase() || 'N/A',
+              format: t.TICKET_TYPES?.format || 'in-person'
+            })),
+            eventTitle: validTickets[0].EVENTS.title,
+            eventDate: validTickets[0].EVENTS.event_date,
+            eventLocation: isVirtual 
+              ? 'Virtual Event' 
+              : (validTickets[0].EVENTS.location_name || validTickets[0].EVENTS.address),
+            isVirtual: isVirtual
+          }
+        });
+        console.log('✅ Ticket email sent to:', userData.email, '| Virtual:', isVirtual);
+      }
+    } catch (emailError) {
+      console.error('❌ Email send failed:', emailError);
+      // Don't fail the verification if email fails
+    }
 
     // 5. Return success with all data
     const response = {
