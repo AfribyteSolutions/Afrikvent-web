@@ -183,24 +183,28 @@ export async function POST(request: NextRequest) {
 
     console.log('Successfully verified payment with', validTickets.length, 'tickets');
 
-    // ============= GUARANTEED EMAIL DELIVERY =============
-    let emailSent = false;
-    let emailError = null;
+    // ============= EMAIL SENDING WITH DETAILED LOGGING =============
+    let emailStatus = 'pending';
+    let emailId = null;
+    const emailLogs: string[] = [];
 
-    try {
-      console.log('Fetching user data for email...');
-      
-      const { data: userData, error: userError } = await supabase
-        .from('USERS')
-        .select('email, name')
-        .eq('id', validTickets[0].user_id)
-        .single();
+    // Get user data
+    console.log('[EMAIL] Step 1: Fetching user data...');
+    emailLogs.push('Fetching user data');
+    
+    const { data: userData, error: userError } = await supabase
+      .from('USERS')
+      .select('email, name')
+      .eq('id', validTickets[0].user_id)
+      .single();
 
-      if (userError || !userData?.email) {
-        throw new Error(`User email not found: ${userError?.message || 'No email'}`);
-      }
-
-      console.log('User data fetched:', { email: userData.email, name: userData.name });
+    if (userError || !userData?.email) {
+      console.error('[EMAIL] ERROR: Failed to get user data:', userError);
+      emailLogs.push(`ERROR: ${userError?.message || 'No email found'}`);
+      emailStatus = 'failed';
+    } else {
+      console.log('[EMAIL] User email:', userData.email);
+      emailLogs.push(`User: ${userData.email}`);
 
       const isVirtual = validTickets[0].TICKET_TYPES?.format === 'online';
       
@@ -222,108 +226,87 @@ export async function POST(request: NextRequest) {
         isVirtual: isVirtual
       };
 
-      // Check if email already sent for this payment
-      const { data: existingQueue } = await supabase
-        .from('EMAIL_QUEUE')
-        .select('id, status, external_id')
-        .eq('user_id', validTickets[0].user_id)
-        .eq('email_type', 'ticket_confirmation')
-        .eq('status', 'sent')
-        .contains('payload', { eventTitle: emailPayload.eventTitle })
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single();
+      console.log('[EMAIL] Step 2: Payload prepared for event:', emailPayload.eventTitle);
+      emailLogs.push(`Event: ${emailPayload.eventTitle}`);
 
-      if (existingQueue) {
-        console.log('✓ Email already sent previously:', existingQueue.external_id);
-        emailSent = true;
-      } else {
-        console.log('Sending email now...');
-        
-        // Multiple retry attempts with increasing timeouts
-        const maxAttempts = 3;
-        let lastError = null;
+      // Try sending email immediately
+      console.log('[EMAIL] Step 3: Attempting to send email via Supabase function...');
+      emailLogs.push('Calling send-ticket-email function');
 
-        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-          try {
-            console.log(`Email send attempt ${attempt}/${maxAttempts}...`);
-            
-            const timeout = 15000 + (attempt * 10000); // 15s, 25s, 35s
-            
-            const emailResult = await Promise.race([
-              supabase.functions.invoke('send-ticket-email', { body: emailPayload }),
-              new Promise<never>((_, reject) => 
-                setTimeout(() => reject(new Error('Timeout')), timeout)
-              )
-            ]) as InvocationResponse;
+      try {
+        const functionResult = await supabase.functions.invoke('send-ticket-email', {
+          body: emailPayload
+        });
 
-            if (emailResult.error) {
-              throw emailResult.error;
-            }
+        console.log('[EMAIL] Function result:', JSON.stringify(functionResult, null, 2));
 
-            console.log('✓ Email sent successfully:', emailResult.data?.emailId);
-            emailSent = true;
-
-            // Record successful send in queue
-            await supabase
-              .from('EMAIL_QUEUE')
-              .insert({
-                user_id: validTickets[0].user_id,
-                email_type: 'ticket_confirmation',
-                payload: emailPayload,
-                status: 'sent',
-                recipient_email: userData.email,
-                created_at: new Date().toISOString(),
-                sent_at: new Date().toISOString(),
-                external_id: emailResult.data?.emailId,
-                retry_count: attempt - 1
-              });
-
-            break; // Success, exit retry loop
-
-          } catch (attemptError) {
-            lastError = attemptError;
-            console.log(`Attempt ${attempt} failed:`, attemptError instanceof Error ? attemptError.message : 'Unknown');
-            
-            if (attempt < maxAttempts) {
-              // Wait before retry (exponential backoff)
-              await new Promise(resolve => setTimeout(resolve, 2000 * attempt));
-            }
-          }
+        if (functionResult.error) {
+          console.error('[EMAIL] Function returned error:', functionResult.error);
+          emailLogs.push(`Function error: ${functionResult.error.message}`);
+          throw functionResult.error;
         }
 
-        if (!emailSent) {
-          // All attempts failed - queue for later
-          console.error('All email attempts failed, queueing for retry');
-          
-          await supabase
-            .from('EMAIL_QUEUE')
-            .insert({
+        if (functionResult.data?.success) {
+          console.log('[EMAIL] ✓ SUCCESS! Email sent with ID:', functionResult.data.emailId);
+          emailStatus = 'sent';
+          emailId = functionResult.data.emailId;
+          emailLogs.push(`SUCCESS: Email sent (${emailId})`);
+
+          // Record in queue as sent
+          try {
+            await supabase.from('EMAIL_QUEUE').insert({
               user_id: validTickets[0].user_id,
               email_type: 'ticket_confirmation',
               payload: emailPayload,
-              status: 'pending',
+              status: 'sent',
               recipient_email: userData.email,
               created_at: new Date().toISOString(),
-              retry_count: 0,
-              max_retries: 5,
-              next_retry_at: new Date(Date.now() + 60000).toISOString(), // Retry in 1 minute
-              error_message: lastError instanceof Error ? lastError.message : 'Failed to send'
+              sent_at: new Date().toISOString(),
+              external_id: emailId,
+              retry_count: 0
             });
+            emailLogs.push('Recorded in EMAIL_QUEUE');
+          } catch (queueErr) {
+            console.log('[EMAIL] Note: Could not record in queue (table may not exist)');
+            emailLogs.push('Queue table not available');
+          }
+        } else {
+          throw new Error('Function returned no success flag');
+        }
 
-          emailError = 'Email queued for delivery';
+      } catch (sendError) {
+        console.error('[EMAIL] Failed to send:', sendError);
+        emailLogs.push(`Send failed: ${sendError instanceof Error ? sendError.message : 'Unknown'}`);
+        emailStatus = 'failed';
+
+        // Try to queue for retry
+        console.log('[EMAIL] Step 4: Attempting to queue for retry...');
+        try {
+          await supabase.from('EMAIL_QUEUE').insert({
+            user_id: validTickets[0].user_id,
+            email_type: 'ticket_confirmation',
+            payload: emailPayload,
+            status: 'pending',
+            recipient_email: userData.email,
+            created_at: new Date().toISOString(),
+            retry_count: 0,
+            max_retries: 5,
+            next_retry_at: new Date().toISOString(),
+            error_message: sendError instanceof Error ? sendError.message : 'Failed to send'
+          });
+          emailLogs.push('Queued for retry');
+          emailStatus = 'queued';
+        } catch (queueError) {
+          console.error('[EMAIL] ERROR: Could not queue email:', queueError);
+          emailLogs.push(`Queue failed: ${queueError instanceof Error ? queueError.message : 'Unknown'}`);
         }
       }
-
-    } catch (error) {
-      console.error('Email processing error:', error);
-      emailError = error instanceof Error ? error.message : 'Unknown error';
-      
-      // Even if email fails, payment is successful
-      console.log('⚠️ Payment successful but email delivery pending');
     }
 
-    // 5. Return success with all data
+    console.log('[EMAIL] Final status:', emailStatus);
+    console.log('[EMAIL] Complete log:', emailLogs.join(' → '));
+
+    // 5. Return success with all data + email debug info
     const response = {
       success: true,
       status: 'completed',
@@ -336,11 +319,14 @@ export async function POST(request: NextRequest) {
       },
       tickets: validTickets,
       email: {
-        sent: emailSent,
-        message: emailSent 
+        status: emailStatus,
+        emailId: emailId,
+        message: emailStatus === 'sent' 
           ? 'Confirmation email has been sent to your inbox'
-          : 'Your tickets are confirmed. Email will be delivered shortly.',
-        error: emailError
+          : emailStatus === 'queued'
+          ? 'Email queued for delivery'
+          : 'Email delivery in progress - check your inbox shortly',
+        logs: emailLogs
       }
     };
     
