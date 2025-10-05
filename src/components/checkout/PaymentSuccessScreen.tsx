@@ -26,7 +26,7 @@ const PaymentSuccessScreen: React.FC<PaymentSuccessScreenProps> = ({
   const router = useRouter();
 
   const handleCheckMyTickets = () => {
-    router.push('/events?tab=my-tickets');
+    router.push('/events');
     onClose();
   };
 
