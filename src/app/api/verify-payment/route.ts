@@ -15,7 +15,13 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    });
+
     const { session_id } = await request.json();
 
     if (!session_id) {
@@ -50,7 +56,7 @@ export async function POST(request: NextRequest) {
       amount: payment.amount,
     });
 
-    // 2. Check payment status (handle any case variation)
+    // 2. Check payment status
     const normalizedStatus = payment.payment_status?.toUpperCase().trim();
     
     console.log('Normalized payment status:', normalizedStatus);
@@ -65,7 +71,6 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Accept multiple successful status variations
     const successfulStatuses = ['SUCCESSFUL', 'COMPLETED', 'ACTIVE', 'PAID'];
     if (!successfulStatuses.includes(normalizedStatus)) {
       console.log('Payment has non-successful status:', payment.payment_status);
@@ -79,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     console.log('Payment status is valid');
 
-    // 3. Get associated tickets through PAYMENT_TICKETS junction table
+    // 3. Get associated tickets
     const { data: paymentTickets, error: ptError } = await supabase
       .from('PAYMENT_TICKETS')
       .select('ticket_id')
@@ -106,7 +111,7 @@ export async function POST(request: NextRequest) {
     const ticketIds = paymentTickets.map(pt => pt.ticket_id);
     console.log('Found ticket IDs:', ticketIds);
 
-    // 4. Fetch full ticket details with related data INCLUDING format field
+    // 4. Fetch full ticket details with format field
     const { data: ticketsData, error: ticketsError } = await supabase
       .from('TICKETS')
       .select(`
@@ -141,10 +146,6 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('Raw tickets fetched:', ticketsData?.length || 0);
-    console.log('Ticket statuses:', ticketsData?.map(t => ({
-      id: t.id,
-      status: t.ticket_status
-    })));
 
     if (!ticketsData || ticketsData.length === 0) {
       console.error('No ticket data returned for IDs:', ticketIds);
@@ -155,7 +156,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Filter tickets to accept both SUCCESSFUL and pending statuses
+    // Filter valid tickets
     const validTickets = ticketsData.filter(ticket => {
       const ticketStatus = ticket.ticket_status?.toUpperCase().trim();
       return ['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID', 'PENDING'].includes(ticketStatus);
@@ -164,9 +165,7 @@ export async function POST(request: NextRequest) {
     console.log('Valid tickets after filtering:', validTickets.length);
 
     if (validTickets.length === 0) {
-      console.log('No valid tickets found. Statuses:', 
-        ticketsData.map(t => t.ticket_status)
-      );
+      console.log('No valid tickets found. Statuses:', ticketsData.map(t => t.ticket_status));
       return NextResponse.json({
         success: false,
         status: 'no_valid_tickets',
@@ -176,42 +175,87 @@ export async function POST(request: NextRequest) {
 
     console.log('Successfully verified payment with', validTickets.length, 'tickets');
 
-    // Send ticket email
+    // Send ticket email with improved error handling
     try {
-      const { data: userData } = await supabase
+      console.log('Starting email send process...');
+      
+      const { data: userData, error: userError } = await supabase
         .from('USERS')
         .select('email, name')
         .eq('id', validTickets[0].user_id)
         .single();
 
-      if (userData?.email) {
-        // Determine if this is a virtual event based on ticket format
-        const isVirtual = validTickets[0].TICKET_TYPES?.format === 'online';
-        
-        await supabase.functions.invoke('send-ticket-email', {
-          body: {
-            userEmail: userData.email,
-            userName: userData.name,
-            tickets: validTickets.map(t => ({
-              orderId: t.id.toString(),
-              ticketType: t.TICKET_TYPES.name,
-              qrCode: t.qr_code_data,
-              accessCode: t.qr_code_data?.substring(0, 6).toUpperCase() || 'N/A',
-              format: t.TICKET_TYPES?.format || 'in-person'
-            })),
-            eventTitle: validTickets[0].EVENTS.title,
-            eventDate: validTickets[0].EVENTS.event_date,
-            eventLocation: isVirtual 
-              ? 'Virtual Event' 
-              : (validTickets[0].EVENTS.location_name || validTickets[0].EVENTS.address),
-            isVirtual: isVirtual
-          }
-        });
-        console.log('✅ Ticket email sent to:', userData.email, '| Virtual:', isVirtual);
+      if (userError) {
+        console.error('Error fetching user data:', userError);
+        throw userError;
       }
+
+      if (!userData?.email) {
+        console.error('No email found for user:', validTickets[0].user_id);
+        throw new Error('User email not found');
+      }
+
+      console.log('User data fetched:', { email: userData.email, name: userData.name });
+
+      const isVirtual = validTickets[0].TICKET_TYPES?.format === 'online';
+      console.log('Event type:', isVirtual ? 'Virtual' : 'In-Person');
+
+      const emailPayload = {
+        userEmail: userData.email,
+        userName: userData.name,
+        tickets: validTickets.map(t => ({
+          orderId: t.id.toString(),
+          ticketType: t.TICKET_TYPES.name,
+          qrCode: t.qr_code_data,
+          accessCode: t.qr_code_data?.substring(0, 6).toUpperCase() || 'N/A',
+          format: t.TICKET_TYPES?.format || 'in-person'
+        })),
+        eventTitle: validTickets[0].EVENTS.title,
+        eventDate: validTickets[0].EVENTS.event_date,
+        eventLocation: isVirtual 
+          ? 'Virtual Event' 
+          : (validTickets[0].EVENTS.location_name || validTickets[0].EVENTS.address),
+        isVirtual: isVirtual
+      };
+
+      console.log('About to invoke edge function with:', {
+        userEmail: emailPayload.userEmail,
+        ticketCount: emailPayload.tickets.length,
+        isVirtual: emailPayload.isVirtual
+      });
+
+      // Create dedicated client for function invocation
+      const functionClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      });
+
+      const { data: emailResult, error: emailError } = await functionClient.functions.invoke(
+        'send-ticket-email',
+        { body: emailPayload }
+      );
+
+      if (emailError) {
+        console.error('Edge function invocation error:', {
+          message: emailError.message,
+          context: emailError.context,
+          name: emailError.name
+        });
+        throw emailError;
+      }
+
+      console.log('Edge function response:', emailResult);
+      console.log('Email sent successfully to:', userData.email);
+
     } catch (emailError) {
-      console.error('❌ Email send failed:', emailError);
-      // Don't fail the verification if email fails
+      console.error('Email send failed:', emailError);
+      console.error('Error details:', {
+        message: emailError instanceof Error ? emailError.message : 'Unknown error',
+        stack: emailError instanceof Error ? emailError.stack : undefined
+      });
+      console.error('WARNING: Payment verified but email NOT sent');
     }
 
     // 5. Return success with all data
