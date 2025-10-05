@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
     const { data: userData, error: userError } = await supabase
       .from('USERS')
       .select('email, name')
-      .eq('id', validTickets[0].user_id)
+      .eq('user_id', validTickets[0].user_id)
       .single();
 
     if (userError || !userData?.email) {

@@ -26,8 +26,10 @@ const PaymentSuccessScreen: React.FC<PaymentSuccessScreenProps> = ({
   const router = useRouter();
 
   const handleCheckMyTickets = () => {
-    router.push('/events');
-    onClose();
+    onClose(); // Close modal first
+    setTimeout(() => {
+      router.push('/events');
+    }, 100); // Small delay to ensure modal closes
   };
 
   const handleBackToHome = () => {
