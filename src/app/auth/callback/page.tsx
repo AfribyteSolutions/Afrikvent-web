@@ -11,17 +11,42 @@ export default function AuthCallback() {
   useEffect(() => {
     const handleAuth = async () => {
       try {
-        // Exchange the code for a session
-        const { data, error } = await supabase.auth.exchangeCodeForSession(
-          window.location.href
-        );
-
-        if (error) {
-          console.error("Auth error:", error.message);
-          setError(error.message);
-          // Wait a bit so user can see the error, then redirect to login
+        // Get the hash parameters from the URL
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const searchParams = new URLSearchParams(window.location.search);
+        
+        // Check if there's an error in the URL
+        const errorParam = hashParams.get('error') || searchParams.get('error');
+        const errorDescription = hashParams.get('error_description') || searchParams.get('error_description');
+        
+        if (errorParam) {
+          console.error("OAuth error:", errorParam, errorDescription);
+          setError(errorDescription || errorParam);
           setTimeout(() => {
-            router.push("/login");
+            router.push("/");
+          }, 2000);
+          return;
+        }
+
+        // Check for access token (implicit flow) or code (PKCE flow)
+        const accessToken = hashParams.get('access_token');
+        const code = searchParams.get('code');
+
+        if (!accessToken && !code) {
+          // No auth data found, just redirect to home
+          console.log("No auth data found in URL, redirecting to home");
+          router.push("/");
+          return;
+        }
+
+        // Let Supabase handle the session automatically
+        const { data, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("Session error:", sessionError.message);
+          setError(sessionError.message);
+          setTimeout(() => {
+            router.push("/");
           }, 2000);
           return;
         }
@@ -36,10 +61,12 @@ export default function AuthCallback() {
 
           // If user doesn't exist in users table, create them
           if (userError && userError.code === "PGRST116") {
-            // User not found, create new user record
             const { error: insertError } = await supabase.from("users").insert({
               user_id: data.session.user.id,
-              name: data.session.user.user_metadata?.name || data.session.user.email?.split("@")[0] || "User",
+              name: data.session.user.user_metadata?.full_name || 
+                    data.session.user.user_metadata?.name || 
+                    data.session.user.email?.split("@")[0] || 
+                    "User",
               email: data.session.user.email || "",
               phone: data.session.user.user_metadata?.phone || "",
               role: "attendee",
@@ -53,7 +80,11 @@ export default function AuthCallback() {
             }
           }
 
-          // Redirect to home page
+          // Successfully authenticated, redirect to home
+          router.push("/");
+        } else {
+          // No session found after auth
+          console.log("No session found, redirecting to home");
           router.push("/");
         }
       } catch (err) {
@@ -65,7 +96,12 @@ export default function AuthCallback() {
       }
     };
 
-    handleAuth();
+    // Small delay to ensure URL params are available
+    const timer = setTimeout(() => {
+      handleAuth();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [router]);
 
   return (
@@ -93,7 +129,7 @@ export default function AuthCallback() {
             </p>
             <p className="text-sm text-center text-gray-600 mb-4">{error}</p>
             <p className="text-xs text-center text-gray-500">
-              Redirecting to login...
+              Redirecting to home...
             </p>
           </>
         ) : (
@@ -114,10 +150,10 @@ export default function AuthCallback() {
               </svg>
             </div>
             <p className="text-lg font-semibold text-center text-gray-800 mb-2">
-              Processing login...
+              Completing sign in...
             </p>
             <p className="text-sm text-center text-gray-600">
-              Please wait while we complete your authentication.
+              You will be redirected to the home page shortly.
             </p>
           </>
         )}

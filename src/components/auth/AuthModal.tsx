@@ -50,27 +50,34 @@ const AuthModal: React.FC<AuthModalProps> = ({
           password,
           options: {
             data: { name, phone },
+            emailRedirectTo: `${window.location.origin}/auth/callback`,
           },
         });
 
         if (authError) throw authError;
 
         if (data.user) {
-          await supabase.from("users").insert({
-            user_id: data.user.id,
-            name,
-            email,
-            phone,
-            role: "attendee",
-            is_active: true,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
+          // Only create user record if email confirmation is disabled
+          // Otherwise, this will be done in the callback after email confirmation
+          const { data: { user: currentUser } } = await supabase.auth.getUser();
+          
+          if (currentUser) {
+            await supabase.from("users").insert({
+              user_id: data.user.id,
+              name,
+              email,
+              phone,
+              role: "attendee",
+              is_active: true,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            });
+          }
         }
 
         onSuccess(data.user?.email || "");
         onClose();
-        router.push("/"); // Redirect to home page
+        router.push("/");
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
@@ -80,7 +87,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
         
         onSuccess(data.user?.email || "");
         onClose();
-        router.push("/"); // Redirect to home page
+        router.push("/");
       }
     } catch (err) {
       const e = err as AuthError;
@@ -93,14 +100,23 @@ const AuthModal: React.FC<AuthModalProps> = ({
   const handleSocialAuth = async (provider: Provider) => {
     try {
       setLoading(true);
-      const { error } = await supabase.auth.signInWithOAuth({
+      setError("");
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
           redirectTo: `${window.location.origin}/auth/callback`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       });
+      
       if (error) throw error;
-      // Social auth will redirect to callback URL, which handles the redirect to "/"
+      
+      // The redirect will happen automatically
+      // Don't set loading to false here as the page will redirect
     } catch (err) {
       const e = err as AuthError;
       setError(e.message);
@@ -120,8 +136,10 @@ const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleClose = () => {
-    resetForm();
-    onClose();
+    if (!loading) {
+      resetForm();
+      onClose();
+    }
   };
 
   return (
@@ -143,10 +161,11 @@ const AuthModal: React.FC<AuthModalProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-8   relative">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-8 relative">
               <button
                 onClick={handleClose}
-                className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors p-1"
+                disabled={loading}
+                className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors p-1 disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -165,7 +184,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
               </div>
             </div>
 
-            {/* Social Auth (Moved to the top) */}
+            {/* Social Auth */}
             <div className="p-6 pb-0">
               <div className="flex items-center justify-center">
                 <button
@@ -174,17 +193,29 @@ const AuthModal: React.FC<AuthModalProps> = ({
                   disabled={loading}
                   className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg bg-white text-base text-gray-500 hover:bg-gray-50 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path fill="#4285F4" d="M24 9.5c3.34 0 5.86 1.13 7.82 2.92l6.53-6.53C35.86 2.37 30.14 0 24 0 14.86 0 6.91 5.09 3.01 12.33l7.07 5.46C12.89 12.39 18.06 9.5 24 9.5z" />
-                    <path fill="#34A853" d="M44 24.5c0-1.57-.14-3.07-.4-4.52H24v8.58h11.23c-1.22 4.41-5.11 7.4-9.82 7.4-5.94 0-10.9-4.04-12.72-9.6H1.2c4.08 7.91 12.01 13.52 22.8 13.52 7.15 0 13.41-2.39 17.8-6.54l-6.53-5.06z" />
-                    <path fill="#FBBC04" d="M11.28 29.43c-1.88-.51-3.6-1.29-5.04-2.29l-7.07 5.46c2.81 4.54 6.89 7.7 11.58 9.38 2.24.8 4.67 1.22 7.21 1.22 2.54 0 4.97-.42 7.21-1.22l-7.07-5.46z" />
-                    <path fill="#EA4335" d="M24 9.5c3.34 0 5.86 1.13 7.82 2.92l6.53-6.53C35.86 2.37 30.14 0 24 0 14.86 0 6.91 5.09 3.01 12.33l7.07 5.46C12.89 12.39 18.06 9.5 24 9.5z" />
-                  </svg>
-                  Sign in with Google
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path fill="#4285F4" d="M24 9.5c3.34 0 5.86 1.13 7.82 2.92l6.53-6.53C35.86 2.37 30.14 0 24 0 14.86 0 6.91 5.09 3.01 12.33l7.07 5.46C12.89 12.39 18.06 9.5 24 9.5z" />
+                        <path fill="#34A853" d="M44 24.5c0-1.57-.14-3.07-.4-4.52H24v8.58h11.23c-1.22 4.41-5.11 7.4-9.82 7.4-5.94 0-10.9-4.04-12.72-9.6H1.2c4.08 7.91 12.01 13.52 22.8 13.52 7.15 0 13.41-2.39 17.8-6.54l-6.53-5.06z" />
+                        <path fill="#FBBC04" d="M11.28 29.43c-1.88-.51-3.6-1.29-5.04-2.29l-7.07 5.46c2.81 4.54 6.89 7.7 11.58 9.38 2.24.8 4.67 1.22 7.21 1.22 2.54 0 4.97-.42 7.21-1.22l-7.07-5.46z" />
+                        <path fill="#EA4335" d="M24 9.5c3.34 0 5.86 1.13 7.82 2.92l6.53-6.53C35.86 2.37 30.14 0 24 0 14.86 0 6.91 5.09 3.01 12.33l7.07 5.46C12.89 12.39 18.06 9.5 24 9.5z" />
+                      </svg>
+                      Sign in with Google
+                    </>
+                  )}
                 </button>
               </div>
               <div className="relative flex justify-center py-4">
-                  <span className="px-2 bg-white text-gray-500 text-sm">or</span>
+                <span className="px-2 bg-white text-gray-500 text-sm">or</span>
               </div>
             </div>
 
@@ -201,7 +232,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                         required
-                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white"
+                        disabled={loading}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white disabled:opacity-50"
                       />
                     </div>
                     <div className="relative">
@@ -212,7 +244,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         required
-                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white"
+                        disabled={loading}
+                        className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white disabled:opacity-50"
                       />
                     </div>
                   </>
@@ -226,7 +259,8 @@ const AuthModal: React.FC<AuthModalProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white"
+                    disabled={loading}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white disabled:opacity-50"
                   />
                 </div>
 
@@ -239,12 +273,14 @@ const AuthModal: React.FC<AuthModalProps> = ({
                     onChange={(e) => setPassword(e.target.value)}
                     required
                     minLength={6}
-                    className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white"
+                    disabled={loading}
+                    className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white disabled:opacity-50"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400"
+                    disabled={loading}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 disabled:opacity-50"
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
@@ -260,12 +296,14 @@ const AuthModal: React.FC<AuthModalProps> = ({
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                       minLength={6}
-                      className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white"
+                      disabled={loading}
+                      className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 focus:bg-white disabled:opacity-50"
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400"
+                      disabled={loading}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 disabled:opacity-50"
                     >
                       {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>
@@ -285,9 +323,19 @@ const AuthModal: React.FC<AuthModalProps> = ({
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 transition-all"
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
                 >
-                  {loading ? (type === "signin" ? "Signing In..." : "Creating Account...") : type === "signin" ? "Log in" : "Sign up"}
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {type === "signin" ? "Signing In..." : "Creating Account..."}
+                    </>
+                  ) : (
+                    type === "signin" ? "Log in" : "Sign up"
+                  )}
                 </button>
               </form>
             </div>
