@@ -53,6 +53,10 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("Missing required information: userId, phone, or ticketId");
       }
 
+      if (!userEmail) {
+        throw new Error("Email is required for payment");
+      }
+
       const phoneRegex = /^(\+?[1-9]\d{2})[1-9]\d{7,9}$/;
       if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
         throw new Error(
@@ -65,6 +69,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
       console.log("Starting mobile money checkout with:", {
         userId,
+        email: userEmail,
         phone: cleanPhone,
         tickets,
       });
@@ -87,8 +92,9 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         },
         body: JSON.stringify({
           user_id: userId,
+          email: userEmail, // ✅ Added email
           phone_number: cleanPhone,
-          payment_method: "mobile_money",
+          payment_method: "mobile_money", // Edge function now accepts this format
           tickets,
         }),
       });
@@ -133,7 +139,12 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("Please provide a valid email address");
       }
 
-      const tickets = [{ ticket_id: ticketId, quantity }];
+      const tickets = [{ 
+        ticket_id: ticketId, 
+        quantity,
+        event_title: eventTitle,
+        name: ticketTypeName 
+      }];
 
       console.log("Starting Stripe checkout with:", {
         userId,
@@ -141,12 +152,25 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         tickets,
       });
 
-      const response = await fetch("/api/initiate-stripe-payment", {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error("Supabase configuration missing. Please contact support.");
+      }
+
+      const functionUrl = `${supabaseUrl}/functions/v1/initiate-payment-url`;
+
+      const response = await fetch(functionUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseAnonKey}`
+        },
         body: JSON.stringify({
-          customer_email: userEmail,
           user_id: userId,
+          email: userEmail,
+          payment_method: "stripe",
           tickets,
         }),
       });
@@ -159,8 +183,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       const result = await response.json();
       console.log("Stripe payment result:", result);
 
-      if (!result.success) {
-        throw new Error(result.error || "Failed to create Stripe payment session");
+      if (result.error) {
+        throw new Error(result.error);
       }
 
       const checkoutUrl = result.checkout_url;
@@ -173,7 +197,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       
       if (result.session_id) {
         sessionStorage.setItem('stripe_session_id', result.session_id);
-        sessionStorage.setItem('payment_id', result.payment_id?.toString() || '');
       }
 
       window.location.href = checkoutUrl;
