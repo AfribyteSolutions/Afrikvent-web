@@ -6,10 +6,17 @@ const liveUser = process.env.FAPSHI_API_USER || "";
 const liveKey = process.env.FAPSHI_API_KEY || "";
 const liveURL = process.env.FAPSHI_API_URL || "https://api.fapshi.com";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL ?? "",
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
-);
+// Initialize Supabase client lazily to avoid build-time errors
+function getSupabaseClient() {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Missing Supabase environment variables");
+  }
+  
+  return createClient(supabaseUrl, supabaseKey);
+}
 
 console.log("INITIATE PAYMENT CALLED!");
 
@@ -144,6 +151,7 @@ export async function POST(req: Request) {
 
     // Fetch user details
     console.log("FETCHING USER DETAILS");
+    const supabase = getSupabaseClient();
     const { data: user, error: userError } = await supabase
       .from("USERS")
       .select("user_id, name, email")
