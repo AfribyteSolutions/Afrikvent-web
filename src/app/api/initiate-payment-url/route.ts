@@ -1,26 +1,14 @@
-// initiate-payment-url - Fixed TypeScript version
+// initiate-payment-url - Next.js API Route
 import { createClient } from "@supabase/supabase-js";
 
-// Declare Deno global to avoid TypeScript errors
-declare const Deno: {
-  env: {
-    get(key: string): string | undefined;
-  };
-  serve(handler: (req: Request) => Promise<Response> | Response): void;
-};
-
-// ✅ Import or define your Fapshi credentials
-// If you have a models.ts file, uncomment this line:
-// import { liveUser, liveKey, liveURL } from "./models.ts";
-
-// Otherwise use these environment variables:
-const liveUser = Deno.env.get("FAPSHI_API_USER") || "";
-const liveKey = Deno.env.get("FAPSHI_API_KEY") || "";
-const liveURL = Deno.env.get("FAPSHI_API_URL") || "https://api.fapshi.com";
+// Environment variables for Next.js
+const liveUser = process.env.FAPSHI_API_USER || "";
+const liveKey = process.env.FAPSHI_API_KEY || "";
+const liveURL = process.env.FAPSHI_API_URL || "https://api.fapshi.com";
 
 const supabase = createClient(
-  Deno.env.get("SUPABASE_URL") ?? "",
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+  process.env.SUPABASE_URL ?? "",
+  process.env.SUPABASE_SERVICE_ROLE_KEY ?? ""
 );
 
 console.log("INITIATE PAYMENT CALLED!");
@@ -116,8 +104,8 @@ function isMobileMoneyPayment(paymentMethod: string): boolean {
   );
 }
 
-// Main handler
-Deno.serve(async (req) => {
+// Next.js API Route Handler
+export async function POST(req: Request) {
   try {
     const { phone_number, payment_method, user_id, tickets } = await req.json() as {
       phone_number?: string;
@@ -348,4 +336,4 @@ Deno.serve(async (req) => {
       { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
-});
+}
