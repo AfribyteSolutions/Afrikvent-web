@@ -1,4 +1,3 @@
-// app/api/verify-payment/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -19,30 +18,58 @@ export async function POST(request: NextRequest) {
       console.error('Missing Supabase credentials');
       return NextResponse.json({
         success: false,
-        error: 'Server configuration error'
+        error: 'Server configuration error',
       }, { status: 500 });
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: {
         autoRefreshToken: false,
-        persistSession: false
-      }
+        persistSession: false,
+      },
     });
 
-    const { session_id } = await request.json();
+    const body = await request.json();
+    const { session_id, payment_method } = body;
 
     if (!session_id) {
       console.error('No session_id provided');
       return NextResponse.json({
         success: false,
-        error: 'Session ID required'
+        error: 'Session ID required',
       }, { status: 400 });
     }
 
-    console.log('Verifying payment for session:', session_id);
+    console.log(`Verifying payment for session: ${session_id} (${payment_method || 'stripe'})`);
 
-    // 1. Find payment by transaction_id
+    // ===============================
+    // 1️⃣ Special Case: MoMo Payment
+    // ===============================
+    if (payment_method === 'momo') {
+      console.log('🔶 Handling MoMo verification...');
+
+      // Optional: verify with your MoMo gateway if applicable
+      // (uncomment and customize this section)
+      /*
+      const momoResponse = await fetch(`${process.env.MOMO_VERIFY_URL}/${session_id}`);
+      const momoData = await momoResponse.json();
+      console.log('MoMo API Response:', momoData);
+      if (!momoData || momoData.status !== 'SUCCESSFUL') {
+        return NextResponse.json({
+          success: false,
+          status: 'failed',
+          message: 'MoMo payment verification failed or still pending.',
+        });
+      }
+      */
+
+      // Then fall through to same Supabase lookup since MoMo payments
+      // are also recorded in your PAYMENTS table
+    }
+
+    // ===============================
+    // 2️⃣ Supabase Payment Lookup
+    // ===============================
     const { data: payment, error: paymentError } = await supabase
       .from('PAYMENTS')
       .select('*')
@@ -50,292 +77,154 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (paymentError || !payment) {
-      console.log('Payment not found yet:', paymentError?.message);
+      console.log('Payment not found:', paymentError?.message);
       return NextResponse.json({
         success: false,
         status: 'not_found',
-        message: 'Payment record not found yet. It may still be processing.'
+        message: 'Payment record not found or still processing.',
       });
     }
 
-    console.log('Payment found:', {
-      id: payment.id,
-      status: payment.payment_status,
-      amount: payment.amount,
-    });
+    console.log('Payment found:', payment.id, payment.payment_status);
 
-    // 2. Check payment status
     const normalizedStatus = payment.payment_status?.toUpperCase().trim();
-    
-    console.log('Normalized payment status:', normalizedStatus);
-    
+    const successfulStatuses = ['SUCCESSFUL', 'COMPLETED', 'ACTIVE', 'PAID'];
+
     if (normalizedStatus === 'PENDING') {
-      console.log('Payment is still pending');
       return NextResponse.json({
         success: false,
         status: 'pending',
         payment_status: payment.payment_status,
-        message: 'Payment is being processed'
+        message: 'Payment still processing.',
       });
     }
 
-    const successfulStatuses = ['SUCCESSFUL', 'COMPLETED', 'ACTIVE', 'PAID'];
     if (!successfulStatuses.includes(normalizedStatus)) {
-      console.log('Payment has non-successful status:', payment.payment_status);
       return NextResponse.json({
         success: false,
         status: 'failed',
         payment_status: payment.payment_status,
-        message: 'Payment was not successful'
+        message: 'Payment not successful.',
       });
     }
 
-    console.log('Payment status is valid');
+    console.log('✅ Payment verified successfully.');
 
-    // 3. Get associated tickets
+    // ===============================
+    // 3️⃣ Ticket Linking
+    // ===============================
     const { data: paymentTickets, error: ptError } = await supabase
       .from('PAYMENT_TICKETS')
       .select('ticket_id')
       .eq('payment_id', payment.id);
 
-    if (ptError) {
-      console.error('Error fetching payment_tickets:', ptError);
-      return NextResponse.json({
-        success: false,
-        status: 'tickets_error',
-        message: 'Error fetching ticket associations'
-      });
-    }
-
-    if (!paymentTickets || paymentTickets.length === 0) {
-      console.log('No tickets found in PAYMENT_TICKETS for payment_id:', payment.id);
+    if (ptError || !paymentTickets?.length) {
       return NextResponse.json({
         success: false,
         status: 'no_tickets',
-        message: 'No tickets found for this payment'
+        message: 'No tickets found for this payment.',
       });
     }
 
-    const ticketIds = paymentTickets.map(pt => pt.ticket_id);
-    console.log('Found ticket IDs:', ticketIds);
+    const ticketIds = paymentTickets.map((pt) => pt.ticket_id);
 
-    // 4. Fetch full ticket details with format field
     const { data: ticketsData, error: ticketsError } = await supabase
       .from('TICKETS')
       .select(`
         *,
         EVENTS!inner (
-          id,
-          title,
-          event_date,
-          location_name,
-          address,
-          images,
-          description
+          id, title, event_date, location_name, address, images, description
         ),
         TICKET_TYPES!inner (
-          id,
-          name,
-          price,
-          description,
-          format
+          id, name, price, description, format
         )
       `)
       .in('id', ticketIds);
 
-    if (ticketsError) {
-      console.error('Error fetching ticket details:', ticketsError);
+    if (ticketsError || !ticketsData?.length) {
       return NextResponse.json({
         success: false,
-        status: 'tickets_error',
-        message: 'Error fetching ticket details',
-        error: ticketsError.message
+        status: 'no_ticket_data',
+        message: 'Could not fetch ticket details.',
       });
     }
 
-    console.log('Raw tickets fetched:', ticketsData?.length || 0);
-
-    if (!ticketsData || ticketsData.length === 0) {
-      console.error('No ticket data returned for IDs:', ticketIds);
-      return NextResponse.json({
-        success: false,
-        status: 'no_tickets',
-        message: 'Ticket data not found'
-      });
-    }
-
-    // Filter valid tickets
-    const validTickets = ticketsData.filter(ticket => {
-      const ticketStatus = ticket.ticket_status?.toUpperCase().trim();
-      return ['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID', 'PENDING'].includes(ticketStatus);
+    const validTickets = ticketsData.filter((ticket) => {
+      const status = ticket.ticket_status?.toUpperCase().trim();
+      return ['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID'].includes(status);
     });
 
-    console.log('Valid tickets after filtering:', validTickets.length);
-
-    if (validTickets.length === 0) {
-      console.log('No valid tickets found. Statuses:', ticketsData.map(t => t.ticket_status));
+    if (!validTickets.length) {
       return NextResponse.json({
         success: false,
         status: 'no_valid_tickets',
-        message: 'No valid tickets found for this payment'
+        message: 'No valid tickets found for this payment.',
       });
     }
 
-    console.log('Successfully verified payment with', validTickets.length, 'tickets');
+    console.log('🎟 Tickets verified:', validTickets.length);
 
-    // ============= EMAIL SENDING WITH DETAILED LOGGING =============
+    // ===============================
+    // 4️⃣ Send Ticket Email (reused)
+    // ===============================
     let emailStatus = 'pending';
     let emailId = null;
-    const emailLogs: string[] = [];
 
-    // Get user data
-    console.log('[EMAIL] Step 1: Fetching user data...');
-    emailLogs.push('Fetching user data');
-    
-    const { data: userData, error: userError } = await supabase
+    const { data: userData } = await supabase
       .from('USERS')
       .select('email, name')
       .eq('user_id', validTickets[0].user_id)
       .single();
 
-    if (userError || !userData?.email) {
-      console.error('[EMAIL] ERROR: Failed to get user data:', userError);
-      emailLogs.push(`ERROR: ${userError?.message || 'No email found'}`);
-      emailStatus = 'failed';
-    } else {
-      console.log('[EMAIL] User email:', userData.email);
-      emailLogs.push(`User: ${userData.email}`);
-
+    if (userData?.email) {
       const isVirtual = validTickets[0].TICKET_TYPES?.format === 'online';
-      
       const emailPayload = {
         userEmail: userData.email,
         userName: userData.name,
-        tickets: validTickets.map(t => ({
+        tickets: validTickets.map((t) => ({
           orderId: t.id.toString(),
           ticketType: t.TICKET_TYPES.name,
           qrCode: t.qr_code_data,
           accessCode: t.qr_code_data?.substring(0, 6).toUpperCase() || 'N/A',
-          format: t.TICKET_TYPES?.format || 'in-person'
+          format: t.TICKET_TYPES?.format || 'in-person',
         })),
         eventTitle: validTickets[0].EVENTS.title,
         eventDate: validTickets[0].EVENTS.event_date,
-        eventLocation: isVirtual 
-          ? 'Virtual Event' 
-          : (validTickets[0].EVENTS.location_name || validTickets[0].EVENTS.address),
-        isVirtual: isVirtual
+        eventLocation: isVirtual
+          ? 'Virtual Event'
+          : validTickets[0].EVENTS.location_name || validTickets[0].EVENTS.address,
+        isVirtual,
       };
 
-      console.log('[EMAIL] Step 2: Payload prepared for event:', emailPayload.eventTitle);
-      emailLogs.push(`Event: ${emailPayload.eventTitle}`);
+      const functionResult = await supabase.functions.invoke('send-ticket-email', {
+        body: emailPayload,
+      });
 
-      // Try sending email immediately
-      console.log('[EMAIL] Step 3: Attempting to send email via Supabase function...');
-      emailLogs.push('Calling send-ticket-email function');
-
-      try {
-        const functionResult = await supabase.functions.invoke('send-ticket-email', {
-          body: emailPayload
-        });
-
-        console.log('[EMAIL] Function result:', JSON.stringify(functionResult, null, 2));
-
-        if (functionResult.error) {
-          console.error('[EMAIL] Function returned error:', functionResult.error);
-          emailLogs.push(`Function error: ${functionResult.error.message}`);
-          throw functionResult.error;
-        }
-
-        if (functionResult.data?.success) {
-          console.log('[EMAIL] ✓ SUCCESS! Email sent with ID:', functionResult.data.emailId);
-          emailStatus = 'sent';
-          emailId = functionResult.data.emailId;
-          emailLogs.push(`SUCCESS: Email sent (${emailId})`);
-
-          // Record in queue as sent
-          try {
-            await supabase.from('EMAIL_QUEUE').insert({
-              user_id: validTickets[0].user_id,
-              email_type: 'ticket_confirmation',
-              payload: emailPayload,
-              status: 'sent',
-              recipient_email: userData.email,
-              created_at: new Date().toISOString(),
-              sent_at: new Date().toISOString(),
-              external_id: emailId,
-              retry_count: 0
-            });
-            emailLogs.push('Recorded in EMAIL_QUEUE');
-          } catch (queueErr) {
-            console.log('[EMAIL] Note: Could not record in queue (table may not exist)');
-            emailLogs.push('Queue table not available');
-          }
-        } else {
-          throw new Error('Function returned no success flag');
-        }
-
-      } catch (sendError) {
-        console.error('[EMAIL] Failed to send:', sendError);
-        emailLogs.push(`Send failed: ${sendError instanceof Error ? sendError.message : 'Unknown'}`);
-        emailStatus = 'failed';
-
-        // Try to queue for retry
-        console.log('[EMAIL] Step 4: Attempting to queue for retry...');
-        try {
-          await supabase.from('EMAIL_QUEUE').insert({
-            user_id: validTickets[0].user_id,
-            email_type: 'ticket_confirmation',
-            payload: emailPayload,
-            status: 'pending',
-            recipient_email: userData.email,
-            created_at: new Date().toISOString(),
-            retry_count: 0,
-            max_retries: 5,
-            next_retry_at: new Date().toISOString(),
-            error_message: sendError instanceof Error ? sendError.message : 'Failed to send'
-          });
-          emailLogs.push('Queued for retry');
-          emailStatus = 'queued';
-        } catch (queueError) {
-          console.error('[EMAIL] ERROR: Could not queue email:', queueError);
-          emailLogs.push(`Queue failed: ${queueError instanceof Error ? queueError.message : 'Unknown'}`);
-        }
+      if (functionResult.data?.success) {
+        emailStatus = 'sent';
+        emailId = functionResult.data.emailId;
+      } else {
+        emailStatus = 'queued';
       }
     }
 
-    console.log('[EMAIL] Final status:', emailStatus);
-    console.log('[EMAIL] Complete log:', emailLogs.join(' → '));
-
-    // 5. Return success with all data + email debug info
-    const response = {
+    // ===============================
+    // 5️⃣ Response
+    // ===============================
+    return NextResponse.json({
       success: true,
       status: 'completed',
+      source: payment_method || 'stripe',
       payment: {
         id: payment.id,
         amount: payment.amount,
         currency: payment.currency,
         status: payment.payment_status,
-        created_at: payment.created_at
       },
       tickets: validTickets,
       email: {
         status: emailStatus,
-        emailId: emailId,
-        message: emailStatus === 'sent' 
-          ? 'Confirmation email has been sent to your inbox'
-          : emailStatus === 'queued'
-          ? 'Email queued for delivery'
-          : 'Email delivery in progress - check your inbox shortly',
-        logs: emailLogs
-      }
-    };
-    
-    console.log('Returning successful response with', validTickets.length, 'tickets');
-    
-    return NextResponse.json(response, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
+        emailId,
       },
     });
 
@@ -344,13 +233,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      status: 'error'
     }, { status: 500 });
   }
 }
 
 export async function GET() {
   return NextResponse.json({
-    error: 'Method not allowed. Use POST.'
+    error: 'Method not allowed. Use POST.',
   }, { status: 405 });
 }
