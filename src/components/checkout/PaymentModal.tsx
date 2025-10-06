@@ -634,25 +634,24 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       </p>
                     )}
                   </div>
-
                   <div className="pt-4">
                   <CheckoutButton
-    ticketId={selectedTicket.id}
-    userId={user?.id || ''}
-    phone={getFullPhoneNumber()}
-    userEmail={user?.email ?? ''}  
-    ticketPrice={selectedTicket.price as number} 
-    quantity={quantity}
-    onError={handlePaymentError}
-    disabled={!isPhoneNumberValid()}
-    className="w-full"
-    eventTitle={eventTitle}
-    eventDate={eventDate || new Date().toISOString()}
-    eventLocation={eventLocation || 'Location TBA'}
-    ticketTypeName={selectedTicket.name}
-    eventId={eventId}
-    eventImage={eventImage}
-/>
+                  ticketId={selectedTicket.id}
+                  userId={user?.id || ''}
+                  phone={getFullPhoneNumber()}
+                  userEmail={user?.email ?? ''}  
+                  ticketPrice={selectedTicket.price as number} 
+                  quantity={quantity}
+                  onError={handlePaymentError}
+                  disabled={!isPhoneNumberValid()}
+                  className="w-full"
+                  eventTitle={eventTitle}
+                  eventDate={eventDate || new Date().toISOString()}
+                  eventLocation={eventLocation || 'Location TBA'}
+                  ticketTypeName={selectedTicket.name}
+                  eventId={eventId}
+                  eventImage={eventImage}
+                  />
                   </div>
                 </motion.div>
               )}
