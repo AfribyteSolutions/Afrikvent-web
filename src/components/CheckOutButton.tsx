@@ -18,6 +18,8 @@ interface FunctionResponseData {
   };
   error?: string; // Used for application-level errors from the function
   session_id?: string; // Used for Stripe
+  transaction_id?: string; // ✅ Add this
+  transId?: string; 
 }
 
 interface CheckoutButtonProps {
@@ -85,20 +87,19 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("Missing required information: userId, phone, or ticketId");
       }
       
-      
       if (!supabase) {
         throw new Error("Supabase client not initialized. Check Supabase URL and Key.");
       }
-
+  
       const phoneRegex = /^(\+?[1-9]\d{2})[1-9]\d{7,9}$/;
       if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
         throw new Error(
           "Invalid phone number format. Please enter a valid international mobile number with country code."
         );
       }
-
+  
       const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
-
+  
       const functionBody = {
         phone_number: cleanPhone,
         payment_method: "mobile money", 
@@ -110,35 +111,46 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
           }
         ]
       };
-
+  
       console.log("Invoking Edge Function with body:", functionBody);
-
-     
+  
       const { data, error: funcError } = await supabase.functions.invoke<FunctionResponseData>('initiate-payment-url', {
         body: functionBody,
       });
-
+  
       if (funcError) {
         console.error("Supabase Functions Error:", funcError);
         throw new Error(funcError.message || `Payment service error: ${funcError.status}`);
       }
-      
-
+  
       const result = data;
-
+  
       if (result?.error) {
         throw new Error(result.error);
       }
-
+  
       const checkoutUrl = result?.checkout_url || result?.data?.checkout_url;
+      const transId = result?.transaction_id || result?.transId;
+      
       if (!checkoutUrl) {
         console.error("Full result:", result);
         throw new Error("No checkout URL received. Please try again.");
       }
-
+  
+      // ✅ Store transaction ID for verification later
+      if (transId) {
+        sessionStorage.setItem('momo_transaction_id', transId);
+      }
+  
       console.log("Redirecting to mobile money checkout:", checkoutUrl);
+      
+      // ✅ Redirect to Fapshi, but append our return URL to their checkout
+      // After user pays, they'll be sent to our payment-success page
+      const returnUrl = `${window.location.origin}/payment-success?momo_ref=${transId || userId}&provider=momo`;
+      
+      // Open Fapshi in same window - they should redirect back after payment
       window.location.href = checkoutUrl;
-
+  
     } catch (err) {
       setLoading(false); 
       throw err;

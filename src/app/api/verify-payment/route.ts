@@ -42,34 +42,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`Verifying payment for session: ${session_id} (${payment_method || 'stripe'})`);
 
-    // ===============================
-    // 1️⃣ Special Case: MoMo Payment
-    // ===============================
     if (payment_method === 'momo') {
       console.log('🔶 Handling MoMo verification...');
 
-      // Optional: verify with your MoMo gateway if applicable
-      // (uncomment and customize this section)
-      /*
-      const momoResponse = await fetch(`${process.env.MOMO_VERIFY_URL}/${session_id}`);
-      const momoData = await momoResponse.json();
-      console.log('MoMo API Response:', momoData);
-      if (!momoData || momoData.status !== 'SUCCESSFUL') {
-        return NextResponse.json({
-          success: false,
-          status: 'failed',
-          message: 'MoMo payment verification failed or still pending.',
-        });
-      }
-      */
-
-      // Then fall through to same Supabase lookup since MoMo payments
-      // are also recorded in your PAYMENTS table
+    
     }
 
-    // ===============================
-    // 2️⃣ Supabase Payment Lookup
-    // ===============================
+
     const { data: payment, error: paymentError } = await supabase
       .from('PAYMENTS')
       .select('*')
@@ -110,9 +89,7 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Payment verified successfully.');
 
-    // ===============================
-    // 3️⃣ Ticket Linking
-    // ===============================
+
     const { data: paymentTickets, error: ptError } = await supabase
       .from('PAYMENT_TICKETS')
       .select('ticket_id')
@@ -208,9 +185,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // ===============================
-    // 5️⃣ Response
-    // ===============================
     return NextResponse.json({
       success: true,
       status: 'completed',
