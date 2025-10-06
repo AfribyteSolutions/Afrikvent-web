@@ -63,6 +63,7 @@ const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
     eventTime: ticket.eventTime || "TBD",
     eventLocation: ticket.eventLocation || "Location TBA",
     ticketType: ticket.ticketType || "General Admission",
+    ticketFormat: ticket.ticketFormat || 'in-person', // ADD THIS LINE
     quantity: ticket.quantity,
     totalPrice: ticket.totalPrice ?? 0,
     purchaseDate: ticket.purchaseDate,
@@ -206,21 +207,21 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
         const ticketTypeIds = [...new Set(tickets.map(t => t.ticket_type_id).filter(Boolean))];
         
         const { data: ticketTypes, error: typesError } = await supabase
-          .from("TICKET_TYPES")
-          .select(`
-            id,
-            name,
-            event_id,
-            EVENTS(
+            .from("TICKET_TYPES")
+            .select(`
               id,
-              title,
-              event_date,
-              location_name,
-              start_time
-            )
-          `)
-          .in("id", ticketTypeIds);
-
+              name,
+              event_id,
+              format,
+              EVENTS(
+                id,
+                title,
+                event_date,
+                location_name,
+                start_time
+              )
+            `)
+            .in("id", ticketTypeIds);
         if (typesError) {
           console.error("Ticket types error:", typesError);
           throw typesError;
@@ -236,6 +237,7 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
 
         interface TypeData {
           name: string;
+          format?: 'in-person' | 'online';
           event: EventData;
         }
 
@@ -244,38 +246,39 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
           if (type.EVENTS && !Array.isArray(type.EVENTS)) {
             typeMap.set(type.id, {
               name: type.name || "General",
+              format: type.format || 'in-person',
               event: type.EVENTS as EventData
             });
           }
         });
-
         const transformedTickets: UserTicket[] = tickets
-          .map((ticket) => {
-            const typeData = typeMap.get(ticket.ticket_type_id);
-            
-            if (!typeData) {
-              return null;
-            }
+        .map((ticket) => {
+          const typeData = typeMap.get(ticket.ticket_type_id);
+          
+          if (!typeData) {
+            return null;
+          }
 
-            const mapped: UserTicket = {
-              id: ticket.id.toString(),
-              eventId: typeData.event.id?.toString() ?? "",
-              eventTitle: typeData.event.title ?? "Unknown Event",
-              eventDate: typeData.event.event_date ?? "",
-              eventTime: typeData.event.start_time ?? "TBD",
-              eventLocation: typeData.event.location_name ?? "",
-              ticketType: typeData.name ?? "General",
-              quantity: parseInt(ticket.quantity ?? "1", 10),
-              totalPrice: ticket.total ?? 0,
-              purchaseDate: ticket.created_at ?? new Date().toISOString(),
-              status: (ticket.ticket_status as UserTicket["status"]) ?? "confirmed",
-              userId: ticket.user_id ?? "",
-              qrCodeData: ticket.qr_code_data ?? undefined,
-            };
+          const mapped: UserTicket = {
+            id: ticket.id.toString(),
+            eventId: typeData.event.id?.toString() ?? "",
+            eventTitle: typeData.event.title ?? "Unknown Event",
+            eventDate: typeData.event.event_date ?? "",
+            eventTime: typeData.event.start_time ?? "TBD",
+            eventLocation: typeData.event.location_name ?? "",
+            ticketType: typeData.name ?? "General",
+            ticketFormat: typeData.format ?? 'in-person', // ADD THIS LINE
+            quantity: parseInt(ticket.quantity ?? "1", 10),
+            totalPrice: ticket.total ?? 0,
+            purchaseDate: ticket.created_at ?? new Date().toISOString(),
+            status: (ticket.ticket_status as UserTicket["status"]) ?? "confirmed",
+            userId: ticket.user_id ?? "",
+            qrCodeData: ticket.qr_code_data ?? undefined,
+          };
 
-            return mapped;
-          })
-          .filter((ticket): ticket is UserTicket => ticket !== null);
+          return mapped;
+        })
+        .filter((ticket): ticket is UserTicket => ticket !== null);
 
         setDbUserTickets(transformedTickets);
       } catch (err) {

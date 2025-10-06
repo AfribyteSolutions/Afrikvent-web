@@ -21,6 +21,7 @@ export interface UserTicket {
   status: 'confirmed' | 'pending' | 'cancelled';
   userId?: string;
   qrCodeData?: string; // ADDED: QR code data from database
+  ticketFormat?: 'in-person' | 'online'; // ADD THIS LINE
   eventTime?: string;
 }
 
@@ -33,6 +34,7 @@ export interface EnhancedTicket extends UserTicket {
   seatNumber?: string;
   gate?: string;
   validUntil?: string;
+  ticketFormat?: 'in-person' | 'online'; // ADD THIS LINE
   validationCode?: string; // Add this line
 }
 
