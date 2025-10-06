@@ -259,9 +259,7 @@ const getEventTime = (time?: string): string => {
           <div className="mb-8">
             <div className="text-xs opacity-80 mb-1">Format</div>
             <div className="text-sm">
-              {ticket.eventLocation.toLowerCase().includes('online') || 
-               ticket.eventLocation.toLowerCase().includes('virtual') || 
-               ticket.eventLocation.toLowerCase().includes('zoom') ? 'Online' : 'In-Person'}
+              {ticket.ticketFormat === 'online' ? 'Online' : 'In-Person'}
             </div>
           </div>
 
