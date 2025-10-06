@@ -11,7 +11,7 @@ import {
 interface CheckoutButtonProps {
   ticketId: number;
   userId: string;
-  userEmail: string; // Add email for Stripe
+  userEmail: string;
   phone: string;
   quantity?: number;
   onError?: (error: string) => void;
@@ -23,7 +23,7 @@ interface CheckoutButtonProps {
   ticketTypeName: string | null;
   eventId?: number;
   eventImage?: string;
-  paymentMethod?: 'mobile_money' | 'stripe'; // Allow choosing payment method
+  paymentMethod?: 'mobile_money' | 'stripe';
 }
 
 const CheckoutButton: React.FC<CheckoutButtonProps> = ({
@@ -41,7 +41,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   ticketTypeName,
   eventId,
   eventImage,
-  paymentMethod = 'stripe', // Default to Stripe
+  paymentMethod = 'stripe',
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +61,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       }
 
       const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
-      const tickets = [{ ticket_id: ticketId, quantity }];
+      const tickets = [{ ticket_id: ticketId.toString(), quantity }];
 
       console.log("Starting mobile money checkout with:", {
         userId,
@@ -69,19 +69,36 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         tickets,
       });
 
-      const response = await fetch("/api/initiate-payment-url", {
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      
+      if (!supabaseUrl || !supabaseAnonKey) {
+        throw new Error("Supabase configuration missing. Please contact support.");
+      }
+
+      const functionUrl = `${supabaseUrl}/functions/v1/initiate-payment-url`;
+      console.log("Calling Edge Function at:", functionUrl);
+
+      const response = await fetch(functionUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseAnonKey}`
+        },
         body: JSON.stringify({
           user_id: userId,
           phone_number: cleanPhone,
-          payment_method: "mobile money",
+          payment_method: "mobile_money",
           tickets,
         }),
       });
 
+      console.log("Response status:", response.status);
+
       if (!response.ok) {
-        throw new Error(`API error: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        console.error("API error response:", errorData);
+        throw new Error(errorData.error || `Payment service error: ${response.statusText}`);
       }
 
       const result = await response.json();
@@ -93,7 +110,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
       const checkoutUrl = result.checkout_url || result.data?.checkout_url;
       if (!checkoutUrl) {
-        throw new Error("No checkout URL received from payment service");
+        console.error("Full result:", result);
+        throw new Error("No checkout URL received. Please try again.");
       }
 
       console.log("Redirecting to mobile money checkout:", checkoutUrl);
@@ -110,7 +128,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("Missing required information: userId, email, or ticketId");
       }
 
-      // Validate email
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(userEmail)) {
         throw new Error("Please provide a valid email address");
@@ -154,13 +171,11 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
       console.log("Redirecting to Stripe checkout:", checkoutUrl);
       
-      // Store session info for verification later
       if (result.session_id) {
         sessionStorage.setItem('stripe_session_id', result.session_id);
         sessionStorage.setItem('payment_id', result.payment_id?.toString() || '');
       }
 
-      // Redirect to Stripe checkout
       window.location.href = checkoutUrl;
 
     } catch (err) {
@@ -251,7 +266,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
   return (
     <div className="space-y-3">
-      {/* Payment Method Selector */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
         <button
           type="button"
@@ -287,7 +301,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         </button>
       </div>
 
-      {/* Checkout Button */}
       <motion.button
         onClick={handleCheckout}
         disabled={loading || disabled}
@@ -308,7 +321,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         {getButtonContent()}
       </motion.button>
 
-      {/* Error Message */}
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -10 }}
@@ -320,18 +332,16 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         </motion.div>
       )}
 
-      {/* Payment Method Info */}
       {!loading && (
         <div className="text-xs text-gray-500 text-center">
           {selectedMethod === 'stripe' ? (
-            <span>💳 Secure payment with Stripe</span>
+            <span>Secure payment with Stripe</span>
           ) : (
-            <span>📱 Pay with MTN, Orange, or other mobile money</span>
+            <span>Pay with MTN, Orange, or other mobile money</span>
           )}
         </div>
       )}
 
-      {/* Debug Info (Development Only) */}
       {process.env.NODE_ENV === "development" && (
         <details className="text-xs text-gray-500 mt-2">
           <summary className="cursor-pointer hover:text-gray-700">
@@ -350,6 +360,10 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
                   eventDate,
                   eventLocation,
                   ticketTypeName,
+                },
+                env_check: {
+                  has_supabase_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+                  has_supabase_key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
                 },
                 timestamp: new Date().toISOString(),
               },
