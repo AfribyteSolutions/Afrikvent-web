@@ -1,6 +1,5 @@
 // initiate-payment-url - Fixed TypeScript version
-// @ts-expect-error - Deno URL import
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
 
 // Declare Deno global to avoid TypeScript errors
 declare const Deno: {
