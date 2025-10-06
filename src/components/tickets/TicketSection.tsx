@@ -226,6 +226,11 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
           console.error("Ticket types error:", typesError);
           throw typesError;
         }
+        // ADD THIS:
+console.log('Raw ticketTypes from database:', ticketTypes);
+ticketTypes?.forEach(tt => {
+  console.log(`Ticket Type ${tt.id}: format="${tt.format}" (type: ${typeof tt.format})`);
+});
 
         interface EventData {
           id?: number;
@@ -241,44 +246,68 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
           event: EventData;
         }
 
-        const typeMap = new Map<number, TypeData>();
-        ticketTypes?.forEach(type => {
-          if (type.EVENTS && !Array.isArray(type.EVENTS)) {
-            typeMap.set(type.id, {
-              name: type.name || "General",
-              format: type.format || 'in-person',
-              event: type.EVENTS as EventData
-            });
-          }
-        });
-        const transformedTickets: UserTicket[] = tickets
-        .map((ticket) => {
-          const typeData = typeMap.get(ticket.ticket_type_id);
-          
-          if (!typeData) {
-            return null;
-          }
+        // In TicketsSection.tsx, replace the typeMap building section with this:
 
-          const mapped: UserTicket = {
-            id: ticket.id.toString(),
-            eventId: typeData.event.id?.toString() ?? "",
-            eventTitle: typeData.event.title ?? "Unknown Event",
-            eventDate: typeData.event.event_date ?? "",
-            eventTime: typeData.event.start_time ?? "TBD",
-            eventLocation: typeData.event.location_name ?? "",
-            ticketType: typeData.name ?? "General",
-            ticketFormat: typeData.format ?? 'in-person', // ADD THIS LINE
-            quantity: parseInt(ticket.quantity ?? "1", 10),
-            totalPrice: ticket.total ?? 0,
-            purchaseDate: ticket.created_at ?? new Date().toISOString(),
-            status: (ticket.ticket_status as UserTicket["status"]) ?? "confirmed",
-            userId: ticket.user_id ?? "",
-            qrCodeData: ticket.qr_code_data ?? undefined,
-          };
+const typeMap = new Map<number, TypeData>();
+ticketTypes?.forEach(type => {
+  if (type.EVENTS && !Array.isArray(type.EVENTS)) {
+    // CRITICAL FIX: Explicitly cast and default the format field
+    const ticketFormat = (type.format as 'in-person' | 'online' | null) || 'in-person';
+    
+    console.log(`Building typeMap for ticket type ${type.id}:`, {
+      name: type.name,
+      rawFormat: type.format,
+      processedFormat: ticketFormat
+    });
+    
+    typeMap.set(type.id, {
+      name: type.name || "General",
+      format: ticketFormat,
+      event: type.EVENTS as EventData
+    });
+  }
+});
 
-          return mapped;
-        })
-        .filter((ticket): ticket is UserTicket => ticket !== null);
+// Later when mapping tickets, add logging:
+const transformedTickets: UserTicket[] = tickets
+  .map((ticket) => {
+    const typeData = typeMap.get(ticket.ticket_type_id);
+    
+    if (!typeData) {
+      return null;
+    }
+
+    console.log(`Mapping ticket ${ticket.id}:`, {
+      ticket_type_id: ticket.ticket_type_id,
+      format_from_typeData: typeData.format
+    });
+
+    const mapped: UserTicket = {
+      id: ticket.id.toString(),
+      eventId: typeData.event.id?.toString() ?? "",
+      eventTitle: typeData.event.title ?? "Unknown Event",
+      eventDate: typeData.event.event_date ?? "",
+      eventTime: typeData.event.start_time ?? "TBD",
+      eventLocation: typeData.event.location_name ?? "",
+      ticketType: typeData.name ?? "General",
+      ticketFormat: typeData.format, // This should now work
+      quantity: parseInt(ticket.quantity ?? "1", 10),
+      totalPrice: ticket.total ?? 0,
+      purchaseDate: ticket.created_at ?? new Date().toISOString(),
+      status: (ticket.ticket_status as UserTicket["status"]) ?? "confirmed",
+      userId: ticket.user_id ?? "",
+      qrCodeData: ticket.qr_code_data ?? undefined,
+    };
+
+    return mapped;
+  })
+  .filter((ticket): ticket is UserTicket => ticket !== null);
+
+console.log('Final transformed tickets:', transformedTickets.map(t => ({
+  id: t.id,
+  ticketFormat: t.ticketFormat,
+  eventTitle: t.eventTitle
+})));
 
         setDbUserTickets(transformedTickets);
       } catch (err) {
