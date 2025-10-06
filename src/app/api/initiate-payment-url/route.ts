@@ -1,16 +1,33 @@
-// initiate-payment-url - Fixed for both MoMo and Mobile Money
+// initiate-payment-url - Fixed TypeScript version
+// @ts-expect-error - Deno URL import
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { liveUser, liveKey, liveURL } from "./models.ts";
+
+// Declare Deno global to avoid TypeScript errors
+declare const Deno: {
+  env: {
+    get(key: string): string | undefined;
+  };
+  serve(handler: (req: Request) => Promise<Response> | Response): void;
+};
+
+// ✅ Import or define your Fapshi credentials
+// If you have a models.ts file, uncomment this line:
+// import { liveUser, liveKey, liveURL } from "./models.ts";
+
+// Otherwise use these environment variables:
+const liveUser = Deno.env.get("FAPSHI_API_USER") || "";
+const liveKey = Deno.env.get("FAPSHI_API_KEY") || "";
+const liveURL = Deno.env.get("FAPSHI_API_URL") || "https://api.fapshi.com";
 
 const supabase = createClient(
-  Deno.env.get("SUPABASE_URL"),
-  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
+  Deno.env.get("SUPABASE_URL") ?? "",
+  Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
 console.log("INITIATE PAYMENT CALLED!");
 
-// ✅ Helper to generate unique ticket QR codes
-function generateUniqueCode() {
+// Helper to generate unique ticket QR codes
+function generateUniqueCode(): string {
   const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   let result = "";
   for (let i = 0; i < 6; i++) {
@@ -19,8 +36,33 @@ function generateUniqueCode() {
   return result;
 }
 
-// ✅ Fixed initiatePay function
-async function initiatePay({ user, amount }) {
+// Type definitions
+interface User {
+  user_id: string;
+  name: string;
+  email: string;
+}
+
+interface FapshiResponse {
+  transId?: string;
+  link?: string;
+  redirectUrl?: string;
+  [key: string]: unknown;
+}
+
+interface TicketRequest {
+  ticket_id: string;
+  quantity?: number;
+}
+
+interface TicketType {
+  id: string;
+  event_id: string;
+  price: number;
+}
+
+// Fixed initiatePay function
+async function initiatePay({ user, amount }: { user: User; amount: number }): Promise<FapshiResponse> {
   if (!user) throw new Error("User is Null");
 
   const url = `${liveURL}/initiate-pay`;
@@ -33,7 +75,6 @@ async function initiatePay({ user, amount }) {
   };
 
   try {
-    // 1️⃣ Create payment
     const response = await fetch(url, {
       method: "POST",
       headers,
@@ -48,17 +89,13 @@ async function initiatePay({ user, amount }) {
     });
 
     if (!response.ok) {
-      console.log(
-        `Payment initiation failed: ${response.status} - ${response.statusText}`
-      );
+      console.log(`Payment initiation failed: ${response.status} - ${response.statusText}`);
       throw new Error("An Error occurred");
     }
 
-    // 2️⃣ Get response from Fapshi
-    const responseData = await response.json();
+    const responseData = await response.json() as FapshiResponse;
     console.log("Fapshi initiate-pay response:", responseData);
 
-    // 3️⃣ Add redirect with transId if available
     if (responseData.transId) {
       responseData.redirectUrl = `https://afrikvent.com/payment-success?transId=${responseData.transId}`;
     }
@@ -66,11 +103,11 @@ async function initiatePay({ user, amount }) {
     return responseData;
   } catch (e) {
     console.log("ERROR OCCURRED", e);
-    throw new Error(e);
+    throw new Error(e instanceof Error ? e.message : "Payment initiation failed");
   }
 }
 
-// ✅ Helper to check if payment method is mobile money
+// Helper to check if payment method is mobile money
 function isMobileMoneyPayment(paymentMethod: string): boolean {
   const normalized = paymentMethod.toLowerCase().trim();
   return (
@@ -80,10 +117,15 @@ function isMobileMoneyPayment(paymentMethod: string): boolean {
   );
 }
 
-// ✅ Main handler
+// Main handler
 Deno.serve(async (req) => {
   try {
-    const { phone_number, payment_method, user_id, tickets } = await req.json();
+    const { phone_number, payment_method, user_id, tickets } = await req.json() as {
+      phone_number?: string;
+      payment_method?: string;
+      user_id?: string;
+      tickets?: TicketRequest[];
+    };
 
     console.log("📥 Payment request received:", {
       payment_method,
@@ -97,7 +139,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           error: "Invalid request body: user_id and tickets are required",
         }),
-        { status: 400 }
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -109,7 +151,7 @@ Deno.serve(async (req) => {
         JSON.stringify({
           error: "Phone number is required for mobile money payments",
         }),
-        { status: 400 }
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -124,10 +166,8 @@ Deno.serve(async (req) => {
     if (userError || !user) {
       console.error("User fetch error:", userError);
       return new Response(
-        JSON.stringify({
-          error: "User not found",
-        }),
-        { status: 404 }
+        JSON.stringify({ error: "User not found" }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -142,18 +182,25 @@ Deno.serve(async (req) => {
     if (ticketTypeError || !ticketTypes?.length) {
       console.error("Ticket types fetch error:", ticketTypeError);
       return new Response(
-        JSON.stringify({
-          error: "Invalid ticket types",
-        }),
-        { status: 400 }
+        JSON.stringify({ error: "Invalid ticket types" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
     let totalAmount = 0;
-    const ticketInserts = [];
+    const ticketInserts: Array<{
+      user_id: string;
+      event_id: string;
+      ticket_type_id: string;
+      quantity: string;
+      unit_price: number;
+      total: number;
+      qr_code_data: string;
+      ticket_status: string;
+    }> = [];
 
     for (const t of tickets) {
-      const ticketType = ticketTypes.find((tt) => tt.id === t.ticket_id);
+      const ticketType = (ticketTypes as TicketType[]).find((tt) => tt.id === t.ticket_id);
       if (!ticketType) continue;
 
       const unitPrice = ticketType.price ?? 0;
@@ -175,23 +222,21 @@ Deno.serve(async (req) => {
 
     if (totalAmount <= 0) {
       return new Response(
-        JSON.stringify({
-          error: "Invalid total amount",
-        }),
-        { status: 400 }
+        JSON.stringify({ error: "Invalid total amount" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
     console.log("TOTAL AMOUNT:", totalAmount);
 
-    // ✅ FIXED: Call Fapshi for mobile money payments
-    let paymentResponse = null;
+    // FIXED: Call Fapshi for mobile money payments
+    let paymentResponse: FapshiResponse | null = null;
     
     if (isMobileMoney) {
       console.log("🏦 Initiating mobile money payment via Fapshi");
       try {
         paymentResponse = await initiatePay({
-          user,
+          user: user as User,
           amount: totalAmount,
         });
         console.log("✅ Fapshi response received:", paymentResponse);
@@ -201,7 +246,7 @@ Deno.serve(async (req) => {
           JSON.stringify({
             error: "Failed to initiate mobile money payment. Please try again.",
           }),
-          { status: 500 }
+          { status: 500, headers: { "Content-Type": "application/json" } }
         );
       }
     } else {
@@ -234,10 +279,8 @@ Deno.serve(async (req) => {
     if (paymentInsertError || !paymentRecord) {
       console.error("Payment insert error:", paymentInsertError);
       return new Response(
-        JSON.stringify({
-          error: "Failed to record payment",
-        }),
-        { status: 500 }
+        JSON.stringify({ error: "Failed to record payment" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
@@ -251,15 +294,13 @@ Deno.serve(async (req) => {
     if (ticketInsertError || !insertedTickets?.length) {
       console.error("Ticket insert error:", ticketInsertError);
       return new Response(
-        JSON.stringify({
-          error: "Failed to insert tickets",
-        }),
-        { status: 500 }
+        JSON.stringify({ error: "Failed to insert tickets" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
     // Link tickets to payment
-    const paymentTicketLinks = insertedTickets.map((t) => ({
+    const paymentTicketLinks = insertedTickets.map((t: { id: string }) => ({
       payment_id: paymentRecord.id,
       ticket_id: t.id,
     }));
@@ -272,14 +313,12 @@ Deno.serve(async (req) => {
     if (paymentTicketError) {
       console.error("ERROR LINKING TICKETS TO PAYMENT:", paymentTicketError);
       return new Response(
-        JSON.stringify({
-          error: "Failed to link payment to tickets",
-        }),
-        { status: 500 }
+        JSON.stringify({ error: "Failed to link payment to tickets" }),
+        { status: 500, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // ✅ Return appropriate response based on payment method
+    // Return appropriate response based on payment method
     const responseData = {
       message: "Payment initiated successfully",
       amount: totalAmount,
@@ -301,12 +340,13 @@ Deno.serve(async (req) => {
     });
   } catch (err) {
     console.error("❌ Error in initiate-payment:", err);
+    const errorMessage = err instanceof Error ? err.message : "Internal server error";
     return new Response(
       JSON.stringify({
         error: "Internal server error",
-        details: err.message,
+        details: errorMessage,
       }),
-      { status: 500 }
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 });
