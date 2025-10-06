@@ -60,7 +60,7 @@ export default function AuthCallback() {
         console.error("Unexpected error:", err);
         setError("An unexpected error occurred");
         setTimeout(() => {
-          router.push("/login");
+          router.push("/");
         }, 2000);
       }
     };
