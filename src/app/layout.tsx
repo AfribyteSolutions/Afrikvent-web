@@ -4,6 +4,7 @@ import Header from "@/components/header/Header";
 import Footer from "@/components/footer/Footer";
 import Preloader from "@/components/preloader/preloader";
 import { Montserrat } from "next/font/google";
+import PaymentStatusChecker from '@/components/PaymentStatusChecker';
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -28,6 +29,7 @@ export default function RootLayout({
       <body className="flex flex-col min-h-screen bg-background text-foreground font-sans">
         <Preloader />
         <Header />
+        <PaymentStatusChecker />
         <main className="flex-grow">{children}</main>
         <Footer />
       </body>

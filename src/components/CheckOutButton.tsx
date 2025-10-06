@@ -13,13 +13,17 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js"; // ⬅️ 
 // ➡️ 1. Define the specific type for the Edge Function's successful response
 interface FunctionResponseData {
   checkout_url?: string;
-  data?: { // Sometimes the result is nested under 'data'
+  data?: {
     checkout_url?: string;
   };
-  error?: string; // Used for application-level errors from the function
-  session_id?: string; // Used for Stripe
-  transaction_id?: string; // ✅ Add this
-  transId?: string; 
+  error?: string;
+  session_id?: string;
+  transaction_id?: string;
+  transId?: string;
+  payment?: {
+    id: string;
+    transaction_id?: string;
+  };
 }
 
 interface CheckoutButtonProps {
@@ -129,27 +133,55 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error(result.error);
       }
   
+      // Extract payment identifiers
+      const paymentId = result?.payment?.id;
+      const transId = result?.transaction_id || result?.transId || result?.payment?.transaction_id;
       const checkoutUrl = result?.checkout_url || result?.data?.checkout_url;
-      const transId = result?.transaction_id || result?.transId;
       
       if (!checkoutUrl) {
         console.error("Full result:", result);
         throw new Error("No checkout URL received. Please try again.");
       }
   
-      // ✅ Store transaction ID for verification later
-      if (transId) {
-        sessionStorage.setItem('momo_transaction_id', transId);
+      // Create unique reference for this payment
+      const paymentRef = transId || paymentId || `${userId}_${Date.now()}`;
+  
+      // Store payment info in sessionStorage for verification
+      const paymentData = {
+        paymentId: paymentId,
+        transId: transId,
+        paymentRef: paymentRef,
+        userId: userId,
+        timestamp: Date.now(),
+      };
+      
+      sessionStorage.setItem('momo_payment_data', JSON.stringify(paymentData));
+  
+      console.log("Opening Fapshi payment in new tab, payment reference:", paymentRef);
+      
+      // Open Fapshi payment in a NEW TAB
+      const paymentWindow = window.open(checkoutUrl, '_blank', 'width=600,height=800');
+      
+      if (!paymentWindow) {
+        // Popup was blocked
+        const proceed = confirm(
+          "Pop-up was blocked. Please allow pop-ups for this site.\n\n" +
+          "Click OK to open payment page in current tab instead."
+        );
+        
+        if (proceed) {
+          window.location.href = checkoutUrl;
+          return;
+        } else {
+          throw new Error("Payment window was blocked. Please enable pop-ups and try again.");
+        }
       }
   
-      console.log("Redirecting to mobile money checkout:", checkoutUrl);
+      // Wait a moment for the window to open
+      await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // ✅ Redirect to Fapshi, but append our return URL to their checkout
-      // After user pays, they'll be sent to our payment-success page
-      const returnUrl = `${window.location.origin}/payment-success?momo_ref=${transId || userId}&provider=momo`;
-      
-      // Open Fapshi in same window - they should redirect back after payment
-      window.location.href = checkoutUrl;
+      // Redirect current tab to payment-success page
+      window.location.href = `/payment-success?momo_ref=${encodeURIComponent(paymentRef)}&provider=momo`;
   
     } catch (err) {
       setLoading(false); 
