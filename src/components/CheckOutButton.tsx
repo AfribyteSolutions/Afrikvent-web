@@ -55,14 +55,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("Missing required information: userId, phone, or ticketId");
       }
 
-      if (!userEmail) {
-        throw new Error("Email is required for payment");
-      }
-
-      if (!ticketPrice || ticketPrice <= 0) {
-        throw new Error("Ticket price is missing or invalid.");
-      }
-
       const phoneRegex = /^(\+?[1-9]\d{2})[1-9]\d{7,9}$/;
       if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
         throw new Error(
@@ -71,18 +63,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       }
 
       const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
-      
-      const tickets = [{ 
-        ticket_id: ticketId, 
-        quantity
-      }];
-
-      console.log("Starting mobile money checkout with:", {
-        userId,
-        email: userEmail,
-        phone: cleanPhone,
-        tickets,
-      });
 
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
       
@@ -91,31 +71,59 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       }
 
       const functionUrl = `${supabaseUrl}/functions/v1/initiate-payment-url`;
-      console.log("Calling Edge Function at:", functionUrl);
-
-      // ✅ FIXED: Removed Authorization header to match working example
-      const response = await fetch(functionUrl, {
-        method: "POST",
-        headers: { 
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          user_id: userId,
-          phone_number: cleanPhone,
-          payment_method: "mobile money",
-          tickets,
-        }),
+      
+      console.log("Starting mobile money checkout with:", {
+        userId,
+        phone: cleanPhone,
+        ticketId,
+        quantity
       });
+
+      // ✅ EXACT format from boss's working example
+      const myHeaders = new Headers();
+      myHeaders.append("Content-Type", "application/json");
+
+      const raw = JSON.stringify({
+        phone_number: cleanPhone,
+        payment_method: "mobile money",
+        user_id: userId,
+        tickets: [
+          {
+            ticket_id: ticketId,
+            quantity: quantity
+          }
+        ]
+      });
+
+      const requestOptions: RequestInit = {
+        method: "POST",
+        headers: myHeaders,
+        body: raw,
+        redirect: "follow"
+      };
+
+      console.log("Calling Edge Function at:", functionUrl);
+      console.log("Request body:", raw);
+
+      const response = await fetch(functionUrl, requestOptions);
 
       console.log("Response status:", response.status);
 
+      const resultText = await response.text();
+      console.log("Raw response:", resultText);
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        let errorData;
+        try {
+          errorData = JSON.parse(resultText);
+        } catch {
+          errorData = { error: response.statusText };
+        }
         console.error("API error response:", errorData);
         throw new Error(errorData.error || `Payment service error: ${response.statusText}`);
       }
 
-      const result = await response.json();
+      const result = JSON.parse(resultText);
       console.log("Mobile money payment result:", result);
 
       if (result.error) {
@@ -173,7 +181,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
       const functionUrl = `${supabaseUrl}/functions/v1/initiate-payment-url`;
 
-      // ✅ FIXED: Removed Authorization header to match working example
       const response = await fetch(functionUrl, {
         method: "POST",
         headers: { 
@@ -387,9 +394,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
               {
                 payment_method: selectedMethod,
                 user_id: userId,
-                email: userEmail,
                 phone_number: phone.replace(/\d(?=\d{4})/g, "*"),
-                tickets: [{ ticket_id: ticketId, quantity, price: ticketPrice }],
+                tickets: [{ ticket_id: ticketId, quantity }],
                 event_details: {
                   eventTitle,
                   eventDate,
