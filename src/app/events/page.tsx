@@ -252,6 +252,12 @@ export default function MyEvents() {
             const ticketType = ticket.TICKET_TYPES;
             const event = ticketType?.EVENTS;
 
+            // Extract and normalize the ticket format
+            const rawFormat = ticketType?.format;
+            const ticketFormat = (typeof rawFormat === 'string' && rawFormat.toLowerCase().trim() === 'online')
+              ? 'online' as const
+              : 'in-person' as const;
+
             return {
               id: ticket.id.toString(),
               eventId: event?.id.toString() || "0",
@@ -260,6 +266,7 @@ export default function MyEvents() {
               eventTime: event?.start_time || "",
               eventLocation: event?.location_name || "",
               ticketType: ticketType?.name || "General",
+              ticketFormat: ticketFormat, // ✅ ADD THIS LINE
               quantity: parseInt(ticket.quantity || "1"),
               totalPrice: ticket.total || 0,
               purchaseDate: ticket.created_at,

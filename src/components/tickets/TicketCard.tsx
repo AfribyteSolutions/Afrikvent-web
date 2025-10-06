@@ -67,6 +67,7 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   user,
   className = '',
 }) => {
+  console.log(`TicketCard ${ticket.id}: ticketFormat="${ticket.ticketFormat}" (type: ${typeof ticket.ticketFormat})`);
   const ticketRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -255,24 +256,50 @@ const getEventTime = (time?: string): string => {
             </div>
           </div>
 
-          {/* Event Type - Online or In-Person */}
-          <div className="mb-8">
-            <div className="text-xs opacity-80 mb-1">Format</div>
-            <div className="text-sm">
-              {ticket.ticketFormat === 'online' ? 'Online' : 'In-Person'}
-            </div>
-          </div>
+       {/* Event Type - Online or In-Person */}
+<div className="mb-8">
+  <div className="text-xs opacity-80 mb-1">Format</div>
+  <div className="text-sm">
+    {String(ticket.ticketFormat || '').toLowerCase().trim() === 'online' ? 'Online' : 'In-Person'}
+  </div>
+</div>
 
-          {/* QR Code Section */}
+          {/* Access Code / QR Code Section */}
           <div className="flex justify-center">
-            <div className="bg-white p-4 rounded-lg">
-              <QRCode
-                value={ticket.qrCode}
-                size={120}
-                level="M"
-                style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-              />
-            </div>
+            {String(ticket.ticketFormat || '').toLowerCase().trim() === 'online' ? (
+              // Virtual Event - Show Access Code
+              <div className="w-full">
+                <div className="text-xs opacity-80 mb-2 text-center">Access Code</div>
+                <div className="bg-white p-6 rounded-lg border-2 border-dashed" style={{ borderColor: cardColors.accent }}>
+                  <div className="text-center">
+                    <span className="text-3xl font-black letter-spacing-widest tracking-[0.3em] font-mono text-gray-800">
+                      {ticket.qrCode.substring(0, 6).toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+                <div className="text-xs opacity-70 mt-2 text-center">
+                  Use this code to join the virtual event
+                </div>
+              </div>
+            ) : (
+              // In-Person Event - Show QR Code
+// In-Person Event - Show QR Code
+<div className="w-full flex flex-col items-center">
+  <div className="text-xs opacity-80 mb-2 text-center">Entry QR Code</div>
+  <div className="bg-white p-5 rounded-2xl flex justify-center items-center shadow-md w-[180px] h-[180px] sm:w-[200px] sm:h-[200px]">
+    <QRCode
+      value={ticket.qrCode}
+      size={160}
+      level="M"
+      style={{ width: "100%", height: "auto" }}
+    />
+  </div>
+  <div className="text-xs opacity-70 mt-3 text-center">
+    Scan at venue entrance
+  </div>
+</div>
+
+            )}
           </div>
 
           {/* Event Title at bottom */}

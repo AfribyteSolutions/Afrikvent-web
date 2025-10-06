@@ -40,6 +40,8 @@ const TICKET_TEMPLATES = [
 ];
 
 const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
+  console.log(`enhanceTicket for ticket ${ticket.id}: ticketFormat="${ticket.ticketFormat}" (type: ${typeof ticket.ticketFormat})`);
+
   const eventDateIso = ticket.eventDate || new Date().toISOString();
   const orderId = `ORD-${ticket.id.toString().padStart(6, "0")}`;
   
@@ -49,12 +51,12 @@ const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
   } else {
     qrCode = `TKT${ticket.id.toString().padStart(3, "0")}`;
   }
-
+  
   const eventDate = new Date(eventDateIso);
   const now = new Date();
   const isEventInFuture = eventDate.getTime() > now.getTime();
   const ticketStatus = isEventInFuture ? "active" : "expired";
-
+  
   const enhanced: EnhancedTicket = {
     id: ticket.id.toString(),
     eventId: ticket.eventId?.toString() || "",
@@ -63,7 +65,8 @@ const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
     eventTime: ticket.eventTime || "TBD",
     eventLocation: ticket.eventLocation || "Location TBA",
     ticketType: ticket.ticketType || "General Admission",
-    ticketFormat: ticket.ticketFormat || 'in-person', // ADD THIS LINE
+    // CRITICAL: Use the ticket format from database, don't default to 'in-person'
+    ticketFormat: ticket.ticketFormat,
     quantity: ticket.quantity,
     totalPrice: ticket.totalPrice ?? 0,
     purchaseDate: ticket.purchaseDate,
@@ -75,7 +78,7 @@ const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
     qrCodeData: ticket.qrCodeData,
     validationCode: qrCode,
   };
-
+  
   return enhanced;
 };
 
@@ -252,7 +255,9 @@ const typeMap = new Map<number, TypeData>();
 ticketTypes?.forEach(type => {
   if (type.EVENTS && !Array.isArray(type.EVENTS)) {
     // CRITICAL FIX: Explicitly cast and default the format field
-    const ticketFormat = (type.format as 'in-person' | 'online' | null) || 'in-person';
+    const ticketFormat = (type.format as string)?.toLowerCase().trim() === 'online' 
+  ? 'online' as const
+  : 'in-person' as const;
     
     console.log(`Building typeMap for ticket type ${type.id}:`, {
       name: type.name,
@@ -322,6 +327,12 @@ console.log('Final transformed tickets:', transformedTickets.map(t => ({
   }, [userId, shouldFetchFromDb]);
 
   const enhancedTickets = useMemo(() => {
+    console.log('=== ENHANCING TICKETS ===');
+  console.log('Raw userTickets:', userTickets.map(t => ({
+    id: t.id,
+    ticketFormat: t.ticketFormat,
+    hasFormat: t.hasOwnProperty('ticketFormat')
+  })));
     return userTickets.map(enhanceTicket);
   }, [userTickets]);
 
