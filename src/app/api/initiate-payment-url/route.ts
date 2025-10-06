@@ -1,36 +1,25 @@
-// initiate-payment-url - Next.js API Route
 import { createClient } from "@supabase/supabase-js";
 
-// Environment variables for Next.js
 const liveUser = process.env.FAPSHI_API_USER || "";
 const liveKey = process.env.FAPSHI_API_KEY || "";
 const liveURL = process.env.FAPSHI_API_URL || "https://api.fapshi.com";
 
-// Initialize Supabase client lazily to avoid build-time errors
 function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  
+  const supabaseUrl = process.env.SUPABASE_URL!;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
   if (!supabaseUrl || !supabaseKey) {
     throw new Error("Missing Supabase environment variables");
   }
-  
   return createClient(supabaseUrl, supabaseKey);
 }
 
-console.log("INITIATE PAYMENT CALLED!");
-
-// Helper to generate unique ticket QR codes
 function generateUniqueCode(): string {
   const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  let result = "";
-  for (let i = 0; i < 6; i++) {
-    result += characters.charAt(Math.floor(Math.random() * characters.length));
-  }
-  return result;
+  return Array.from({ length: 6 }, () =>
+    characters.charAt(Math.floor(Math.random() * characters.length))
+  ).join("");
 }
 
-// Type definitions
 interface User {
   user_id: string;
   name: string;
@@ -55,55 +44,54 @@ interface TicketType {
   price: number;
 }
 
-// Fixed initiatePay function
-async function initiatePay({ user, amount }: { user: User; amount: number }): Promise<FapshiResponse> {
-  if (!user) throw new Error("User is Null");
+interface TicketInsert {
+  user_id: string;
+  event_id: string;
+  ticket_type_id: string;
+  quantity: string;
+  unit_price: number;
+  total: number;
+  qr_code_data: string;
+  ticket_status: string;
+}
 
+async function initiatePay({
+  user,
+  amount,
+}: {
+  user: User;
+  amount: number;
+}): Promise<FapshiResponse> {
   const url = `${liveURL}/initiate-pay`;
-  console.log(`Initiating pay: amount=${amount}, user=${user.user_id}`);
-
   const headers = {
     apiuser: liveUser,
     apikey: liveKey,
     "Content-Type": "application/json",
   };
 
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        amount,
-        email: user.email,
-        userId: user.user_id,
-        externalId: user.user_id,
-        message: "Making a payment transaction",
-        redirectUrl: "https://afrikvent.com/payment-success",
-      }),
-    });
+  const body = JSON.stringify({
+    amount,
+    email: user.email,
+    userId: user.user_id,
+    externalId: user.user_id,
+    message: "Making a payment transaction",
+    redirectUrl: "https://afrikvent.com/payment-success",
+  });
 
-    if (!response.ok) {
-      console.log(`Payment initiation failed: ${response.status} - ${response.statusText}`);
-      throw new Error("An Error occurred");
-    }
+  const response = await fetch(url, { method: "POST", headers, body });
 
-    const responseData = await response.json() as FapshiResponse;
-    console.log("Fapshi initiate-pay response:", responseData);
+  if (!response.ok) throw new Error(`Fapshi API error: ${response.statusText}`);
 
-    if (responseData.transId) {
-      responseData.redirectUrl = `https://afrikvent.com/payment-success?transId=${responseData.transId}`;
-    }
-
-    return responseData;
-  } catch (e) {
-    console.log("ERROR OCCURRED", e);
-    throw new Error(e instanceof Error ? e.message : "Payment initiation failed");
+  const data = (await response.json()) as FapshiResponse;
+  if (data.transId) {
+    data.redirectUrl = `https://afrikvent.com/payment-success?transId=${data.transId}`;
   }
+
+  return data;
 }
 
-// Helper to check if payment method is mobile money
 function isMobileMoneyPayment(paymentMethod: string): boolean {
-  const normalized = paymentMethod.toLowerCase().trim();
+  const normalized = paymentMethod?.toLowerCase() || "";
   return (
     normalized.includes("momo") ||
     normalized.includes("mobile money") ||
@@ -111,46 +99,24 @@ function isMobileMoneyPayment(paymentMethod: string): boolean {
   );
 }
 
-// Next.js API Route Handler
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<Response> {
   try {
-    const { phone_number, payment_method, user_id, tickets } = await req.json() as {
+    const body = (await req.json()) as {
       phone_number?: string;
       payment_method?: string;
       user_id?: string;
       tickets?: TicketRequest[];
     };
 
-    console.log("📥 Payment request received:", {
-      payment_method,
-      user_id,
-      phone_number: phone_number ? "***" + phone_number.slice(-4) : null,
-      tickets_count: tickets?.length,
-    });
+    const { phone_number, payment_method, user_id, tickets } = body;
 
     if (!user_id || !tickets?.length) {
       return new Response(
-        JSON.stringify({
-          error: "Invalid request body: user_id and tickets are required",
-        }),
+        JSON.stringify({ error: "user_id and tickets are required" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Validate payment method specific requirements
-    const isMobileMoney = isMobileMoneyPayment(payment_method || "");
-    
-    if (isMobileMoney && !phone_number) {
-      return new Response(
-        JSON.stringify({
-          error: "Phone number is required for mobile money payments",
-        }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Fetch user details
-    console.log("FETCHING USER DETAILS");
     const supabase = getSupabaseClient();
     const { data: user, error: userError } = await supabase
       .from("USERS")
@@ -159,98 +125,68 @@ export async function POST(req: Request) {
       .single();
 
     if (userError || !user) {
-      console.error("User fetch error:", userError);
-      return new Response(
-        JSON.stringify({ error: "User not found" }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "User not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    // Fetch ticket type prices
-    console.log("FETCHING TICKET TYPES", tickets);
     const ticketIds = tickets.map((t) => t.ticket_id);
-    const { data: ticketTypes, error: ticketTypeError } = await supabase
+    const { data: ticketTypes, error: ticketError } = await supabase
       .from("TICKET_TYPES")
       .select("id, event_id, price")
       .in("id", ticketIds);
 
-    if (ticketTypeError || !ticketTypes?.length) {
-      console.error("Ticket types fetch error:", ticketTypeError);
-      return new Response(
-        JSON.stringify({ error: "Invalid ticket types" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    let totalAmount = 0;
-    const ticketInserts: Array<{
-      user_id: string;
-      event_id: string;
-      ticket_type_id: string;
-      quantity: string;
-      unit_price: number;
-      total: number;
-      qr_code_data: string;
-      ticket_status: string;
-    }> = [];
-
-    for (const t of tickets) {
-      const ticketType = (ticketTypes as TicketType[]).find((tt) => tt.id === t.ticket_id);
-      if (!ticketType) continue;
-
-      const unitPrice = ticketType.price ?? 0;
-      const qty = t.quantity ?? 1;
-      const subtotal = unitPrice * qty;
-      totalAmount += subtotal;
-
-      ticketInserts.push({
-        user_id,
-        event_id: ticketType.event_id,
-        ticket_type_id: ticketType.id,
-        quantity: `${qty}`,
-        unit_price: unitPrice,
-        total: subtotal,
-        qr_code_data: generateUniqueCode(),
-        ticket_status: "pending",
+    if (ticketError || !ticketTypes?.length) {
+      return new Response(JSON.stringify({ error: "Invalid ticket types" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
       });
     }
 
+    let totalAmount = 0;
+    const ticketInserts: TicketInsert[] = tickets
+      .map((t): TicketInsert | null => {
+        const ticketType = (ticketTypes as TicketType[]).find((tt) => tt.id === t.ticket_id);
+        if (!ticketType) return null;
+
+        const qty = t.quantity ?? 1;
+        const total = (ticketType.price ?? 0) * qty;
+        totalAmount += total;
+
+        return {
+          user_id,
+          event_id: ticketType.event_id,
+          ticket_type_id: ticketType.id,
+          quantity: `${qty}`,
+          unit_price: ticketType.price,
+          total,
+          qr_code_data: generateUniqueCode(),
+          ticket_status: "pending",
+        };
+      })
+      .filter((t): t is TicketInsert => t !== null);
+
     if (totalAmount <= 0) {
-      return new Response(
-        JSON.stringify({ error: "Invalid total amount" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid total amount" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    console.log("TOTAL AMOUNT:", totalAmount);
-
-    // FIXED: Call Fapshi for mobile money payments
     let paymentResponse: FapshiResponse | null = null;
-    
-    if (isMobileMoney) {
-      console.log("🏦 Initiating mobile money payment via Fapshi");
-      try {
-        paymentResponse = await initiatePay({
-          user: user as User,
-          amount: totalAmount,
-        });
-        console.log("✅ Fapshi response received:", paymentResponse);
-      } catch (error) {
-        console.error("❌ Fapshi payment initiation failed:", error);
+
+    if (isMobileMoneyPayment(payment_method || "")) {
+      if (!phone_number) {
         return new Response(
-          JSON.stringify({
-            error: "Failed to initiate mobile money payment. Please try again.",
-          }),
-          { status: 500, headers: { "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Phone number required for mobile money" }),
+          { status: 400, headers: { "Content-Type": "application/json" } }
         );
       }
-    } else {
-      console.log("💳 Non-mobile money payment - skipping Fapshi");
+      paymentResponse = await initiatePay({ user, amount: totalAmount });
     }
 
-    // Insert payment record
-    console.log("RECORDING PAYMENT");
-    const { data: paymentRecord, error: paymentInsertError } = await supabase
+    const { data: paymentRecord, error: paymentError } = await supabase
       .from("PAYMENTS")
       .insert({
         user_id,
@@ -260,88 +196,51 @@ export async function POST(req: Request) {
         payment_status: "pending",
         provider_response: paymentResponse,
         transaction_id: paymentResponse?.transId || null,
-        mobile_money_provider: isMobileMoney ? payment_method : null,
+        mobile_money_provider: isMobileMoneyPayment(payment_method || "")
+          ? payment_method
+          : null,
         currency: "XAF",
       })
       .select()
       .single();
 
-    console.log("💾 Payment insert result:", {
-      paymentRecord,
-      paymentInsertError,
-    });
-
-    if (paymentInsertError || !paymentRecord) {
-      console.error("Payment insert error:", paymentInsertError);
-      return new Response(
-        JSON.stringify({ error: "Failed to record payment" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
+    if (paymentError || !paymentRecord) {
+      throw new Error("Failed to record payment");
     }
 
-    // Insert tickets
-    console.log("INSERTING TICKETS");
     const { data: insertedTickets, error: ticketInsertError } = await supabase
       .from("TICKETS")
       .insert(ticketInserts)
       .select();
 
     if (ticketInsertError || !insertedTickets?.length) {
-      console.error("Ticket insert error:", ticketInsertError);
-      return new Response(
-        JSON.stringify({ error: "Failed to insert tickets" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
+      throw new Error("Failed to insert tickets");
     }
 
-    // Link tickets to payment
-    const paymentTicketLinks = insertedTickets.map((t: { id: string }) => ({
+    const links = insertedTickets.map((t) => ({
       payment_id: paymentRecord.id,
       ticket_id: t.id,
     }));
 
-    console.log("LINKING TICKETS TO PAYMENT");
-    const { error: paymentTicketError } = await supabase
-      .from("PAYMENT_TICKETS")
-      .insert(paymentTicketLinks);
+    const { error: linkError } = await supabase.from("PAYMENT_TICKETS").insert(links);
+    if (linkError) throw new Error("Failed to link tickets to payment");
 
-    if (paymentTicketError) {
-      console.error("ERROR LINKING TICKETS TO PAYMENT:", paymentTicketError);
-      return new Response(
-        JSON.stringify({ error: "Failed to link payment to tickets" }),
-        { status: 500, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Return appropriate response based on payment method
-    const responseData = {
-      message: "Payment initiated successfully",
-      amount: totalAmount,
-      payment: paymentRecord,
-      tickets: insertedTickets,
-      checkout_url: paymentResponse?.link || null,
-    };
-
-    console.log("✅ Payment initiated successfully:", {
-      payment_id: paymentRecord.id,
-      amount: totalAmount,
-      tickets_count: insertedTickets.length,
-      has_checkout_url: !!responseData.checkout_url,
-    });
-
-    return new Response(JSON.stringify(responseData), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err) {
-    console.error("❌ Error in initiate-payment:", err);
-    const errorMessage = err instanceof Error ? err.message : "Internal server error";
     return new Response(
       JSON.stringify({
-        error: "Internal server error",
-        details: errorMessage,
+        message: "Payment initiated successfully",
+        amount: totalAmount,
+        payment: paymentRecord,
+        tickets: insertedTickets,
+        checkout_url: paymentResponse?.link || null,
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 200, headers: { "Content-Type": "application/json" } }
     );
+  } catch (err) {
+    console.error("❌ initiate-payment-url error:", err);
+    const msg = err instanceof Error ? err.message : "Internal server error";
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
