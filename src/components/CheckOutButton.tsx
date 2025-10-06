@@ -24,7 +24,6 @@ interface CheckoutButtonProps {
   eventId?: number;
   eventImage?: string;
   paymentMethod?: 'mobile_money' | 'stripe';
-  // ➡️ CRITICAL FIX: Add the price of a single ticket
   ticketPrice: number; 
 }
 
@@ -44,89 +43,80 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   eventId,
   eventImage,
   paymentMethod = 'stripe',
-  // ➡️ CRITICAL FIX: Destructure the price
   ticketPrice, 
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<'mobile_money' | 'stripe'>(paymentMethod);
 
-  // CheckoutButton.tsx (Inside handleMobileMoneyCheckout function)
+  const handleMobileMoneyCheckout = async () => {
+    try {
+      if (!userId || !phone || !ticketId) {
+        throw new Error("Missing required information: userId, phone, or ticketId");
+      }
 
-const handleMobileMoneyCheckout = async () => {
-  try {
-    if (!userId || !phone || !ticketId) {
-      throw new Error("Missing required information: userId, phone, or ticketId");
-    }
+      if (!userEmail) {
+        throw new Error("Email is required for payment");
+      }
 
-    // NOTE: We are removing the email check and price check to match the minimal
-    // successful payload, assuming the Edge Function now handles this logic.
-    /*
-    if (!userEmail) {
-      throw new Error("Email is required for payment");
-    }
-    if (!ticketPrice || ticketPrice <= 0) {
-      throw new Error("Ticket price is missing or invalid.");
-    }
-    */
+      if (!ticketPrice || ticketPrice <= 0) {
+        throw new Error("Ticket price is missing or invalid.");
+      }
 
-    const phoneRegex = /^(\+?[1-9]\d{2})[1-9]\d{7,9}$/;
-    if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
-      throw new Error(
-        "Invalid phone number format. Please enter a valid international mobile number with country code."
-      );
-    }
+      const phoneRegex = /^(\+?[1-9]\d{2})[1-9]\d{7,9}$/;
+      if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
+        throw new Error(
+          "Invalid phone number format. Please enter a valid international mobile number with country code."
+        );
+      }
 
-    const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
-    
-    // ➡️ 1. MATCH BOSS'S PAYLOAD: Remove price, use number for ticket_id
-    const tickets = [{ 
-      ticket_id: ticketId, // Use number type
-      quantity, 
-    }];
+      const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
+      
+      const tickets = [{ 
+        ticket_id: ticketId.toString(), 
+        quantity, 
+        price: ticketPrice
+      }];
 
-    console.log("Starting mobile money checkout with:", {
-      userId,
-      // Removed email from log to reflect payload removal
-      phone: cleanPhone,
-      tickets,
-    });
+      console.log("Starting mobile money checkout with:", {
+        userId,
+        email: userEmail,
+        phone: cleanPhone,
+        tickets,
+      });
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error("Supabase configuration missing. Please contact support.");
-    }
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      
+      if (!supabaseUrl) {
+        throw new Error("Supabase configuration missing. Please contact support.");
+      }
 
-    const functionUrl = `${supabaseUrl}/functions/v1/initiate-payment-url`;
-    console.log("Calling Edge Function at:", functionUrl);
+      const functionUrl = `${supabaseUrl}/functions/v1/initiate-payment-url`;
+      console.log("Calling Edge Function at:", functionUrl);
 
-    const response = await fetch(functionUrl, {
-      method: "POST",
-      headers: { 
-        "Content-Type": "application/json",
-        // ➡️ 2. MATCH BOSS'S HEADERS: Authorization header removed
-        // "Authorization": `Bearer ${supabaseAnonKey}` 
-      },
-      // ➡️ 3. MATCH BOSS'S BODY STRUCTURE
-      body: JSON.stringify({
-        user_id: userId,
-        // Removed: email: userEmail, 
-        phone_number: cleanPhone,
-        payment_method: "mobile money", // ⬅️ MATCH BOSS'S STRING
-        tickets, 
-      }),
-    });
+      // ✅ FIXED: Removed Authorization header to match working example
+      const response = await fetch(functionUrl, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          email: userEmail, 
+          phone_number: cleanPhone,
+          payment_method: "mobile_money",
+          tickets,
+        }),
+      });
 
-    console.log("Response status:", response.status);
+      console.log("Response status:", response.status);
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: response.statusText }));
-      console.error("API error response:", errorData);
-      throw new Error(errorData.error || `Payment service error: ${response.statusText}`);
-    }
-    // ... (rest of the function remains the same)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        console.error("API error response:", errorData);
+        throw new Error(errorData.error || `Payment service error: ${response.statusText}`);
+      }
+
       const result = await response.json();
       console.log("Mobile money payment result:", result);
 
@@ -154,7 +144,6 @@ const handleMobileMoneyCheckout = async () => {
         throw new Error("Missing required information: userId, email, or ticketId");
       }
       
-      // Check if price is valid before proceeding
       if (!ticketPrice || ticketPrice <= 0) {
         throw new Error("Ticket price is missing or invalid.");
       }
@@ -164,13 +153,12 @@ const handleMobileMoneyCheckout = async () => {
         throw new Error("Please provide a valid email address");
       }
 
-      // ➡️ FIX: Include the price in the tickets array for Stripe as well
       const tickets = [{ 
         ticket_id: ticketId, 
         quantity,
         event_title: eventTitle,
         name: ticketTypeName,
-        price: ticketPrice // Pass the price for Stripe calculation
+        price: ticketPrice
       }];
 
       console.log("Starting Stripe checkout with:", {
@@ -180,19 +168,18 @@ const handleMobileMoneyCheckout = async () => {
       });
 
       const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
       
-      if (!supabaseUrl || !supabaseAnonKey) {
+      if (!supabaseUrl) {
         throw new Error("Supabase configuration missing. Please contact support.");
       }
 
       const functionUrl = `${supabaseUrl}/functions/v1/initiate-payment-url`;
 
+      // ✅ FIXED: Removed Authorization header to match working example
       const response = await fetch(functionUrl, {
         method: "POST",
         headers: { 
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${supabaseAnonKey}`
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           user_id: userId,
@@ -316,7 +303,6 @@ const handleMobileMoneyCheckout = async () => {
 
   return (
     <div className="space-y-3">
-      {/* ... (rest of the component JSX) ... */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
         <button
           type="button"
@@ -405,7 +391,7 @@ const handleMobileMoneyCheckout = async () => {
                 user_id: userId,
                 email: userEmail,
                 phone_number: phone.replace(/\d(?=\d{4})/g, "*"),
-                tickets: [{ ticket_id: ticketId, quantity, price: ticketPrice }], // ⬅️ DEBUG: Shows price is included
+                tickets: [{ ticket_id: ticketId, quantity, price: ticketPrice }],
                 event_details: {
                   eventTitle,
                   eventDate,
@@ -414,7 +400,6 @@ const handleMobileMoneyCheckout = async () => {
                 },
                 env_check: {
                   has_supabase_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-                  has_supabase_key: !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
                 },
                 timestamp: new Date().toISOString(),
               },
