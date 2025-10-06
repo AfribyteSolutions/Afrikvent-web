@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/lib/supabaseClient";
 import type { AuthError, Provider } from "@supabase/supabase-js";
@@ -19,6 +20,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -67,15 +69,19 @@ const AuthModal: React.FC<AuthModalProps> = ({
         }
 
         onSuccess(data.user?.email || "");
+        onClose();
+        router.push("/"); // Redirect to home page
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+        
         onSuccess(data.user?.email || "");
+        onClose();
+        router.push("/"); // Redirect to home page
       }
-      onClose();
     } catch (err) {
       const e = err as AuthError;
       setError(e.message);
@@ -94,10 +100,10 @@ const AuthModal: React.FC<AuthModalProps> = ({
         },
       });
       if (error) throw error;
+      // Social auth will redirect to callback URL, which handles the redirect to "/"
     } catch (err) {
       const e = err as AuthError;
       setError(e.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -137,7 +143,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-8 relative">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-8   relative">
               <button
                 onClick={handleClose}
                 className="absolute top-4 right-4 text-white/80 hover:text-white transition-colors p-1"
@@ -166,7 +172,7 @@ const AuthModal: React.FC<AuthModalProps> = ({
                   type="button"
                   onClick={() => handleSocialAuth("google")}
                   disabled={loading}
-                  className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg bg-white text-base text-gray-500 hover:bg-gray-50 font-semibold transition-colors"
+                  className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg bg-white text-base text-gray-500 hover:bg-gray-50 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path fill="#4285F4" d="M24 9.5c3.34 0 5.86 1.13 7.82 2.92l6.53-6.53C35.86 2.37 30.14 0 24 0 14.86 0 6.91 5.09 3.01 12.33l7.07 5.46C12.89 12.39 18.06 9.5 24 9.5z" />

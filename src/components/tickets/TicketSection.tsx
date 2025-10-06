@@ -123,28 +123,18 @@ const filterTickets = (tickets: EnhancedTicket[], filters: TicketFilterState): E
 
 const deduplicateTickets = (tickets: UserTicket[]): UserTicket[] => {
   const seenIds = new Set<string>();
-  const deduplicatedById = tickets.filter((ticket) => {
+  const deduplicated = tickets.filter((ticket) => {
     const key = ticket.id.toString();
     if (seenIds.has(key)) {
+      console.log(`Duplicate ticket ID found: ${key}, skipping`);
       return false;
     }
     seenIds.add(key);
     return true;
   });
 
-  const seenCombos = new Set<string>();
-  const finalDeduplication = deduplicatedById.filter((ticket) => {
-    const comboKey = `${ticket.eventId}-${ticket.userId}-${ticket.ticketType}-${ticket.quantity}-${ticket.totalPrice}`;
-    if (seenCombos.has(comboKey)) {
-      console.log(`Duplicate ticket combo: ${comboKey}, skipping ticket ${ticket.id}`);
-      return false;
-    }
-    seenCombos.add(comboKey);
-    return true;
-  });
-
-  console.log(`TicketSection deduplication: ${tickets.length} → ${finalDeduplication.length} tickets`);
-  return finalDeduplication;
+  console.log(`TicketSection deduplication: ${tickets.length} → ${deduplicated.length} tickets`);
+  return deduplicated;
 };
 
 export const TicketsSection: React.FC<TicketsSectionProps> = ({
