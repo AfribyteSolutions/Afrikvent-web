@@ -42,15 +42,19 @@ function PaymentSuccessContent() {
 
   useEffect(() => {
     const sessionId = searchParams.get('session_id');
-    
-    console.log('Payment Success Page - Session ID:', sessionId);
-    
-    if (!sessionId) {
-      console.error('No session_id in URL');
-      setError('No session ID found');
+    const momoRef = searchParams.get('momo_ref'); // new
+    const provider = searchParams.get('provider'); // new e.g. "momo" or "stripe"
+
+    console.log('✅ Payment Success Page - Params:', { sessionId, momoRef, provider });
+
+    if (!sessionId && !momoRef) {
+      setError('Missing payment reference.');
       setIsLoading(false);
       return;
     }
+
+    const isMomo = provider === 'momo' || (!!momoRef && !sessionId);
+    const verifyUrl = isMomo ? '/api/verify-momo' : '/api/verify-payment';
 
     let retries = 0;
     const maxRetries = 25;
@@ -59,128 +63,88 @@ function PaymentSuccessContent() {
     const checkPayment = async () => {
       try {
         setAttempt(retries + 1);
-        
-        console.log(`Attempt ${retries + 1}: Verifying payment for session:`, sessionId);
-        
-        const res = await fetch('/api/verify-payment', {
+        const body = isMomo
+          ? { momo_ref: momoRef }
+          : { session_id: sessionId };
+
+        console.log(`🔎 Attempt ${retries + 1}: Verifying via ${verifyUrl}`, body);
+
+        const res = await fetch(verifyUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId })
+          body: JSON.stringify(body),
         });
 
-        console.log('Response status:', res.status);
-        console.log('Response Content-Type:', res.headers.get('content-type'));
-
         if (!res.ok) {
-          console.error('API response not OK:', res.status, res.statusText);
           throw new Error(`API returned ${res.status}`);
         }
 
-        // Get the raw text first to debug
         const rawText = await res.text();
-        console.log('Raw response (first 200 chars):', rawText.substring(0, 200));
-
-        // Parse the JSON
         let data;
         try {
           data = JSON.parse(rawText);
-        } catch (parseError) {
-          console.error('JSON Parse Error:', parseError);
-          console.error('Full raw response:', rawText);
-          throw new Error('Invalid JSON response from server');
+        } catch (err) {
+          console.error('JSON parse error:', rawText);
+          throw new Error('Invalid JSON from verification API.');
         }
-        
-        console.log('API Response:', {
-          success: data?.success,
-          status: data?.status,
-          hasTickets: !!data?.tickets,
-          ticketsIsArray: Array.isArray(data?.tickets),
-          ticketsLength: data?.tickets?.length,
-          ticketsType: typeof data?.tickets,
-          firstTicket: data?.tickets?.[0]
-        });
 
-        // Check if we have a successful response with tickets
-        if (data.success === true && data.tickets && Array.isArray(data.tickets) && data.tickets.length > 0) {
-          console.log('SUCCESS! Transforming tickets:', data.tickets.length);
-          
-          // Transform tickets
-          const transformed: EnhancedTicket[] = data.tickets.map((t: TicketData) => {
-            console.log('Transforming ticket:', t.id, t.EVENTS?.title);
-            return {
-              id: t.id.toString(),
-              eventId: t.event_id.toString(),
-              eventTitle: t.EVENTS?.title || 'Event',
-              eventDate: t.EVENTS?.event_date || new Date().toISOString(),
-              eventLocation: t.EVENTS?.location_name || t.EVENTS?.address || 'Location',
-              ticketType: t.TICKET_TYPES?.name || 'Ticket',
-              quantity: parseInt(t.quantity) || 1,
-              totalPrice: t.total || 0,
-              purchaseDate: t.created_at,
-              status: 'confirmed',
-              userId: t.user_id,
-              qrCode: t.qr_code_data,
-              orderId: data.payment?.id?.toString() || 'N/A',
-              ticketStatus: 'active'
-            };
-          });
-          
-          console.log('Transformed tickets:', transformed);
+        console.log('API verification response:', data);
+
+        if (data.success === true && Array.isArray(data.tickets) && data.tickets.length > 0) {
+          const transformed: EnhancedTicket[] = data.tickets.map((t: TicketData) => ({
+            id: t.id.toString(),
+            eventId: t.event_id.toString(),
+            eventTitle: t.EVENTS?.title || 'Event',
+            eventDate: t.EVENTS?.event_date || new Date().toISOString(),
+            eventLocation: t.EVENTS?.location_name || t.EVENTS?.address || 'Location',
+            ticketType: t.TICKET_TYPES?.name || 'Ticket',
+            quantity: parseInt(t.quantity) || 1,
+            totalPrice: t.total || 0,
+            purchaseDate: t.created_at,
+            status: 'confirmed',
+            userId: t.user_id,
+            qrCode: t.qr_code_data,
+            orderId: data.payment?.id?.toString() || momoRef || sessionId || 'N/A',
+            ticketStatus: 'active',
+          }));
+
           setTickets(transformed);
           setIsLoading(false);
           return;
         }
 
-        // Check for specific error statuses
-        if (data.status === 'not_found') {
-          console.log('Payment not found yet, will retry...');
-        } else if (data.status === 'pending') {
-          console.log('Payment is pending, will retry...');
-        } else if (data.status === 'no_tickets') {
-          console.log('No tickets found yet, will retry...');
+        if (['not_found', 'pending', 'no_tickets'].includes(data.status)) {
+          console.log('⏳ Payment still processing, retrying...');
         } else if (data.status === 'failed') {
-          console.error('Payment failed:', data.payment_status);
-          setError('Payment was not successful. Please contact support.');
+          setError('Payment failed. Please contact support.');
           setIsLoading(false);
           return;
-        } else {
-          console.log('Unexpected status:', data.status);
         }
 
-        // Retry if not at max attempts
         if (retries < maxRetries) {
           retries++;
-          console.log(`Will retry in 2 seconds... (${retries}/${maxRetries})`);
           timeoutId = setTimeout(checkPayment, 2000);
         } else {
-          console.error('Max retries reached');
-          setError('Payment is processing. Please check "My Tickets" in a moment.');
+          setError('Payment is still processing. Check "My Tickets" later.');
           setIsLoading(false);
         }
       } catch (err) {
-        console.error('Error in checkPayment:', err);
-        
+        console.error('Verification error:', err);
         if (retries < maxRetries) {
           retries++;
-          console.log(`Error occurred, will retry... (${retries}/${maxRetries})`);
           timeoutId = setTimeout(checkPayment, 2000);
         } else {
-          console.error('Max retries reached after error');
-          setError('Unable to verify payment. Please check "My Tickets" or contact support.');
+          setError('Unable to verify payment. Check "My Tickets" or contact support.');
           setIsLoading(false);
         }
       }
     };
 
     checkPayment();
-    
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
+    return () => timeoutId && clearTimeout(timeoutId);
   }, [searchParams]);
 
+  // Loading UI
   if (isLoading) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-50 z-50 flex items-center justify-center p-4">
@@ -192,20 +156,17 @@ function PaymentSuccessContent() {
           <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            Verifying Payment
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Verifying Payment</h1>
           <p className="text-gray-600">Please wait while we confirm your purchase...</p>
           {attempt > 3 && (
-            <p className="text-sm text-gray-500 mt-4">
-              This is taking longer than usual. Attempt {attempt} of 25.
-            </p>
+            <p className="text-sm text-gray-500 mt-4">Attempt {attempt} of 25</p>
           )}
         </motion.div>
       </div>
     );
   }
 
+  // Error UI
   if (error) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-red-50 to-orange-50 z-50 flex items-center justify-center p-4">
@@ -217,9 +178,7 @@ function PaymentSuccessContent() {
           <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle className="w-10 h-10 text-red-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            Payment Processing
-          </h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Payment Issue</h1>
           <p className="text-gray-600 mb-6">{error}</p>
           <div className="flex flex-col gap-3">
             <button
@@ -241,7 +200,6 @@ function PaymentSuccessContent() {
   }
 
   if (tickets.length === 0) {
-    console.error('Reached end of flow with no tickets and no error');
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-red-50 to-orange-50 z-50 flex items-center justify-center p-4">
         <motion.div
@@ -252,12 +210,8 @@ function PaymentSuccessContent() {
           <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
             <AlertCircle className="w-10 h-10 text-red-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-3">
-            Payment Issue
-          </h1>
-          <p className="text-gray-600 mb-6">
-            Tickets not found. Please contact support.
-          </p>
+          <h1 className="text-2xl font-bold text-gray-900 mb-3">Payment Issue</h1>
+          <p className="text-gray-600 mb-6">Tickets not found. Please contact support.</p>
           <div className="flex flex-col gap-3">
             <button
               onClick={() => router.push('/events')}
@@ -277,6 +231,7 @@ function PaymentSuccessContent() {
     );
   }
 
+  // Success UI
   return (
     <PaymentSuccessScreen
       isOpen={true}
@@ -291,11 +246,13 @@ function PaymentSuccessContent() {
 
 export default function PaymentSuccessPage() {
   return (
-    <Suspense fallback={
-      <div className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-50 z-50 flex items-center justify-center">
-        <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div className="fixed inset-0 bg-gradient-to-br from-blue-50 to-purple-50 z-50 flex items-center justify-center">
+          <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
+        </div>
+      }
+    >
       <PaymentSuccessContent />
     </Suspense>
   );
