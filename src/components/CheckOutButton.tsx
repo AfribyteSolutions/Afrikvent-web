@@ -73,9 +73,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
       
       const tickets = [{ 
-        ticket_id: ticketId.toString(), 
-        quantity, 
-        price: ticketPrice
+        ticket_id: ticketId, 
+        quantity
       }];
 
       console.log("Starting mobile money checkout with:", {
@@ -102,9 +101,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         },
         body: JSON.stringify({
           user_id: userId,
-          email: userEmail, 
           phone_number: cleanPhone,
-          payment_method: "mobile_money",
+          payment_method: "mobile money",
           tickets,
         }),
       });
