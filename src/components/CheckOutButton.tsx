@@ -24,6 +24,8 @@ interface CheckoutButtonProps {
   eventId?: number;
   eventImage?: string;
   paymentMethod?: 'mobile_money' | 'stripe';
+  // ➡️ CRITICAL FIX: Add the price of a single ticket
+  ticketPrice: number; 
 }
 
 const CheckoutButton: React.FC<CheckoutButtonProps> = ({
@@ -42,6 +44,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   eventId,
   eventImage,
   paymentMethod = 'stripe',
+  // ➡️ CRITICAL FIX: Destructure the price
+  ticketPrice, 
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,6 +61,11 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("Email is required for payment");
       }
 
+      // Check if price is valid before proceeding
+      if (!ticketPrice || ticketPrice <= 0) {
+        throw new Error("Ticket price is missing or invalid.");
+      }
+
       const phoneRegex = /^(\+?[1-9]\d{2})[1-9]\d{7,9}$/;
       if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
         throw new Error(
@@ -65,7 +74,13 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       }
 
       const cleanPhone = phone.replace(/\s+/g, "").replace(/^\+/, "");
-      const tickets = [{ ticket_id: ticketId.toString(), quantity }];
+      
+      // ➡️ CRITICAL FIX: Include the price in the tickets array
+      const tickets = [{ 
+        ticket_id: ticketId.toString(), 
+        quantity, 
+        price: ticketPrice // Pass the price to the Edge Function
+      }];
 
       console.log("Starting mobile money checkout with:", {
         userId,
@@ -92,10 +107,10 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         },
         body: JSON.stringify({
           user_id: userId,
-          email: userEmail, // ✅ Added email
+          email: userEmail, 
           phone_number: cleanPhone,
-          payment_method: "mobile_money", // Edge function now accepts this format
-          tickets,
+          payment_method: "mobile_money",
+          tickets, // Now includes the price
         }),
       });
 
@@ -133,17 +148,24 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       if (!userId || !userEmail || !ticketId) {
         throw new Error("Missing required information: userId, email, or ticketId");
       }
+      
+      // Check if price is valid before proceeding
+      if (!ticketPrice || ticketPrice <= 0) {
+        throw new Error("Ticket price is missing or invalid.");
+      }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(userEmail)) {
         throw new Error("Please provide a valid email address");
       }
 
+      // ➡️ FIX: Include the price in the tickets array for Stripe as well
       const tickets = [{ 
         ticket_id: ticketId, 
         quantity,
         event_title: eventTitle,
-        name: ticketTypeName 
+        name: ticketTypeName,
+        price: ticketPrice // Pass the price for Stripe calculation
       }];
 
       console.log("Starting Stripe checkout with:", {
@@ -176,7 +198,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
         throw new Error(errorData.error || `API error: ${response.statusText}`);
       }
 
@@ -289,6 +311,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
   return (
     <div className="space-y-3">
+      {/* ... (rest of the component JSX) ... */}
       <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
         <button
           type="button"
@@ -377,7 +400,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
                 user_id: userId,
                 email: userEmail,
                 phone_number: phone.replace(/\d(?=\d{4})/g, "*"),
-                tickets: [{ ticket_id: ticketId, quantity }],
+                tickets: [{ ticket_id: ticketId, quantity, price: ticketPrice }], // ⬅️ DEBUG: Shows price is included
                 event_details: {
                   eventTitle,
                   eventDate,
