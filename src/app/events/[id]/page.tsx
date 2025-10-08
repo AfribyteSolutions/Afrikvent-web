@@ -233,7 +233,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     try {
       const { error } = await supabase
         .from('EVENT_COMMENTS')
-        .update({ is_deleted: true })
+        .delete()
         .eq('id', commentId);
 
       if (error) {
