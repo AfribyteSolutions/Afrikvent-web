@@ -8,6 +8,7 @@ import { User } from '@supabase/supabase-js';
 import { EnhancedTicket } from '@/types/ticket';
 import PaymentModal from '@/components/checkout/PaymentModal';
 import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
+import AuthModal from '@/components/auth/AuthModal';
 import { getCurrencyInfo } from '@/utils/currency';
 
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
@@ -99,6 +100,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   const [purchasedTickets, setPurchasedTickets] = useState<EnhancedTicket[]>([]);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [authModalType, setAuthModalType] = useState<"signin" | "signup">("signin");
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const eventId = parseInt(resolvedParams.id);
 
@@ -185,6 +188,14 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAuthSuccess = (userEmail: string) => {
+    console.log("User authenticated:", userEmail);
+    setShowLoginPrompt(false);
+    setShowAuthModal(false);
+    // Refresh the page to update the user state
+    window.location.reload();
   };
 
   const handleTicketClick = (ticket: TicketTypeRow) => {
@@ -785,7 +796,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 <button
                   onClick={() => {
                     setShowLoginPrompt(false);
-                    router.push('/login');
+                    setAuthModalType("signin");
+                    setShowAuthModal(true);
                   }}
                   className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
                 >
@@ -803,7 +815,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 <button
                   onClick={() => {
                     setShowLoginPrompt(false);
-                    router.push('/signup');
+                    setAuthModalType("signup");
+                    setShowAuthModal(true);
                   }}
                   className="text-blue-600 hover:text-blue-700 font-medium"
                 >
@@ -814,6 +827,14 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
           </div>
         </div>
       )}
+
+      {/* Auth Modal */}
+      <AuthModal
+        type={authModalType}
+        isOpen={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        onSuccess={handleAuthSuccess}
+      />
     </div>
   );
 };
