@@ -98,6 +98,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showSuccessScreen, setShowSuccessScreen] = useState(false);
   const [purchasedTickets, setPurchasedTickets] = useState<EnhancedTicket[]>([]);
+  const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
   const eventId = parseInt(resolvedParams.id);
 
@@ -186,6 +187,14 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     }
   };
 
+  const handleTicketClick = (ticket: TicketTypeRow) => {
+    if (!user) {
+      setShowLoginPrompt(true);
+      return;
+    }
+    setSelectedTicket(ticket);
+  };
+
   const handleAddComment = async () => {
     if (!newComment.trim() || !user || !event) return;
 
@@ -241,7 +250,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         throw error;
       }
 
-      // Optimistically update the UI without full page reload
       setEvent(prevEvent => {
         if (!prevEvent) return null;
         return {
@@ -253,7 +261,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     } catch (error) {
       console.error('Error deleting comment:', error);
       alert('Failed to delete comment. Please try again.');
-      // Refetch on error to ensure consistency
       await fetchEventDetails();
     }
   };
@@ -271,7 +278,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const formatTime = (timeString: string | null) => {
     if (!timeString) return 'Time TBA';
     
-    // Parse the time string directly without creating a full Date object
     const timeMatch = timeString.match(/(\d{2}):(\d{2})/);
     if (!timeMatch) return 'Time TBA';
     
@@ -279,7 +285,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     const hour = parseInt(hours, 10);
     const minute = parseInt(minutes, 10);
     
-    // Format the time
     const period = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
     const displayMinute = minute.toString().padStart(2, '0');
@@ -477,7 +482,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                             ? `${colorScheme.border} bg-white shadow-xl transform scale-[1.01]`
                             : `${colorScheme.bgCard} border-gray-300 shadow-sm hover:shadow-md`
                         }`}
-                        onClick={() => setSelectedTicket(ticket)}
+                        onClick={() => handleTicketClick(ticket)}
                       >
                         {isSelected && (
                           <div className={`absolute -top-2 -right-2 w-6 h-6 ${colorScheme.checkIcon} rounded-full flex items-center justify-center`}>
@@ -494,7 +499,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                                 {ticket.name}
                               </h3>
                               
-                              {/* Format Badge - Online/In-Person */}
                               <span className={`inline-flex items-center gap-1 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold ${
                                 isOnline 
                                   ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-md' 
@@ -543,7 +547,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                                 <span className="text-[11px] sm:text-sm text-gray-600">per ticket</span>
                               </div>
 
-                              {isSelected && (
+                              {isSelected && user && (
                                 <div className="flex items-center gap-2 sm:gap-3">
                                   <span className="text-[11px] sm:text-sm font-medium text-gray-700">Qty:</span>
                                   <div className="flex items-center gap-1 sm:gap-2">
@@ -620,65 +624,65 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </div>
               )}
 
-<div className="space-y-4">
-  {event.comments.map((comment) => (
-    <div key={comment.id} className="flex space-x-2 sm:space-x-3">
-      <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
-        {comment.USERS?.image_url ? (
-          <Image
-            src={comment.USERS.image_url}
-            alt={comment.USERS.name || 'User'}
-            width={40}
-            height={40}
-            className="object-cover w-full h-full"
-          />
-        ) : (
-          <span className="text-white font-semibold text-xs sm:text-sm">
-            {(comment.USERS?.name || comment.USERS?.email || 'A')
-              .charAt(0)
-              .toUpperCase()}
-          </span>
-        )}
-      </div>
-      <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-2 sm:p-3">
-        <div className="flex justify-between items-start gap-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
-              <span className="font-medium text-gray-900 text-sm sm:text-base truncate">
-                {comment.USERS?.name || 'Anonymous'}
-              </span>
-              {comment.user_id === event.organizer_id && (
-                <span className="bg-blue-100 text-blue-800 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">
-                  Organizer
-                </span>
-              )}
-              <span className="text-gray-500 text-[10px] sm:text-xs whitespace-nowrap">
-                {new Date(comment.created_at).toLocaleDateString()}
-              </span>
-            </div>
-            <p className="text-gray-700 text-sm sm:text-base break-words">{comment.message}</p>
-          </div>
-          {user && (user.id === comment.user_id || user.id === event.organizer_id) && (
-            <button
-              onClick={() => handleDeleteComment(comment.id)}
-              className="text-red-500 hover:text-red-700 flex-shrink-0"
-            >
-              <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  ))}
+              <div className="space-y-4">
+                {event.comments.map((comment) => (
+                  <div key={comment.id} className="flex space-x-2 sm:space-x-3">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {comment.USERS?.image_url ? (
+                        <Image
+                          src={comment.USERS.image_url}
+                          alt={comment.USERS.name || 'User'}
+                          width={40}
+                          height={40}
+                          className="object-cover w-full h-full"
+                        />
+                      ) : (
+                        <span className="text-white font-semibold text-xs sm:text-sm">
+                          {(comment.USERS?.name || comment.USERS?.email || 'A')
+                            .charAt(0)
+                            .toUpperCase()}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0 bg-gray-50 rounded-lg p-2 sm:p-3">
+                      <div className="flex justify-between items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+                            <span className="font-medium text-gray-900 text-sm sm:text-base truncate">
+                              {comment.USERS?.name || 'Anonymous'}
+                            </span>
+                            {comment.user_id === event.organizer_id && (
+                              <span className="bg-blue-100 text-blue-800 text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded whitespace-nowrap">
+                                Organizer
+                              </span>
+                            )}
+                            <span className="text-gray-500 text-[10px] sm:text-xs whitespace-nowrap">
+                              {new Date(comment.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <p className="text-gray-700 text-sm sm:text-base break-words">{comment.message}</p>
+                        </div>
+                        {user && (user.id === comment.user_id || user.id === event.organizer_id) && (
+                          <button
+                            onClick={() => handleDeleteComment(comment.id)}
+                            className="text-red-500 hover:text-red-700 flex-shrink-0"
+                          >
+                            <svg className="w-3.5 h-3.5 sm:w-4 sm:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {selectedTicket && (
+      {selectedTicket && user && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50">
           <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-0">
@@ -737,7 +741,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         </div>
       )}
 
-      {selectedTicket && (
+      {selectedTicket && user && (
         <PaymentModal
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
@@ -762,6 +766,54 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         eventLocation={event.location_name || 'TBA'}
         onClose={handleCloseSuccessScreen}
       />
+
+      {/* Login Prompt Modal */}
+      {showLoginPrompt && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 transform transition-all">
+            <div className="text-center">
+              <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4">
+                <svg className="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Sign In Required</h3>
+              <p className="text-gray-600 mb-6">
+                Please sign in to your account to purchase tickets for this event.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => {
+                    setShowLoginPrompt(false);
+                    router.push('/login');
+                  }}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setShowLoginPrompt(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+              <p className="mt-4 text-sm text-gray-500">
+                Do not have an account?{' '}
+                <button
+                  onClick={() => {
+                    setShowLoginPrompt(false);
+                    router.push('/signup');
+                  }}
+                  className="text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  Sign up
+                </button>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

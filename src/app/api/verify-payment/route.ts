@@ -1,3 +1,4 @@
+// Enhanced verify-payment route with ticket availability updates
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -42,13 +43,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`Verifying payment for session: ${session_id} (${payment_method || 'stripe'})`);
 
-    if (payment_method === 'momo') {
-      console.log('🔶 Handling MoMo verification...');
-
-    
-    }
-
-
+    // Fetch payment record
     const { data: payment, error: paymentError } = await supabase
       .from('PAYMENTS')
       .select('*')
@@ -89,7 +84,7 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ Payment verified successfully.');
 
-
+    // Get tickets for this payment
     const { data: paymentTickets, error: ptError } = await supabase
       .from('PAYMENT_TICKETS')
       .select('ticket_id')
@@ -105,6 +100,7 @@ export async function POST(request: NextRequest) {
 
     const ticketIds = paymentTickets.map((pt) => pt.ticket_id);
 
+    // Fetch ticket details
     const { data: ticketsData, error: ticketsError } = await supabase
       .from('TICKETS')
       .select(`
@@ -113,7 +109,7 @@ export async function POST(request: NextRequest) {
           id, title, event_date, location_name, address, images, description
         ),
         TICKET_TYPES!inner (
-          id, name, price, description, format
+          id, name, price, description, format, event_id
         )
       `)
       .in('id', ticketIds);
@@ -126,9 +122,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Filter valid tickets
     const validTickets = ticketsData.filter((ticket) => {
       const status = ticket.ticket_status?.toUpperCase().trim();
-      return ['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID'].includes(status);
+      return ['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID', 'PENDING'].includes(status);
     });
 
     if (!validTickets.length) {
@@ -141,9 +138,47 @@ export async function POST(request: NextRequest) {
 
     console.log('🎟 Tickets verified:', validTickets.length);
 
-    // ===============================
-    // 4️⃣ Send Ticket Email (reused)
-    // ===============================
+    // Update ticket status to active
+    if (normalizedStatus === 'SUCCESSFUL' || normalizedStatus === 'COMPLETED') {
+      const { error: updateError } = await supabase
+        .from('TICKETS')
+        .update({ ticket_status: 'active' })
+        .in('id', ticketIds);
+
+      if (updateError) {
+        console.error('Error updating ticket status:', updateError);
+      }
+
+      // 🔥 NEW: Update ticket availability in TICKET_TYPES
+      for (const ticket of validTickets) {
+        const ticketTypeId = ticket.TICKET_TYPES.id;
+        const quantity = parseInt(ticket.quantity || '1');
+
+        // Decrement available tickets and increment sold tickets
+        const { data: currentTicketType } = await supabase
+          .from('TICKET_TYPES')
+          .select('quantity_available, quantity_sold')
+          .eq('id', ticketTypeId)
+          .single();
+
+        if (currentTicketType) {
+          const newAvailable = Math.max(0, (currentTicketType.quantity_available || 0) - quantity);
+          const newSold = (currentTicketType.quantity_sold || 0) + quantity;
+
+          await supabase
+            .from('TICKET_TYPES')
+            .update({
+              quantity_available: newAvailable,
+              quantity_sold: newSold,
+            })
+            .eq('id', ticketTypeId);
+
+          console.log(`📉 Updated ticket type ${ticketTypeId}: ${newAvailable} available, ${newSold} sold`);
+        }
+      }
+    }
+
+    // Send ticket email
     let emailStatus = 'pending';
     let emailId = null;
 

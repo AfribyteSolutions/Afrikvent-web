@@ -278,7 +278,7 @@ const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-gray-600">Revenue</p>
-              <p className="text-2xl font-bold text-gray-900">₵{totalRevenue.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-gray-900">CFA{totalRevenue.toLocaleString()}</p>
             </div>
             <div className="w-12 h-12 bg-yellow-500 rounded-lg flex items-center justify-center">
               <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">

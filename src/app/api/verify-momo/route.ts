@@ -1,3 +1,4 @@
+// Enhanced verify-momo-payment route with ticket availability updates
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     if (payment1) {
       payment = payment1;
     } else {
-      // Strategy 2: Look for recent payment by user_id (extract from ref)
+      // Strategy 2: Look for recent payment by user_id
       const userId = momo_ref.split('_')[0];
       
       if (userId) {
@@ -126,7 +127,7 @@ export async function POST(request: NextRequest) {
           id, title, event_date, location_name, address, images, description
         ),
         TICKET_TYPES!inner (
-          id, name, price, description, format
+          id, name, price, description, format, event_id
         )
       `)
       .in('id', ticketIds);
@@ -157,10 +158,47 @@ export async function POST(request: NextRequest) {
 
     // Update ticket status to active if successful
     if (normalizedStatus === 'SUCCESSFUL' || normalizedStatus === 'COMPLETED') {
-      await supabase
+      const { error: updateError } = await supabase
         .from('TICKETS')
         .update({ ticket_status: 'active' })
         .in('id', ticketIds);
+
+      if (updateError) {
+        console.error('Error updating ticket status:', updateError);
+      }
+
+      // 🔥 NEW: Update ticket availability in TICKET_TYPES
+      for (const ticket of validTickets) {
+        const ticketTypeId = ticket.TICKET_TYPES.id;
+        const quantity = parseInt(ticket.quantity || '1');
+
+        // Fetch current ticket type data
+        const { data: currentTicketType } = await supabase
+          .from('TICKET_TYPES')
+          .select('quantity_available, quantity_sold, capacity')
+          .eq('id', ticketTypeId)
+          .single();
+
+        if (currentTicketType) {
+          const newAvailable = Math.max(0, (currentTicketType.quantity_available || 0) - quantity);
+          const newSold = (currentTicketType.quantity_sold || 0) + quantity;
+
+          // Update with new values
+          const { error: ticketTypeError } = await supabase
+            .from('TICKET_TYPES')
+            .update({
+              quantity_available: newAvailable,
+              quantity_sold: newSold,
+            })
+            .eq('id', ticketTypeId);
+
+          if (ticketTypeError) {
+            console.error('Error updating ticket type:', ticketTypeError);
+          } else {
+            console.log(`📉 Updated ticket type ${ticketTypeId}: ${newAvailable} available, ${newSold} sold`);
+          }
+        }
+      }
     }
 
     // Send ticket email

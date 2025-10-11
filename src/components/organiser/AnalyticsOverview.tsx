@@ -3,16 +3,21 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
-import type { Database } from '@/types/database.types'; // Adjust path to your database types
+import type { Database } from '@/types/database.types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
-// Use your actual database types
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
-type UserRow = Database['public']['Tables']['USERS']['Row'];
-type TicketRow = Database['public']['Tables']['TICKETS']['Row'];
 
-// Extended type for events with currency
-interface EventWithCurrency extends EventRow {
+interface TicketTypeData {
+  id: number;
+  quantity_available: number | null;
+  quantity_sold: number | null;
+  capacity: number | null;
+}
+
+interface EventWithTicketTypes extends EventRow {
   currency: string;
+  TICKET_TYPES: TicketTypeData[] | null;
 }
 
 interface AnalyticsOverviewProps {
@@ -20,7 +25,6 @@ interface AnalyticsOverviewProps {
   detailed?: boolean;
 }
 
-// Type for the joined query result
 interface SupabaseTicketWithJoins {
   total: number | null;
   unit_price: number | null;
@@ -32,11 +36,18 @@ interface SupabaseTicketWithJoins {
     id: number;
     title: string;
     organizer_id: string;
-    currency: string; // Added currency field
+    currency: string;
   }>;
   USERS: Array<{
     name: string;
   }>;
+}
+
+interface EventPerformance {
+  revenue: number;
+  ticketsSold: number;
+  availableTickets: number;
+  totalCapacity: number;
 }
 
 interface AnalyticsData {
@@ -45,8 +56,8 @@ interface AnalyticsData {
   totalEvents: number;
   averageTicketPrice: number;
   conversionRate: number;
-  currency: string; // Add primary currency
-  revenueByCurrency: Record<string, number>; // Track revenue by currency
+  currency: string;
+  revenueByCurrency: Record<string, number>;
   topSellingEvents: Array<{
     name: string;
     sales: number;
@@ -67,18 +78,25 @@ interface AnalyticsData {
     buyer_name?: string | null;
     currency: string;
   }>;
-  // Update the recentEvents type in the AnalyticsData interface
-recentEvents: Array<{
-  id: number;
-  title: string;
-  event_status: string;
-  event_date: string | null; // Change this to allow null
-  created_at: string;
-  ticketsSold?: number;
-  revenue?: number;
-  currency?: string;
-}>;
+  recentEvents: Array<{
+    id: number;
+    title: string;
+    event_status: string;
+    event_date: string | null;
+    created_at: string;
+    ticketsSold?: number;
+    revenue?: number;
+    currency?: string;
+    availableTickets?: number;
+    totalCapacity?: number;
+  }>;
   loading: boolean;
+}
+
+interface RealtimePayload {
+  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
+  new: Record<string, unknown>;
+  old: Record<string, unknown>;
 }
 
 const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = false }) => {
@@ -88,7 +106,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     totalEvents: 0,
     averageTicketPrice: 0,
     conversionRate: 0,
-    currency: 'GHS', // Default currency
+    currency: 'GHS',
     revenueByCurrency: {},
     topSellingEvents: [],
     salesByMonth: [],
@@ -98,14 +116,99 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
   });
 
   const [toggleLoading, setToggleLoading] = useState<Record<number, boolean>>({});
+  const [realtimeChannel, setRealtimeChannel] = useState<RealtimeChannel | null>(null);
 
   useEffect(() => {
     if (user) {
       fetchAnalyticsData();
+      setupRealtimeSubscription();
     }
+
+    return () => {
+      if (realtimeChannel) {
+        supabase.removeChannel(realtimeChannel);
+      }
+    };
   }, [user]);
 
-  // Helper function to get currency symbol
+  const setupRealtimeSubscription = () => {
+    if (!user) return;
+
+    if (realtimeChannel) {
+      supabase.removeChannel(realtimeChannel);
+    }
+
+    const channel = supabase
+      .channel('analytics-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'PAYMENTS',
+        },
+        (payload) => {
+          console.log('Payment update detected:', payload);
+          handlePaymentUpdate(payload as RealtimePayload);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'TICKETS',
+        },
+        (payload) => {
+          console.log('Ticket update detected:', payload);
+          handleTicketUpdate(payload as RealtimePayload);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'TICKET_TYPES',
+        },
+        (payload) => {
+          console.log('Ticket type update detected:', payload);
+          fetchAnalyticsData();
+        }
+      )
+      .subscribe();
+
+    setRealtimeChannel(channel);
+  };
+
+  const handlePaymentUpdate = async (payload: RealtimePayload) => {
+    if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+      const payment = payload.new;
+      const status = typeof payment?.payment_status === 'string' 
+        ? payment.payment_status.toUpperCase() 
+        : '';
+      
+      if (['SUCCESSFUL', 'COMPLETED', 'ACTIVE', 'PAID'].includes(status)) {
+        console.log('✅ Successful payment detected, refreshing analytics...');
+        await fetchAnalyticsData();
+      }
+    }
+  };
+
+  const handleTicketUpdate = async (payload: RealtimePayload) => {
+    if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+      const ticket = payload.new;
+      const status = typeof ticket?.ticket_status === 'string'
+        ? ticket.ticket_status.toUpperCase()
+        : '';
+      
+      if (['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID', 'PAID', 'USED'].includes(status)) {
+        console.log('🎟️ Ticket status updated, refreshing analytics...');
+        await fetchAnalyticsData();
+      }
+    }
+  };
+
   const getCurrencySymbol = (currency: string): string => {
     switch (currency) {
       case 'GHS':
@@ -123,17 +226,14 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     }
   };
 
-  // Helper function to format currency
   const formatCurrency = (amount: number, currency: string = 'CFA'): string => {
     const symbol = getCurrencySymbol(currency);
     return `${symbol}${amount.toLocaleString()}`;
   };
 
-  // Helper function to get primary currency from user's events
-  const getPrimaryCurrency = (eventsData: EventWithCurrency[]): string => {
+  const getPrimaryCurrency = (eventsData: EventWithTicketTypes[]): string => {
     if (!eventsData || eventsData.length === 0) return 'CFA';
     
-    // Get the most common currency from user's events
     const currencyCount: Record<string, number> = {};
     eventsData.forEach(event => {
       const currency = event.currency || 'CFA';
@@ -151,15 +251,29 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     try {
       setAnalyticsData(prev => ({ ...prev, loading: true }));
 
-      // Fetch events data with currency
       const { data: eventsData } = await supabase
         .from('EVENTS')
-        .select('id, title, event_status, event_date, created_at, currency')
+        .select(`
+          id, 
+          title, 
+          event_status, 
+          event_date, 
+          created_at, 
+          currency,
+          TICKET_TYPES (
+            id,
+            quantity_available,
+            quantity_sold,
+            capacity
+          )
+        `)
         .eq('organizer_id', user.id)
         .order('created_at', { ascending: false });
 
       const totalEvents = eventsData?.length || 0;
-      const primaryCurrency = getPrimaryCurrency((eventsData as EventWithCurrency[]) || []);
+      const typedEventsData = (eventsData || []) as EventWithTicketTypes[];
+      const primaryCurrency = getPrimaryCurrency(typedEventsData);
+
       const { data: ticketsData } = await supabase
         .from('TICKETS')
         .select(`
@@ -175,13 +289,15 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         .eq('EVENTS.organizer_id', user.id);
 
       const confirmedTickets = (ticketsData as SupabaseTicketWithJoins[] | null)?.filter(ticket => 
-        ticket.ticket_status === 'paid' || ticket.ticket_status === 'used'
+        ticket.ticket_status === 'paid' || 
+        ticket.ticket_status === 'used' || 
+        ticket.ticket_status === 'active' ||
+        ticket.ticket_status === 'confirmed'
       ) || [];
 
-      // Calculate revenue by currency
       const revenueByCurrency: Record<string, number> = {};
       confirmedTickets.forEach(ticket => {
-        const currency = ticket.EVENTS?.[0]?.currency || 'GHS';
+        const currency = ticket.EVENTS?.[0]?.currency || 'CFA';
         const total = ticket.total || 0;
         revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + total;
       });
@@ -193,8 +309,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
 
       const averageTicketPrice = totalTicketsSold > 0 ? totalRevenue / totalTicketsSold : 0;
 
-      // Calculate event performance data
-      const eventPerformance = (eventsData as EventWithCurrency[])?.reduce((acc, event) => {
+      const eventPerformance = typedEventsData.reduce((acc, event) => {
         const eventTickets = confirmedTickets.filter(ticket => 
           ticket.EVENTS?.[0]?.id === event.id
         );
@@ -207,25 +322,39 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
           sum + parseInt(ticket.quantity || '0'), 0
         );
 
+        const availableTickets = (event.TICKET_TYPES || []).reduce((sum, tt) => 
+          sum + (tt.quantity_available || 0), 0
+        );
+
+        const totalCapacity = (event.TICKET_TYPES || []).reduce((sum, tt) => 
+          sum + (tt.capacity || 0), 0
+        );
+
         acc[event.id] = {
           revenue: eventRevenue,
-          ticketsSold: eventTicketsSold
+          ticketsSold: eventTicketsSold,
+          availableTickets,
+          totalCapacity
         };
         return acc;
-      }, {} as Record<number, { revenue: number; ticketsSold: number }>) || {};
+      }, {} as Record<number, EventPerformance>);
 
-      // Add performance data to recent events
-      const recentEvents = (eventsData as EventWithCurrency[])?.slice(0, 5).map(event => ({
-        ...event,
+      const recentEvents = typedEventsData.slice(0, 5).map(event => ({
+        id: event.id,
+        title: event.title,
+        event_status: event.event_status,
+        event_date: event.event_date,
+        created_at: event.created_at,
         ticketsSold: eventPerformance[event.id]?.ticketsSold || 0,
         revenue: eventPerformance[event.id]?.revenue || 0,
-        currency: event.currency || 'GHS'
-      })) || [];
+        currency: event.currency || 'CFA',
+        availableTickets: eventPerformance[event.id]?.availableTickets || 0,
+        totalCapacity: eventPerformance[event.id]?.totalCapacity || 0
+      }));
 
-      // Calculate top selling events with currency
       const eventSales = confirmedTickets.reduce((acc, ticket) => {
         const eventTitle = ticket.EVENTS?.[0]?.title || 'Unknown Event';
-        const currency = ticket.EVENTS?.[0]?.currency || 'GHS';
+        const currency = ticket.EVENTS?.[0]?.currency || 'CFA';
         const key = `${eventTitle}-${currency}`;
         
         if (!acc[key]) {
@@ -245,7 +374,6 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 3);
 
-      // Calculate sales by month (last 6 months) with primary currency
       const salesByMonth = [];
       const now = new Date();
       for (let i = 5; i >= 0; i--) {
@@ -269,7 +397,6 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         });
       }
 
-      // Recent activity (last 4 transactions) with currency
       const recentActivity = confirmedTickets
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, 4)
@@ -279,7 +406,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
           amount: ticket.total || 0,
           time: formatTimeAgo(ticket.created_at),
           buyer_name: ticket.USERS?.[0]?.name || undefined,
-          currency: ticket.EVENTS?.[0]?.currency || 'GHS'
+          currency: ticket.EVENTS?.[0]?.currency || 'CFA'
         }));
 
       setAnalyticsData({
@@ -287,7 +414,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         totalTicketsSold,
         totalEvents,
         averageTicketPrice: Math.round(averageTicketPrice),
-        conversionRate: 3.2, // This would need more complex calculation
+        conversionRate: 3.2,
         currency: primaryCurrency,
         revenueByCurrency,
         topSellingEvents,
@@ -321,7 +448,6 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         throw error;
       }
 
-      // Update local state
       setAnalyticsData(prev => ({
         ...prev,
         recentEvents: prev.recentEvents.map(event =>
@@ -352,7 +478,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     switch (type) {
       case 'sale':
         return (
-          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+          <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center animate-pulse">
             <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
             </svg>
@@ -382,7 +508,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
       case 'published':
         return (
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-            <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-1.5"></div>
+            <div className="w-1.5 h-1.5 bg-green-400 rounded-full mr-1.5 animate-pulse"></div>
             Live
           </span>
         );
@@ -429,35 +555,38 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
 
   return (
     <div className="space-y-6">
+      <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+          <span className="text-sm text-green-700 font-medium">Live Dashboard - Updates in real-time</span>
+        </div>
+      </div>
+
       {detailed && (
-        <>
-          {/* Revenue Chart */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-6">Revenue Over Time</h3>
-            <div className="h-64">
-              <div className="flex items-end justify-between h-full space-x-2">
-                {analyticsData.salesByMonth.map((data, index) => (
-                  <div key={index} className="flex-1 flex flex-col items-center">
-                    <div 
-                      className="w-full bg-blue-500 rounded-t-sm"
-                      style={{ 
-                        height: `${Math.max(...analyticsData.salesByMonth.map(d => d.revenue)) > 0 ? (data.revenue / Math.max(...analyticsData.salesByMonth.map(d => d.revenue))) * 100 : 10}%`,
-                        minHeight: '20px'
-                      }}
-                    ></div>
-                    <span className="text-xs text-gray-500 mt-2">{data.month}</span>
-                    <span className="text-xs font-medium text-gray-700">
-                      {formatCurrency(data.revenue, data.currency)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Revenue Over Time</h3>
+          <div className="h-64">
+            <div className="flex items-end justify-between h-full space-x-2">
+              {analyticsData.salesByMonth.map((data, index) => (
+                <div key={index} className="flex-1 flex flex-col items-center">
+                  <div 
+                    className="w-full bg-blue-500 rounded-t-sm transition-all duration-500"
+                    style={{ 
+                      height: `${Math.max(...analyticsData.salesByMonth.map(d => d.revenue)) > 0 ? (data.revenue / Math.max(...analyticsData.salesByMonth.map(d => d.revenue))) * 100 : 10}%`,
+                      minHeight: '20px'
+                    }}
+                  ></div>
+                  <span className="text-xs text-gray-500 mt-2">{data.month}</span>
+                  <span className="text-xs font-medium text-gray-700">
+                    {formatCurrency(data.revenue, data.currency)}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {/* My Events with integrated publish toggle */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-semibold text-gray-900">Publish or Draft Events</h3>
@@ -466,50 +595,52 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         <div className="space-y-4">
           {analyticsData.recentEvents.length > 0 ? (
             analyticsData.recentEvents.map((event) => (
-              <div key={event.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div key={event.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg transition-all duration-300 hover:shadow-md">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h4 className="font-medium text-gray-900">{event.title}</h4>
                     {getStatusBadge(event.event_status)}
                   </div>
                   <div className="flex items-center gap-6 text-sm text-gray-600">
-                  <span>
-                    📅 {event.event_date ? new Date(event.event_date).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric'
-                    }) : 'N/A'}
-                  </span>
-                    <span>📍 Location</span>
+                    <span>
+                      📅 {event.event_date ? new Date(event.event_date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                      }) : 'N/A'}
+                    </span>
+                    <span>
+                      🎟️ {event.availableTickets}/{event.totalCapacity} available
+                    </span>
                     <span>💰 {formatCurrency(event.revenue || 0, event.currency || analyticsData.currency)}</span>
                   </div>
                 </div>
                 
-                  <div className="flex items-center gap-3 ml-6">
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => handlePublishToggle(event.id, event.event_status)}
-                        disabled={toggleLoading[event.id] || event.event_status === 'cancelled'}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                          event.event_status === 'published' ? 'bg-green-600' : 'bg-gray-200'
-                        } ${
-                          event.event_status === 'cancelled' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                <div className="flex items-center gap-3 ml-6">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handlePublishToggle(event.id, event.event_status)}
+                      disabled={toggleLoading[event.id] || event.event_status === 'cancelled'}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        event.event_status === 'published' ? 'bg-green-600' : 'bg-gray-200'
+                      } ${
+                        event.event_status === 'cancelled' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
+                          event.event_status === 'published' ? 'translate-x-6' : 'translate-x-1'
                         }`}
-                      >
-                        <span
-                          className={`inline-block h-4 w-4 rounded-full bg-white transition-transform ${
-                            event.event_status === 'published' ? 'translate-x-6' : 'translate-x-1'
-                          }`}
-                        />
-                        {toggleLoading[event.id] && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
-                          </div>
-                        )}
-                      </button>
-                      <span className="text-xs text-gray-500">Publish</span>
-                    </div>
+                      />
+                      {toggleLoading[event.id] && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-3 h-3 border border-gray-400 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                      )}
+                    </button>
+                    <span className="text-xs text-gray-500">Publish</span>
                   </div>
+                </div>
               </div>
             ))
           ) : (
@@ -518,7 +649,6 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         </div>
       </div>
 
-      {/* Top Selling Events / Performance Overview */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">
           {detailed ? 'Top Selling Events' : 'Performance Overview'}
@@ -528,7 +658,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
           <div className="space-y-4">
             {analyticsData.topSellingEvents.length > 0 ? (
               analyticsData.topSellingEvents.map((event, index) => (
-                <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg transition-all duration-300">
                   <div>
                     <h4 className="font-medium text-gray-900">{event.name}</h4>
                     <p className="text-sm text-gray-600">{event.sales} tickets sold</p>
@@ -547,23 +677,23 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
+            <div className="text-center p-4 bg-blue-50 rounded-lg transition-all duration-300 hover:scale-105">
               <p className="text-2xl font-bold text-blue-600">
                 {formatCurrency(analyticsData.totalRevenue, analyticsData.currency)}
               </p>
               <p className="text-sm text-gray-600">Total Revenue</p>
             </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
+            <div className="text-center p-4 bg-green-50 rounded-lg transition-all duration-300 hover:scale-105">
               <p className="text-2xl font-bold text-green-600">{analyticsData.totalTicketsSold}</p>
               <p className="text-sm text-gray-600">Tickets Sold</p>
             </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
+            <div className="text-center p-4 bg-purple-50 rounded-lg transition-all duration-300 hover:scale-105">
               <p className="text-2xl font-bold text-purple-600">
                 {formatCurrency(analyticsData.averageTicketPrice, analyticsData.currency)}
               </p>
               <p className="text-sm text-gray-600">Avg. Ticket Price</p>
             </div>
-            <div className="text-center p-4 bg-orange-50 rounded-lg">
+            <div className="text-center p-4 bg-orange-50 rounded-lg transition-all duration-300 hover:scale-105">
               <p className="text-2xl font-bold text-orange-600">{analyticsData.conversionRate}%</p>
               <p className="text-sm text-gray-600">Conversion Rate</p>
             </div>
@@ -571,17 +701,17 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         )}
       </div>
 
-      {/* Recent Activity */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-6">Recent Activity</h3>
         <div className="space-y-4">
           {analyticsData.recentActivity.length > 0 ? (
             analyticsData.recentActivity.map((activity, index) => (
-              <div key={index} className="flex items-center space-x-4">
+              <div key={index} className="flex items-center space-x-4 transition-all duration-300 hover:bg-gray-50 p-2 rounded-lg">
                 {getActivityIcon(activity.type)}
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-900">
                     {activity.type === 'sale' ? 'New ticket sale' : 'Refund processed'}
+                    {activity.buyer_name && <span className="text-gray-600"> - {activity.buyer_name}</span>}
                   </p>
                   <p className="text-sm text-gray-600">{activity.event}</p>
                 </div>
