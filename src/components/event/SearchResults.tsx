@@ -76,6 +76,29 @@ const SearchResults: React.FC<SearchResultsProps> = ({
     </div>
   );
 
+  // Helper function to get price display
+  const getPriceDisplay = (event: Event) => {
+    if (!event.price) return "TBD";
+    
+    if (typeof event.price === "string" && event.price.toLowerCase() === "free") {
+      return "Free";
+    }
+
+    // Extract numeric value from price
+    const priceMatch = event.price.toString().match(/[\d,]+\.?\d*/);
+    const numericPrice = priceMatch ? parseFloat(priceMatch[0].replace(",", "")) : 0;
+
+    if (numericPrice === 0) return "Free";
+
+    // Get currency symbol from event or use CFA as default
+    const currencySymbol = "CFA";
+    
+    return `${currencySymbol}${numericPrice.toLocaleString("en-US", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    })}`;
+  };
+
   // Event card component
   const EventCard = ({ event }: { event: Event }) => (
     <div 
@@ -90,11 +113,10 @@ const SearchResults: React.FC<SearchResultsProps> = ({
           className="object-cover"
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
         />
-        {/* Removed is_featured check since it doesn't exist in Event type */}
         {event.price && (
           <div className="absolute top-3 right-3">
-            <span className="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-semibold">
-              ${event.price}
+            <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-semibold">
+              {getPriceDisplay(event)}
             </span>
           </div>
         )}
@@ -147,9 +169,9 @@ const SearchResults: React.FC<SearchResultsProps> = ({
   const getPriceRangeLabel = (priceRange: string) => {
     const priceOptions: { [key: string]: string } = {
       "free": "Free Events",
-      "0-50": "₵0 - ₵50",
-      "50-200": "₵50 - ₵200",
-      "200+": "₵200+"
+      "0-50": "CFA 0 - CFA 50",
+      "50-200": "CFA 50 - CFA 200",
+      "200+": "CFA 200+"
     };
     return priceOptions[priceRange] || priceRange;
   };

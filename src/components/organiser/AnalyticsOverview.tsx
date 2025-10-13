@@ -701,36 +701,6 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-6">Recent Activity</h3>
-        <div className="space-y-4">
-          {analyticsData.recentActivity.length > 0 ? (
-            analyticsData.recentActivity.map((activity, index) => (
-              <div key={index} className="flex items-center space-x-4 transition-all duration-300 hover:bg-gray-50 p-2 rounded-lg">
-                {getActivityIcon(activity.type)}
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900">
-                    {activity.type === 'sale' ? 'New ticket sale' : 'Refund processed'}
-                    {activity.buyer_name && <span className="text-gray-600"> - {activity.buyer_name}</span>}
-                  </p>
-                  <p className="text-sm text-gray-600">{activity.event}</p>
-                </div>
-                <div className="text-right">
-                  <p className={`text-sm font-medium ${
-                    activity.amount > 0 ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {activity.amount > 0 ? '+' : ''}{formatCurrency(Math.abs(activity.amount), activity.currency)}
-                  </p>
-                  <p className="text-xs text-gray-500">{activity.time}</p>
-                </div>
-              </div>
-            ))
-          ) : (
-            <p className="text-gray-500 text-center py-4">No recent activity</p>
-          )}
-        </div>
-      </div>
-
       {detailed && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Export Reports</h3>
