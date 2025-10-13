@@ -102,6 +102,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [authModalType, setAuthModalType] = useState<"signin" | "signup">("signin");
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [showImageLightbox, setShowImageLightbox] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const eventId = parseInt(resolvedParams.id);
 
@@ -194,7 +196,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     console.log("User authenticated:", userEmail);
     setShowLoginPrompt(false);
     setShowAuthModal(false);
-    // Refresh the page to update the user state
     window.location.reload();
   };
 
@@ -336,6 +337,23 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     return event?.USERS?.name || 'Anonymous Organizer';
   };
 
+  const handleImageClick = (index: number = 0) => {
+    setCurrentImageIndex(index);
+    setShowImageLightbox(true);
+  };
+
+  const handleNextImage = () => {
+    const images = event?.images;
+    if (!images || !Array.isArray(images)) return;
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const handlePrevImage = () => {
+    const images = event?.images;
+    if (!images || !Array.isArray(images)) return;
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -365,6 +383,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   }
   
   const eventCurrency = event.currency;
+  const eventImages = Array.isArray(event.images) ? event.images : [];
+  const hasImages = eventImages.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -384,14 +404,54 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="relative h-80 bg-gray-200">
-            {event.images && event.images[0] ? (
-              <Image
-                src={event.images[0]}
-                alt={event.title}
-                fill
-                className="object-cover"
-              />
+          <div 
+            className="relative h-80 bg-gray-200 group cursor-pointer overflow-hidden"
+            onClick={() => hasImages && handleImageClick(0)}
+          >
+            {hasImages ? (
+              <>
+                <Image
+                  src={eventImages[0]}
+                  alt={event.title}
+                  fill
+                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center">
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform group-hover:scale-110">
+                    <div className="bg-white/95 backdrop-blur-sm rounded-full p-4 shadow-2xl">
+                      <svg className="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Desktop hover tooltip */}
+                <div className="hidden sm:block absolute bottom-4 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                  <div className="bg-white/95 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg">
+                    <p className="text-sm font-medium text-gray-800 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Click to view full image
+                    </p>
+                  </div>
+                </div>
+
+                {/* Mobile tap indicator - always visible on small screens */}
+                <div className="sm:hidden absolute bottom-4 left-1/2 transform -translate-x-1/2">
+                  <div className="bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg animate-pulse">
+                    <p className="text-xs font-medium text-white flex items-center gap-1.5">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      Tap to view
+                    </p>
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center">
                 <svg className="w-20 h-20 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -399,6 +459,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </svg>
               </div>
             )}
+            
             <div className="absolute top-4 right-4">
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                 event.event_status === 'active' ? 'bg-green-100 text-green-800' :
@@ -411,13 +472,27 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
             </div>
 
             <button
-              onClick={handleShare}
-              className="absolute top-4 left-4 bg-white/80 backdrop-blur-sm p-2 rounded-full hover:bg-white"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleShare();
+              }}
+              className="absolute top-4 left-4 bg-white/80 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
               </svg>
             </button>
+
+            {hasImages && eventImages.length > 1 && (
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
+                <div className="bg-black/60 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  {eventImages.length} photos
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="p-8">
@@ -693,6 +768,108 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         </div>
       </div>
 
+      {showImageLightbox && hasImages && (
+        <div 
+          className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4"
+          onClick={() => setShowImageLightbox(false)}
+        >
+          <button
+            onClick={() => setShowImageLightbox(false)}
+            className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-3 rounded-full transition-all z-10"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-white/10 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium">
+            {currentImageIndex + 1} / {eventImages.length}
+          </div>
+
+          {eventImages.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handlePrevImage();
+              }}
+              className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-4 rounded-full transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
+
+          {eventImages.length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleNextImage();
+              }}
+              className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-4 rounded-full transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
+
+          <div 
+            className="relative max-w-7xl max-h-[90vh] w-full h-full flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Image
+              src={eventImages[currentImageIndex]}
+              alt={`${event.title} - Image ${currentImageIndex + 1}`}
+              fill
+              className="object-contain"
+              priority
+            />
+          </div>
+
+          {eventImages.length > 1 && (
+            <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2 max-w-full overflow-x-auto px-4">
+              {eventImages.map((img, index) => (
+                <button
+                  key={index}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setCurrentImageIndex(index);
+                  }}
+                  className={`relative w-16 h-16 flex-shrink-0 rounded-lg overflow-hidden transition-all ${
+                    index === currentImageIndex 
+                      ? 'ring-4 ring-white scale-110' 
+                      : 'ring-2 ring-white/30 opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  <Image
+                    src={img}
+                    alt={`Thumbnail ${index + 1}`}
+                    fill
+                    className="object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="absolute top-4 left-4 flex gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleShare();
+              }}
+              className="bg-white/10 hover:bg-white/20 backdrop-blur-sm text-white p-3 rounded-full transition-all"
+              title="Share"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {selectedTicket && user && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50">
           <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
@@ -763,7 +940,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
           eventDate={event.event_date}
           eventLocation={event.location_name}
           eventId={event.id}
-          eventImage={event.images?.[0]}
+          eventImage={eventImages[0]}
           onPaymentSuccess={handlePaymentSuccess}
           eventCurrency={eventCurrency}
         />
@@ -778,7 +955,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         onClose={handleCloseSuccessScreen}
       />
 
-      {/* Login Prompt Modal */}
       {showLoginPrompt && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 transform transition-all">
@@ -828,7 +1004,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         </div>
       )}
 
-      {/* Auth Modal */}
       <AuthModal
         type={authModalType}
         isOpen={showAuthModal}

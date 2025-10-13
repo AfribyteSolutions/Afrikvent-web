@@ -1,8 +1,9 @@
 // src/components/organiser/DashboardStats.tsx
 'use client';
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface DashboardStatsProps {
     user: User | null;
@@ -48,58 +49,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         loading: true
     });
 
-    useEffect(() => {
-        if (user) {
-            fetchDashboardStats();
-            
-            // Real-time subscription for ticket updates
-            const ticketsSubscription = supabase
-                .channel('dashboard-tickets')
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'TICKETS'
-                    },
-                    () => {
-                        fetchDashboardStats();
-                    }
-                )
-                .subscribe();
-
-            return () => {
-                ticketsSubscription.unsubscribe();
-            };
-        } else {
-            setStats(prev => ({ ...prev, loading: false }));
-        }
-    }, [user]);
-
-    const calculateChange = (currentValue: number, previousValue: number) => {
-        if (previousValue === 0) {
-            return currentValue > 0 ? 'New' : 'N/A';
-        }
-        const change = ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
-        return `${change > 0 ? '+' : ''}${change.toFixed(2)}%`;
-    };
-    
-    const formatCurrency = (currency: string, value: number) => {
-        const currencyCode = currency || 'USD'; 
-        
-        try {
-            return new Intl.NumberFormat('en-US', {
-                style: 'currency',
-                currency: currencyCode,
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 0 
-            }).format(value);
-        } catch (e) {
-            return `${currencyCode} ${value.toLocaleString()}`;
-        }
-    };
-
-    const fetchDashboardStats = async () => {
+    // Memoize the fetch function to avoid unnecessary re-renders
+    const fetchDashboardStats = useCallback(async () => {
         if (!user) return;
 
         try {
@@ -217,6 +168,125 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         } catch (error) {
             console.error('Error fetching dashboard stats:', error);
             setStats(prev => ({ ...prev, loading: false }));
+        }
+    }, [user]);
+
+    useEffect(() => {
+        if (!user) {
+            setStats(prev => ({ ...prev, loading: false }));
+            return;
+        }
+
+        // Initial fetch
+        fetchDashboardStats();
+
+        // Set up real-time subscriptions
+        let ticketsChannel: RealtimeChannel;
+        let eventsChannel: RealtimeChannel;
+        let paymentsChannel: RealtimeChannel;
+
+        const setupRealtimeSubscriptions = async () => {
+            // Subscribe to TICKETS table changes
+            ticketsChannel = supabase
+                .channel('dashboard-tickets-realtime')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*', // INSERT, UPDATE, DELETE
+                        schema: 'public',
+                        table: 'TICKETS'
+                    },
+                    (payload) => {
+                        console.log('Ticket change detected:', payload);
+                        fetchDashboardStats();
+                    }
+                )
+                .subscribe((status) => {
+                    console.log('Tickets subscription status:', status);
+                });
+
+            // Subscribe to EVENTS table changes
+            eventsChannel = supabase
+                .channel('dashboard-events-realtime')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'EVENTS',
+                        filter: `organizer_id=eq.${user.id}`
+                    },
+                    (payload) => {
+                        console.log('Event change detected:', payload);
+                        fetchDashboardStats();
+                    }
+                )
+                .subscribe((status) => {
+                    console.log('Events subscription status:', status);
+                });
+
+            // Subscribe to PAYMENTS table changes (optional but recommended)
+            paymentsChannel = supabase
+                .channel('dashboard-payments-realtime')
+                .on(
+                    'postgres_changes',
+                    {
+                        event: '*',
+                        schema: 'public',
+                        table: 'PAYMENTS',
+                        filter: `user_id=eq.${user.id}`
+                    },
+                    (payload) => {
+                        console.log('Payment change detected:', payload);
+                        // Only refresh if payment status changed to success/completed
+                        const newRecord = payload.new as { payment_status?: string } | null;
+                        if (newRecord && newRecord.payment_status === 'completed') {
+                            fetchDashboardStats();
+                        }
+                    }
+                )
+                .subscribe((status) => {
+                    console.log('Payments subscription status:', status);
+                });
+        };
+
+        setupRealtimeSubscriptions();
+
+        // Cleanup function
+        return () => {
+            console.log('Cleaning up real-time subscriptions...');
+            if (ticketsChannel) {
+                supabase.removeChannel(ticketsChannel);
+            }
+            if (eventsChannel) {
+                supabase.removeChannel(eventsChannel);
+            }
+            if (paymentsChannel) {
+                supabase.removeChannel(paymentsChannel);
+            }
+        };
+    }, [user, fetchDashboardStats]);
+
+    const calculateChange = (currentValue: number, previousValue: number) => {
+        if (previousValue === 0) {
+            return currentValue > 0 ? 'New' : 'N/A';
+        }
+        const change = ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
+        return `${change > 0 ? '+' : ''}${change.toFixed(2)}%`;
+    };
+    
+    const formatCurrency = (currency: string, value: number) => {
+        const currencyCode = currency || 'USD'; 
+        
+        try {
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: currencyCode,
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0 
+            }).format(value);
+        } catch (e) {
+            return `${currencyCode} ${value.toLocaleString()}`;
         }
     };
 

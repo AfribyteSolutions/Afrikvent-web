@@ -371,15 +371,7 @@ const EventsList: React.FC<EventsListProps> = ({
                         <span className="text-gray-500">Revenue</span>
                         <p className="font-medium">{formatCurrency(event.revenue, event.currency)}</p>
                       </div>
-                      <div>
-                        <span className="text-gray-500">Progress</span>
-                        <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                          <div 
-                            className="bg-blue-500 h-2 rounded-full" 
-                            style={{ width: `${event.totalTickets > 0 ? (event.ticketsSold / event.totalTickets) * 100 : 0}%` }}
-                          ></div>
-                        </div>
-                      </div>
+                      
                     </div>
                   </div>
 
