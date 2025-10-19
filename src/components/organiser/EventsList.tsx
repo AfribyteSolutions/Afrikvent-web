@@ -64,6 +64,15 @@ const EventsList: React.FC<EventsListProps> = ({
         return currency;
     }
   };
+  const filteredEvents = limit 
+    ? events.slice(0, limit)
+    : events.filter(event => {
+        if (filterStatus === 'all') return true;
+        if (filterStatus === 'active') {
+          return event.event_status === 'active' || event.event_status === 'published';
+        }
+        return event.event_status === filterStatus;
+      });
 
   const formatCurrency = (amount: number, currency: string = 'GHS'): string => {
     const symbol = getCurrencySymbol(currency);
@@ -140,11 +149,7 @@ const EventsList: React.FC<EventsListProps> = ({
     }
   };
 
-  const filteredEvents = limit 
-    ? events.slice(0, limit)
-    : events.filter(event => 
-        filterStatus === 'all' || event.event_status === filterStatus
-      );
+ 
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -301,23 +306,7 @@ const EventsList: React.FC<EventsListProps> = ({
             )}
           </div>
 
-          {!limit && (
-            <div className="flex gap-2">
-              {['all', 'draft', 'active', 'ended'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilterStatus(status)}
-                  className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${
-                    filterStatus === status
-                      ? 'bg-blue-100 text-blue-800'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {status === 'active' ? 'live' : status}
-                </button>
-              ))}
-            </div>
-          )}
+          
         </div>
 
         <div className="divide-y divide-gray-200">

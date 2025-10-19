@@ -559,19 +559,28 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                     const colorScheme = getTicketColorScheme(index);
                     const isSelected = selectedTicket?.id === ticket.id;
                     const isOnline = ticket.format === 'online';
+                    const isSoldOut = (ticket.max_quatity || 0) <= 0;
 
                     return (
                       <div
                         key={ticket.id}
-                        className={`relative border-2 rounded-2xl p-4 sm:p-6 cursor-pointer transition-all duration-300 ${
-                          isSelected
-                            ? `${colorScheme.border} bg-white shadow-xl transform scale-[1.01]`
-                            : `${colorScheme.bgCard} border-gray-300 shadow-sm hover:shadow-md`
+                        className={`relative border-2 rounded-2xl p-4 sm:p-6 transition-all duration-300 ${
+                          isSoldOut 
+                            ? 'border-gray-300 bg-gray-50 opacity-75 cursor-not-allowed' 
+                            : isSelected
+                              ? `${colorScheme.border} bg-white shadow-xl transform scale-[1.01] cursor-pointer`
+                              : `${colorScheme.bgCard} border-gray-300 shadow-sm hover:shadow-md cursor-pointer`
                         }`}
-                        onClick={() => handleTicketClick(ticket)}
+                        onClick={() => !isSoldOut && handleTicketClick(ticket)}
                       >
-                        {isSelected && (
-                          <div className={`absolute -top-2 -right-2 w-6 h-6 ${colorScheme.checkIcon} rounded-full flex items-center justify-center`}>
+                        {isSoldOut && (
+                          <div className="absolute -top-3 -right-3 bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-1.5 rounded-full shadow-lg transform rotate-12 z-10">
+                            <span className="font-bold text-xs sm:text-sm tracking-wide">SOLD OUT</span>
+                          </div>
+                        )}
+
+                        {isSelected && !isSoldOut && (
+                          <div className={`absolute -top-2 -right-2 w-6 h-6 ${colorScheme.checkIcon} rounded-full flex items-center justify-center z-10`}>
                             <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                             </svg>
@@ -581,7 +590,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
-                              <h3 className={`font-bold ${isSelected ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'} text-gray-900`}>
+                              <h3 className={`font-bold ${isSelected ? 'text-lg sm:text-xl' : 'text-base sm:text-lg'} ${isSoldOut ? 'text-gray-500' : 'text-gray-900'}`}>
                                 {ticket.name}
                               </h3>
                               
@@ -609,14 +618,16 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                               </span>
 
                               <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[11px] sm:text-xs font-medium ${
-                                isSelected ? colorScheme.badge : 'bg-gray-100 text-gray-700'
+                                isSoldOut
+                                  ? 'bg-red-100 text-red-700'
+                                  : isSelected ? colorScheme.badge : 'bg-gray-100 text-gray-700'
                               }`}>
-                                {ticket.max_quatity} available
+                                {isSoldOut ? 'Sold Out' : `${ticket.max_quatity} available`}
                               </span>
                             </div>
 
                             {ticket.description && (
-                              <p className="text-gray-700 text-xs sm:text-sm mb-3 leading-relaxed">
+                              <p className={`text-xs sm:text-sm mb-3 leading-relaxed ${isSoldOut ? 'text-gray-500' : 'text-gray-700'}`}>
                                 {ticket.description}
                               </p>
                             )}
@@ -624,16 +635,18 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                             <div className="flex items-center justify-between flex-wrap gap-3">
                               <div className="flex items-center gap-2 sm:gap-4">
                                 <span className={`font-bold ${
-                                  isSelected
-                                    ? 'text-lg sm:text-2xl bg-gradient-to-r ' + colorScheme.gradient + ' bg-clip-text text-transparent'
-                                    : 'text-lg sm:text-2xl text-gray-900'
+                                  isSoldOut
+                                    ? 'text-lg sm:text-2xl text-gray-400 line-through'
+                                    : isSelected
+                                      ? 'text-lg sm:text-2xl bg-gradient-to-r ' + colorScheme.gradient + ' bg-clip-text text-transparent'
+                                      : 'text-lg sm:text-2xl text-gray-900'
                                 }`}>
                                   {formatCurrency(ticket.price, eventCurrency)}
                                 </span>
-                                <span className="text-[11px] sm:text-sm text-gray-600">per ticket</span>
+                                <span className={`text-[11px] sm:text-sm ${isSoldOut ? 'text-gray-400' : 'text-gray-600'}`}>per ticket</span>
                               </div>
 
-                              {isSelected && user && (
+                              {isSelected && user && !isSoldOut && (
                                 <div className="flex items-center gap-2 sm:gap-3">
                                   <span className="text-[11px] sm:text-sm font-medium text-gray-700">Qty:</span>
                                   <div className="flex items-center gap-1 sm:gap-2">
