@@ -8,11 +8,10 @@ import { Database } from '@/types/database.types';
 import { EnhancedTicket } from '@/types/ticket';
 import { getCurrencyInfo } from '@/utils/currency';
 import StripeCheckoutButton from '@/components/StripeCheckoutButton';
-import { supabase } from '@/lib/supabaseClient'; // ✅ ADD THIS IMPORT
+import { supabase } from '@/lib/supabaseClient'; 
+import { validateDiscountCode, incrementDiscountCodeUsage } from '@/utils/discountCode';
 
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
-
-// ... (keep all the existing interfaces, QRCode component, TICKET_COLORS, etc.)
 
 interface QRCodeProps {
   value: string;
@@ -272,12 +271,120 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const [step, setStep] = useState<'method' | 'details' | 'success'>('method');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(null);
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[1]); // Ghana as default
+  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[1]);
   const [provider, setProvider] = useState<'mtn' | 'vodafone' | 'airteltigo'>('mtn');
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [generatedTickets, setGeneratedTickets] = useState<EnhancedTicket[]>([]);
+  
+  // Discount code states
+  const [discountCode, setDiscountCode] = useState('');
+  const [discountError, setDiscountError] = useState('');
+  const [isValidatingCode, setIsValidatingCode] = useState(false);
+  const [hasValidDiscount, setHasValidDiscount] = useState(false);
 
   const totalAmount = (selectedTicket.price || 0) * quantity;
+
+  const handleValidateDiscount = async () => {
+    if (!discountCode.trim()) {
+      setDiscountError('Please enter a discount code');
+      return;
+    }
+
+    if (!eventId) {
+      setDiscountError('Event ID is missing');
+      return;
+    }
+
+    setIsValidatingCode(true);
+    setDiscountError('');
+
+    const result = await validateDiscountCode(discountCode.trim(), eventId);
+
+    setIsValidatingCode(false);
+
+    if (result.valid) {
+      setHasValidDiscount(true);
+      setDiscountError('');
+    } else {
+      setHasValidDiscount(false);
+      setDiscountError(result.error || 'Invalid discount code');
+    }
+  };
+
+  const handleRemoveDiscount = () => {
+    setDiscountCode('');
+    setDiscountError('');
+    setHasValidDiscount(false);
+  };
+
+  const handleFreeCheckout = async () => {
+    if (!user || !eventId) return;
+
+    try {
+      setIsValidatingCode(true);
+
+      // Generate tickets without payment
+      const ticketsToGenerate = [];
+      for (let i = 0; i < quantity; i++) {
+        const orderId = `FREE-${Date.now()}-${i}`;
+        const qrCode = `${eventId}-${user.id}-${orderId}`;
+
+        ticketsToGenerate.push({
+          user_id: user.id,
+          event_id: eventId,
+          ticket_type_id: selectedTicket.id,
+          order_id: orderId,
+          qr_code: qrCode,
+          status: 'valid',
+          purchase_date: new Date().toISOString(),
+          amount_paid: 0,
+        });
+      }
+
+      const { data: insertedTickets, error: insertError } = await supabase
+        .from('TICKETS')
+        .insert(ticketsToGenerate)
+        .select();
+
+      if (insertError) throw insertError;
+
+      // Increment discount code usage
+      await incrementDiscountCodeUsage(discountCode, eventId);
+
+      // Update ticket quantity
+      const newQuantity = (selectedTicket.max_quatity || 0) - quantity;
+      await supabase
+        .from('TICKET_TYPES')
+        .update({ max_quatity: Math.max(0, newQuantity) })
+        .eq('id', selectedTicket.id);
+
+      // Convert to EnhancedTicket format
+      const enhancedTickets: EnhancedTicket[] = (insertedTickets || []).map((ticket) => ({
+        id: ticket.id.toString(),
+        orderId: ticket.order_id,
+        eventTitle: eventTitle,
+        eventDate: eventDate || new Date().toISOString(),
+        eventLocation: eventLocation || 'TBA',
+        ticketType: selectedTicket.name || 'General Admission',
+        qrCode: ticket.qr_code,
+        status: 'confirmed',
+        ticketStatus: 'active',
+        eventId: eventId?.toString() || '0',
+        quantity: 1,
+        totalPrice: 0,
+        purchaseDate: new Date().toISOString(),
+        userName: user?.user_metadata?.name || user?.email || 'Guest',
+      }));
+
+      // Call success handler
+      await handlePaymentSuccess(enhancedTickets);
+    } catch (error) {
+      console.error('Error generating free tickets:', error);
+      setDiscountError('Failed to generate tickets. Please try again.');
+    } finally {
+      setIsValidatingCode(false);
+    }
+  };
 
   const handleMethodSelect = (method: PaymentMethod) => {
     setPaymentMethod(method);
@@ -296,7 +403,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     }
   };
 
-  // ✅ FIXED: Properly named and scoped function
   const handlePaymentSuccess = async (tickets: EnhancedTicket[]) => {
     setGeneratedTickets(tickets);
     setStep('success');
@@ -340,7 +446,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       console.error('Email send error:', emailError);
     }
 
-    // Call the external success handler if provided
     if (onPaymentSuccess) {
       onPaymentSuccess(tickets);
     }
@@ -357,6 +462,9 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       setPaymentMethod(null);
       setPhoneNumber('');
       setGeneratedTickets([]);
+      setDiscountCode('');
+      setDiscountError('');
+      setHasValidDiscount(false);
     }, 300);
   };
 
@@ -507,36 +615,142 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 >
                   <h3 className="font-semibold text-gray-900 mb-4">Choose Payment Method</h3>
                   
-                  <button
-                    onClick={() => handleMethodSelect('mobile_money')}
-                    className="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 text-left"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                        <Smartphone className="w-6 h-6 text-orange-600" />
+                  {/* Discount Code Section */}
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-4 mb-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
                       </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">Mobile Money</h4>
-                        <p className="text-sm text-gray-600">MTN For Now</p>
-                      </div>
-                      <Globe className="w-5 h-5 text-gray-400 ml-auto" />
+                      <h4 className="font-semibold text-gray-900">Have a Free Ticket Code?</h4>
                     </div>
-                  </button>
 
-                  <button
-                    onClick={() => handleMethodSelect('credit_card')}
-                    className="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 text-left"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                        <CreditCard className="w-6 h-6 text-blue-600" />
+                    {!hasValidDiscount ? (
+                      <>
+                        <p className="text-sm text-gray-600 mb-3">
+                          Enter your discount code to get free tickets
+                        </p>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={discountCode}
+                            onChange={(e) => {
+                              setDiscountCode(e.target.value.toUpperCase());
+                              setDiscountError('');
+                            }}
+                            onKeyPress={(e) => e.key === 'Enter' && handleValidateDiscount()}
+                            placeholder="Enter code (e.g. FREE100)"
+                            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 uppercase font-mono text-sm"
+                            disabled={isValidatingCode}
+                          />
+                          <button
+                            onClick={handleValidateDiscount}
+                            disabled={isValidatingCode || !discountCode.trim()}
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm whitespace-nowrap"
+                          >
+                            {isValidatingCode ? 'Checking...' : 'Apply'}
+                          </button>
+                        </div>
+                        {discountError && (
+                          <p className="text-red-600 text-xs mt-2 flex items-center gap-1">
+                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            {discountError}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="bg-white rounded-lg p-3 border border-green-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                              </svg>
+                              <span className="font-bold text-green-800">Code &quot;{discountCode}&quot; Applied!</span>
+                            </div>
+                            <button
+                              onClick={handleRemoveDiscount}
+                              className="text-gray-500 hover:text-gray-700 text-xs"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                          <p className="text-sm text-green-700">✨ You&apos;re getting {quantity} free ticket{quantity > 1 ? 's' : ''}!</p>
+                        </div>
+
+                        <button
+                          onClick={handleFreeCheckout}
+                          disabled={isValidatingCode}
+                          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-bold text-base transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {isValidatingCode ? (
+                            <>
+                              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              Generating Tickets...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Get Free Tickets
+                            </>
+                          )}
+                        </button>
                       </div>
-                      <div>
-                        <h4 className="font-semibold text-gray-900">Credit Card</h4>
-                        <p className="text-sm text-gray-600">Visa, Mastercard</p>
+                    )}
+                  </div>
+
+                  {/* Only show payment options if no valid discount */}
+                  {!hasValidDiscount && (
+                    <>
+                      <div className="relative my-6">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-gray-300"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                          <span className="px-2 bg-white text-gray-500">Or pay with</span>
+                        </div>
                       </div>
-                    </div>
-                  </button>
+
+                      <button
+                        onClick={() => handleMethodSelect('mobile_money')}
+                        className="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 text-left"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                            <Smartphone className="w-6 h-6 text-orange-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">Mobile Money</h4>
+                            <p className="text-sm text-gray-600">MTN For Now</p>
+                          </div>
+                          <Globe className="w-5 h-5 text-gray-400 ml-auto" />
+                        </div>
+                      </button>
+
+                      <button
+                        onClick={() => handleMethodSelect('credit_card')}
+                        className="w-full p-4 border-2 border-gray-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition-all duration-200 text-left"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                            <CreditCard className="w-6 h-6 text-blue-600" />
+                          </div>
+                          <div>
+                            <h4 className="font-semibold text-gray-900">Credit Card</h4>
+                            <p className="text-sm text-gray-600">Visa, Mastercard</p>
+                          </div>
+                        </div>
+                      </button>
+                    </>
+                  )}
                 </motion.div>
               )}
 
@@ -635,103 +849,97 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     )}
                   </div>
                   <div className="pt-4">
-                  <CheckoutButton
-                  ticketId={selectedTicket.id}
-                  userId={user?.id || ''}
-                  phone={getFullPhoneNumber()}
-                  userEmail={user?.email ?? ''}  
-                  ticketPrice={selectedTicket.price as number} 
-                  quantity={quantity}
-                  onError={handlePaymentError}
-                  disabled={!isPhoneNumberValid()}
-                  className="w-full"
-                  eventTitle={eventTitle}
-                  eventDate={eventDate || new Date().toISOString()}
-                  eventLocation={eventLocation || 'Location TBA'}
-                  ticketTypeName={selectedTicket.name}
-                  eventId={eventId}
-                  eventImage={eventImage}
-                  />
+                    <CheckoutButton
+                      ticketId={selectedTicket.id}
+                      userId={user?.id || ''}
+                      phone={getFullPhoneNumber()}
+                      userEmail={user?.email ?? ''}  
+                      ticketPrice={selectedTicket.price as number} 
+                      quantity={quantity}
+                      onSuccess={handlePaymentSuccess}
+                      onError={handlePaymentError}
+                      disabled={!isPhoneNumberValid()}
+                      className="w-full"
+                      eventTitle={eventTitle}
+                      eventDate={eventDate || new Date().toISOString()}
+                      eventLocation={eventLocation || 'Location TBA'}
+                      ticketTypeName={selectedTicket.name}
+                      eventId={eventId}
+                      eventImage={eventImage}
+                    />
                   </div>
                 </motion.div>
               )}
 
-{/* Credit Card Details */}
-{step === 'details' && paymentMethod === 'credit_card' && (
-  <motion.div
-    initial={{ opacity: 0, x: 20 }}
-    animate={{ opacity: 1, x: 0 }}
-    className="space-y-6"
-  >
-    <h3 className="font-semibold text-gray-900">Credit Card Payment</h3>
-    
-    <div className="bg-blue-50 rounded-lg p-4 mb-4">
-      <div className="flex items-start gap-3">
-        <CreditCard className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
-        <div className="text-sm text-blue-800">
-          <p className="font-medium mb-1">Secure Payment via Stripe</p>
-          <p className="text-xs">You will be redirected to Stripe secure checkout page to complete your payment.</p>
-        </div>
-      </div>
-    </div>
+              {step === 'details' && paymentMethod === 'credit_card' && (
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="space-y-6"
+                >
+                  <h3 className="font-semibold text-gray-900">Credit Card Payment</h3>
+                  
+                  <div className="bg-blue-50 rounded-lg p-4 mb-4">
+                    <div className="flex items-start gap-3">
+                      <CreditCard className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-blue-800">
+                        <p className="font-medium mb-1">Secure Payment via Stripe</p>
+                        <p className="text-xs">You will be redirected to Stripe secure checkout page to complete your payment.</p>
+                      </div>
+                    </div>
+                  </div>
 
-    {/* Customer Email */}
-    <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
-        Email Address
-      </label>
-      <input
-        type="email"
-        value={user?.email || ''}
-        disabled
-        className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
-      />
-      <p className="text-xs text-gray-500 mt-1">
-        Payment confirmation will be sent to this email
-      </p>
-    </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email Address
+                    </label>
+                    <input
+                      type="email"
+                      value={user?.email || ''}
+                      disabled
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 cursor-not-allowed"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Payment confirmation will be sent to this email
+                    </p>
+                  </div>
 
-    {/* Stripe Checkout Button */}
-    <div className="pt-4">
-      <StripeCheckoutButton
-        ticketId={selectedTicket.id}
-        userId={user?.id || ''}
-        customerEmail={user?.email || ''}
-        quantity={quantity}
-        onSuccess={() => {
-          // Stripe will redirect, so this won't really be called
-          console.log('Stripe payment initiated successfully');
-        }}
-        onError={handlePaymentError}
-        disabled={!user?.email}
-        className="w-full"
-        eventTitle={eventTitle}
-        eventDate={eventDate || new Date().toISOString()}
-        eventLocation={eventLocation || 'Location TBA'}
-        ticketTypeName={selectedTicket.name}
-        eventId={eventId}
-        eventImage={eventImage}
-      />
-    </div>
+                  <div className="pt-4">
+                    <StripeCheckoutButton
+                      ticketId={selectedTicket.id}
+                      userId={user?.id || ''}
+                      customerEmail={user?.email || ''}
+                      quantity={quantity}
+                      onSuccess={() => {
+                        console.log('Stripe payment initiated successfully');
+                      }}
+                      onError={handlePaymentError}
+                      disabled={!user?.email}
+                      className="w-full"
+                      eventTitle={eventTitle}
+                      eventDate={eventDate || new Date().toISOString()}
+                      eventLocation={eventLocation || 'Location TBA'}
+                      ticketTypeName={selectedTicket.name}
+                      eventId={eventId}
+                      eventImage={eventImage}
+                    />
+                  </div>
 
-    {/* Security Notice */}
-    <div className="flex items-center gap-2 text-xs text-gray-500 pt-2">
-      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-      </svg>
-      <span>Secured by Stripe • Your payment information is encrypted</span>
-    </div>
-  </motion.div>
-)}
+                  <div className="flex items-center gap-2 text-xs text-gray-500 pt-2">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span>Secured by Stripe • Your payment information is encrypted</span>
+                  </div>
+                </motion.div>
+              )}
 
-              {/* Success Step - Show Generated Tickets */}
               {step === 'success' && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="space-y-6"
                 >
-                  {/* Success Header */}
                   <div className="text-center mb-6">
                     <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
                       <CheckCircle className="w-8 h-8 text-green-600" />
@@ -743,7 +951,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </p>
                   </div>
 
-                  {/* Generated Tickets */}
                   <div className="space-y-6 max-h-96 overflow-y-auto">
                     {generatedTickets.map((ticket) => (
                       <TicketCard
@@ -756,11 +963,9 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     ))}
                   </div>
 
-                  {/* Action Buttons */}
                   <div className="flex gap-3 pt-4 border-t border-gray-200">
                     <button
                       onClick={() => {
-                        // Download all tickets
                         generatedTickets.forEach(ticket => handleTicketDownload(ticket));
                       }}
                       className="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
@@ -776,7 +981,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </button>
                   </div>
 
-                  {/* Instructions */}
                   <div className="bg-blue-50 rounded-lg p-4 text-sm text-blue-800">
                     <h4 className="font-semibold mb-2">Important Instructions:</h4>
                     <ul className="space-y-1 text-xs">

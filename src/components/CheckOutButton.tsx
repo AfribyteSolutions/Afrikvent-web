@@ -8,9 +8,9 @@ import {
   Smartphone,
 } from "lucide-react";
 
-import { createClient, SupabaseClient } from "@supabase/supabase-js"; // ⬅️ Import SupabaseClient type
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { EnhancedTicket } from "@/types/ticket";
 
-// ➡️ 1. Define the specific type for the Edge Function's successful response
 interface FunctionResponseData {
   checkout_url?: string;
   data?: {
@@ -32,6 +32,7 @@ interface CheckoutButtonProps {
   userEmail: string;
   phone: string;
   quantity?: number;
+  onSuccess?: (tickets: EnhancedTicket[]) => void | Promise<void>;
   onError?: (error: string) => void;
   disabled?: boolean;
   className?: string;
@@ -44,8 +45,6 @@ interface CheckoutButtonProps {
   paymentMethod?: 'mobile_money' | 'stripe';
   ticketPrice: number; 
 }
-
-// ➡️ 2. Set up the Supabase client once using useMemo
 
 const useSupabaseClient = (): SupabaseClient | null => {
   return useMemo(() => {
@@ -66,6 +65,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   userEmail,
   phone,
   quantity = 1,
+  onSuccess,
   onError,
   disabled = false,
   className = "",
@@ -82,7 +82,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<'mobile_money' | 'stripe'>(paymentMethod);
 
-  // ➡️ 3. Get the initialized client
   const supabase = useSupabaseClient();
   
   const handleMobileMoneyCheckout = async () => {
@@ -132,8 +131,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       if (result?.error) {
         throw new Error(result.error);
       }
-  
-      // Extract payment identifiers
+
       const paymentId = result?.payment?.id;
       const transId = result?.transaction_id || result?.transId || result?.payment?.transaction_id;
       const checkoutUrl = result?.checkout_url || result?.data?.checkout_url;
@@ -142,11 +140,9 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         console.error("Full result:", result);
         throw new Error("No checkout URL received. Please try again.");
       }
-  
-      // Create unique reference for this payment
+
       const paymentRef = transId || paymentId || `${userId}_${Date.now()}`;
-  
-      // Store payment info in sessionStorage for verification
+
       const paymentData = {
         paymentId: paymentId,
         transId: transId,
@@ -159,11 +155,9 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   
       console.log("Opening Fapshi payment in new tab, payment reference:", paymentRef);
       
-      // Open Fapshi payment in a NEW TAB
       const paymentWindow = window.open(checkoutUrl, '_blank', 'width=600,height=800');
       
       if (!paymentWindow) {
-        // Popup was blocked
         const proceed = confirm(
           "Pop-up was blocked. Please allow pop-ups for this site.\n\n" +
           "Click OK to open payment page in current tab instead."
@@ -176,11 +170,9 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
           throw new Error("Payment window was blocked. Please enable pop-ups and try again.");
         }
       }
-  
-      // Wait a moment for the window to open
+
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // Redirect current tab to payment-success page
       window.location.href = `/payment-success?momo_ref=${encodeURIComponent(paymentRef)}&provider=momo`;
   
     } catch (err) {
@@ -222,7 +214,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         tickets,
       });
 
-      // ➡️ Invoke function for Stripe, using the same typed response
       const { data, error: funcError } = await supabase.functions.invoke<FunctionResponseData>('initiate-payment-url', {
         body: {
           user_id: userId,
