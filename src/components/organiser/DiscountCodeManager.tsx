@@ -76,20 +76,23 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
   };
 
   const handleSubmit = async () => {
-    if (!user || !formData.code) return;
+    if (!user || !formData.code) {
+      alert('Please enter a discount code');
+      return;
+    }
 
     setLoading(true);
     try {
       const codeData = {
         event_id: eventId,
-        code: formData.code.toUpperCase(),
+        code: formData.code.toUpperCase().trim(),
         discount_type: formData.discountType,
         discount_value: formData.discountType === 'free' ? 100 : Number(formData.discountValue),
         max_uses: formData.maxUses ? Number(formData.maxUses) : null,
         valid_from: formData.validFrom || null,
         valid_until: formData.validUntil || null,
         is_active: formData.isActive,
-        current_uses: 0
+        current_uses: editingCode ? undefined : 0
       };
 
       if (editingCode) {
@@ -99,23 +102,25 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
           .eq('id', editingCode.id);
 
         if (error) throw error;
+        alert('Discount code updated successfully!');
       } else {
         const { error } = await supabase
           .from('DISCOUNT_CODES')
           .insert([codeData]);
 
         if (error) throw error;
+        alert('Discount code created successfully!');
       }
 
       await fetchDiscountCodes();
       handleCloseModal();
     } catch (error) {
       console.error('Error saving discount code:', error);
-      const dbError = error as { code?: string };
+      const dbError = error as { code?: string; message?: string };
       if (dbError?.code === '23505') {
         alert('This discount code already exists. Please use a different code.');
       } else {
-        alert('Failed to save discount code. Please try again.');
+        alert(`Failed to save discount code: ${dbError?.message || 'Please try again.'}`);
       }
     } finally {
       setLoading(false);
@@ -133,6 +138,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
 
       if (error) throw error;
       await fetchDiscountCodes();
+      alert('Discount code deleted successfully!');
     } catch (error) {
       console.error('Error deleting discount code:', error);
       alert('Failed to delete discount code. Please try again.');
@@ -199,18 +205,18 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex justify-between items-center">
+    <div className="bg-white">
+      <div className="p-4 sm:p-6 border-b border-gray-200">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Discount Codes</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Discount Codes</h2>
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">
               Manage promotional codes for {eventTitle}
             </p>
           </div>
           <button
             onClick={() => setIsModalOpen(true)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center gap-2"
+            className="bg-blue-600 text-white px-4 py-2.5 rounded-lg hover:bg-blue-700 transition-colors text-sm flex items-center justify-center gap-2 touch-manipulation"
           >
             <Plus className="w-4 h-4" />
             Create Code
@@ -221,11 +227,11 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
       <div className="divide-y divide-gray-200">
         {discountCodes.length > 0 ? (
           discountCodes.map(discount => (
-            <div key={discount.id} className="p-6 hover:bg-gray-50 transition-colors">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <code className="text-lg font-bold text-gray-900 bg-gray-100 px-3 py-1 rounded">
+            <div key={discount.id} className="p-4 sm:p-6 hover:bg-gray-50 transition-colors">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <code className="text-base sm:text-lg font-bold text-gray-900 bg-gray-100 px-3 py-1 rounded">
                       {discount.code}
                     </code>
                     <span
@@ -243,21 +249,21 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 text-xs sm:text-sm">
                     <div>
-                      <span className="text-gray-500">Discount</span>
+                      <span className="text-gray-500 block mb-0.5">Discount</span>
                       <p className="font-medium">
                         {formatDiscountValue(discount.discount_type, discount.discount_value)}
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Usage</span>
+                      <span className="text-gray-500 block mb-0.5">Usage</span>
                       <p className="font-medium">
                         {discount.current_uses}/{discount.max_uses || '∞'}
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Valid Until</span>
+                      <span className="text-gray-500 block mb-0.5">Valid Until</span>
                       <p className="font-medium">
                         {discount.valid_until
                           ? new Date(discount.valid_until).toLocaleDateString()
@@ -265,7 +271,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                       </p>
                     </div>
                     <div>
-                      <span className="text-gray-500">Created</span>
+                      <span className="text-gray-500 block mb-0.5">Created</span>
                       <p className="font-medium">
                         {new Date(discount.created_at).toLocaleDateString()}
                       </p>
@@ -273,10 +279,10 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 ml-4">
+                <div className="flex sm:flex-col items-center gap-2 justify-end sm:ml-4">
                   <button
                     onClick={() => handleCopyCode(discount.code)}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors touch-manipulation"
                     title="Copy code"
                   >
                     {copiedCode === discount.code ? (
@@ -287,14 +293,14 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                   </button>
                   <button
                     onClick={() => handleEdit(discount)}
-                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors touch-manipulation"
                     title="Edit code"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>
                   <button
                     onClick={() => handleToggleActive(discount.id, discount.is_active)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors touch-manipulation ${
                       discount.is_active
                         ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         : 'bg-green-100 text-green-700 hover:bg-green-200'
@@ -305,7 +311,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                   </button>
                   <button
                     onClick={() => handleDelete(discount.id, discount.code)}
-                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors touch-manipulation"
                     title="Delete code"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -315,19 +321,19 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
             </div>
           ))
         ) : (
-          <div className="p-12 text-center">
-            <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Ticket className="w-12 h-12 text-gray-400" />
+          <div className="p-8 sm:p-12 text-center">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Ticket className="w-10 h-10 sm:w-12 sm:h-12 text-gray-400" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
+            <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-2">
               No discount codes yet
             </h3>
-            <p className="text-gray-600 mb-6">
+            <p className="text-sm sm:text-base text-gray-600 mb-6">
               Create your first promotional code to boost ticket sales.
             </p>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors"
+              className="bg-blue-600 text-white px-6 py-2.5 rounded-lg hover:bg-blue-700 transition-colors touch-manipulation"
             >
               Create Your First Code
             </button>
@@ -336,23 +342,23 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 rounded-t-2xl">
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-end sm:items-center justify-center">
+          <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-md h-[90vh] sm:max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 rounded-t-2xl z-10">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900">
+                <h2 className="text-lg sm:text-xl font-bold text-gray-900">
                   {editingCode ? 'Edit Discount Code' : 'Create Discount Code'}
                 </h2>
                 <button
                   onClick={handleCloseModal}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors touch-manipulation"
                 >
                   <X className="w-5 h-5 text-gray-600" />
                 </button>
               </div>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-5">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Discount Code *
@@ -365,13 +371,13 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                       setFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }))
                     }
                     placeholder="SAVE50"
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono"
+                    className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 uppercase font-mono text-sm"
                     maxLength={20}
                   />
                   <button
                     type="button"
                     onClick={generateRandomCode}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm whitespace-nowrap"
+                    className="px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm whitespace-nowrap touch-manipulation"
                   >
                     Generate
                   </button>
@@ -391,7 +397,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                       discountValue: e.target.value === 'free' ? 100 : prev.discountValue
                     }))
                   }
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                 >
                   <option value="free">Free Ticket (100% off)</option>
                   <option value="percentage">Percentage Off</option>
@@ -411,7 +417,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                       onChange={e =>
                         setFormData(prev => ({ ...prev, discountValue: Number(e.target.value) }))
                       }
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                       min={1}
                       max={formData.discountType === 'percentage' ? 100 : undefined}
                     />
@@ -433,7 +439,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                   value={formData.maxUses}
                   onChange={e => setFormData(prev => ({ ...prev, maxUses: e.target.value }))}
                   placeholder="Unlimited"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   min={1}
                 />
                 <p className="text-xs text-gray-500 mt-1">
@@ -441,7 +447,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Valid From
@@ -452,7 +458,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                     onChange={e =>
                       setFormData(prev => ({ ...prev, validFrom: e.target.value }))
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
                 <div>
@@ -465,12 +471,12 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                     onChange={e =>
                       setFormData(prev => ({ ...prev, validUntil: e.target.value }))
                     }
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-start gap-3">
                 <input
                   type="checkbox"
                   id="isActive"
@@ -478,7 +484,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                   onChange={e =>
                     setFormData(prev => ({ ...prev, isActive: e.target.checked }))
                   }
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                  className="w-4 h-4 mt-0.5 text-blue-600 rounded focus:ring-blue-500"
                 />
                 <label htmlFor="isActive" className="text-sm font-medium text-gray-700">
                   Activate this discount code immediately
@@ -489,7 +495,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors touch-manipulation"
                 >
                   Cancel
                 </button>
@@ -497,7 +503,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
                   type="button"
                   onClick={handleSubmit}
                   disabled={loading || !formData.code}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed touch-manipulation"
                 >
                   {loading ? 'Saving...' : editingCode ? 'Update Code' : 'Create Code'}
                 </button>
