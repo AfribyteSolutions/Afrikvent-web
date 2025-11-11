@@ -318,69 +318,127 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   };
 
   const handleFreeCheckout = async () => {
-    if (!user || !eventId) return;
-
+    if (!user || !eventId) {
+      setDiscountError('Missing user or event information');
+      return;
+    }
+  
+    if (!hasValidDiscount) {
+      setDiscountError('Please apply a valid discount code first');
+      return;
+    }
+  
     try {
       setIsValidatingCode(true);
-
-      // Generate tickets without payment
-      const ticketsToGenerate = [];
-      for (let i = 0; i < quantity; i++) {
-        const orderId = `FREE-${Date.now()}-${i}`;
-        const qrCode = `${eventId}-${user.id}-${orderId}`;
-
-        ticketsToGenerate.push({
+      setDiscountError('');
+  
+      // Call a server-side endpoint to generate free tickets
+      // This bypasses RLS issues
+      const response = await fetch('/api/generate-free-tickets', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           user_id: user.id,
           event_id: eventId,
           ticket_type_id: selectedTicket.id,
-          order_id: orderId,
-          qr_code: qrCode,
-          status: 'valid',
-          purchase_date: new Date().toISOString(),
-          amount_paid: 0,
-        });
+          quantity: quantity,
+          discount_code: discountCode,
+        }),
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to generate tickets');
       }
-
-      const { data: insertedTickets, error: insertError } = await supabase
-        .from('TICKETS')
-        .insert(ticketsToGenerate)
-        .select();
-
-      if (insertError) throw insertError;
-
-      // Increment discount code usage
-      await incrementDiscountCodeUsage(discountCode, eventId);
-
-      // Update ticket quantity
-      const newQuantity = (selectedTicket.max_quatity || 0) - quantity;
-      await supabase
-        .from('TICKET_TYPES')
-        .update({ max_quatity: Math.max(0, newQuantity) })
-        .eq('id', selectedTicket.id);
-
+  
+      const { tickets } = await response.json();
+  
+      if (!tickets || tickets.length === 0) {
+        throw new Error('No tickets were generated');
+      }
+  
+      // Define the ticket type from API response
+      interface GeneratedTicket {
+        id: number;
+        qr_code_data: string;
+        created_at: string;
+        user_id: string;
+        event_id: number;
+        ticket_type_id: number;
+        quantity: string;
+        unit_price: number;
+        total: number;
+        ticket_status: string;
+      }
+  
       // Convert to EnhancedTicket format
-      const enhancedTickets: EnhancedTicket[] = (insertedTickets || []).map((ticket) => ({
+      const enhancedTickets: EnhancedTicket[] = (tickets as GeneratedTicket[]).map((ticket) => ({
         id: ticket.id.toString(),
-        orderId: ticket.order_id,
+        orderId: ticket.qr_code_data,
         eventTitle: eventTitle,
         eventDate: eventDate || new Date().toISOString(),
         eventLocation: eventLocation || 'TBA',
         ticketType: selectedTicket.name || 'General Admission',
-        qrCode: ticket.qr_code,
+        qrCode: ticket.qr_code_data,
         status: 'confirmed',
         ticketStatus: 'active',
-        eventId: eventId?.toString() || '0',
+        eventId: eventId.toString(),
         quantity: 1,
         totalPrice: 0,
-        purchaseDate: new Date().toISOString(),
+        purchaseDate: ticket.created_at || new Date().toISOString(),
         userName: user?.user_metadata?.name || user?.email || 'Guest',
       }));
-
-      // Call success handler
+  
+      // Send email with tickets
+      try {
+        const isVirtual = eventLocation?.toLowerCase().includes('online') || 
+                         eventLocation?.toLowerCase().includes('virtual') || 
+                         eventLocation?.toLowerCase().includes('zoom');
+  
+        const ticketsWithAccessCodes = enhancedTickets.map(ticket => ({
+          id: ticket.id,
+          orderId: ticket.orderId,
+          ticketType: ticket.ticketType,
+          qrCode: ticket.qrCode,
+          accessCode: ticket.qrCode.slice(-6)
+        }));
+  
+        console.log('Sending free ticket email...');
+        
+        const emailResponse = await supabase.functions.invoke('send-ticket-email', {
+          body: {
+            userEmail: user.email,
+            userName: user?.user_metadata?.name || user?.email?.split('@')[0],
+            tickets: ticketsWithAccessCodes,
+            eventTitle: eventTitle,
+            eventDate: eventDate || new Date().toISOString(),
+            eventLocation: eventLocation || 'TBA',
+            isVirtual
+          }
+        });
+  
+        if (emailResponse.error) {
+          console.error('Email send error:', emailResponse.error);
+        } else {
+          console.log('Free ticket email sent successfully');
+        }
+      } catch (emailError) {
+        console.error('Error sending email:', emailError);
+        // Don't throw - tickets are already created
+      }
+  
+      // Call success handler to show success screen
       await handlePaymentSuccess(enhancedTickets);
+  
     } catch (error) {
       console.error('Error generating free tickets:', error);
-      setDiscountError('Failed to generate tickets. Please try again.');
+      setDiscountError(
+        error instanceof Error 
+          ? `Failed to generate tickets: ${error.message}` 
+          : 'Failed to generate tickets. Please try again.'
+      );
     } finally {
       setIsValidatingCode(false);
     }
