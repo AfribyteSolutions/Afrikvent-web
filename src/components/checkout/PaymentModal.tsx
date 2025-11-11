@@ -699,7 +699,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                             }}
                             onKeyPress={(e) => e.key === 'Enter' && handleValidateDiscount()}
                             placeholder="Enter code (e.g. FREE100)"
-                            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 uppercase font-mono text-sm"
+                            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 uppercase font-mono text-gray-600 text-sm"
                             disabled={isValidatingCode}
                           />
                           <button
