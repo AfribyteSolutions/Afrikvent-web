@@ -9,8 +9,15 @@ import CreateEventModal from "@/components/organiser/CreateEventModal";
 import TicketManagement from "@/components/organiser/TicketManagement";
 import AnalyticsOverview from "@/components/organiser/AnalyticsOverview";
 import OrganiserProfileSetup from "@/components/organiser/OrganizerProfileSetUp";
-import OrganizerStream from "@/components/stream/OrganizerStream";
+import dynamic from "next/dynamic";
 import { DatabaseEvent, OrganizerProfile } from "@/types/event";
+
+const OrganizerStream = dynamic(
+  () => import("@/components/stream/OrganizerStream"),
+  { ssr: false }
+);
+
+
 
 type TabType = 'overview' | 'events' | 'tickets' | 'analytics';
 
