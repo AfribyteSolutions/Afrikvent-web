@@ -10,6 +10,7 @@ import PaymentModal from '@/components/checkout/PaymentModal';
 import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
 import AuthModal from '@/components/auth/AuthModal';
 import { getCurrencyInfo } from '@/utils/currency';
+import ViewerStream from '@/components/stream/ViewerStream';
 
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
@@ -26,6 +27,43 @@ interface EventWithDetails extends EventRow {
 interface EventDetailPageProps {
   params: Promise<{ id: string }>;
 }
+
+// ========== SOLD OUT BADGE HELPER FUNCTIONS ==========
+const isEventSoldOut = (ticketTypes: TicketTypeRow[]): boolean => {
+  if (!ticketTypes || ticketTypes.length === 0) {
+    return false;
+  }
+  return ticketTypes.every(ticket => (ticket.max_quatity || 0) <= 0);
+};
+
+const getAvailabilityBadge = (ticketTypes: TicketTypeRow[]) => {
+  if (!ticketTypes || ticketTypes.length === 0) {
+    return null;
+  }
+  
+  const totalAvailable = ticketTypes.reduce((total, ticket) => {
+    return total + Math.max(0, ticket.max_quatity || 0);
+  }, 0);
+  
+  if (totalAvailable === 0) {
+    return {
+      type: 'sold-out' as const,
+      text: 'SOLD OUT',
+      className: 'bg-gradient-to-r from-red-500 to-red-600 text-white px-4 py-1.5 rounded-full shadow-lg transform rotate-12'
+    };
+  }
+  
+  if (totalAvailable <= 10) {
+    return {
+      type: 'low' as const,
+      text: `⚡ ${totalAvailable} LEFT`,
+      className: 'bg-orange-500 text-white px-3 py-1 rounded-full animate-pulse'
+    };
+  }
+  
+  return null;
+};
+// ========== END HELPER FUNCTIONS ==========
 
 const formatCurrency = (amount: number | null | undefined, currencyCode: string | null | undefined): string => {
   const safeAmount = amount || 0;
@@ -104,6 +142,9 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showImageLightbox, setShowImageLightbox] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  // NEW: Stream-related state
+  const [showViewerStream, setShowViewerStream] = useState(false);
+  const [streamIsLive, setStreamIsLive] = useState(false);
 
   const eventId = parseInt(resolvedParams.id);
 
@@ -116,6 +157,26 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     getCurrentUser();
     if (eventId) {
       fetchEventDetails();
+    }
+  }, [eventId]);
+
+  // NEW: Check stream status
+  useEffect(() => {
+    const checkStreamStatus = async () => {
+      try {
+        const response = await fetch(`/api/stream/status?eventId=${eventId}`);
+        const data = await response.json();
+        setStreamIsLive(data.isLive);
+      } catch (err) {
+        console.error('Error checking stream:', err);
+      }
+    };
+    
+    if (eventId) {
+      checkStreamStatus();
+      const interval = setInterval(checkStreamStatus, 30000); // Check every 30s
+      
+      return () => clearInterval(interval);
     }
   }, [eventId]);
 
@@ -385,7 +446,10 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const eventCurrency = event.currency;
   const eventImages = Array.isArray(event.images) ? event.images : [];
   const hasImages = eventImages.length > 0;
-
+  
+  const eventSoldOut = isEventSoldOut(event.ticketTypes);
+  const eventAvailabilityBadge = getAvailabilityBadge(event.ticketTypes);
+  
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="bg-white border-b">
@@ -414,7 +478,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   src={eventImages[0]}
                   alt={event.title}
                   fill
-                  className="object-cover transition-transform duration-300 group-hover:scale-105"
+                  className={`object-cover transition-transform duration-300 group-hover:scale-105 ${eventSoldOut ? 'grayscale' : ''}`}
                 />
                 <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all duration-300 flex items-center justify-center">
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 transform group-hover:scale-110">
@@ -426,7 +490,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   </div>
                 </div>
                 
-                {/* Desktop hover tooltip */}
                 <div className="hidden sm:block absolute bottom-4 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                   <div className="bg-white/95 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg">
                     <p className="text-sm font-medium text-gray-800 flex items-center gap-2">
@@ -439,7 +502,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                   </div>
                 </div>
 
-                {/* Mobile tap indicator - always visible on small screens */}
                 <div className="sm:hidden absolute bottom-4 left-1/2 transform -translate-x-1/2">
                   <div className="bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-lg animate-pulse">
                     <p className="text-xs font-medium text-white flex items-center gap-1.5">
@@ -451,6 +513,14 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                     </p>
                   </div>
                 </div>
+
+                {eventSoldOut && (
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center z-20">
+                    <div className="bg-white/90 backdrop-blur-sm px-6 py-3 rounded-lg">
+                      <p className="text-red-600 font-bold text-lg">Event Sold Out</p>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className="absolute inset-0 flex items-center justify-center">
@@ -460,7 +530,27 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             )}
             
-            <div className="absolute top-4 right-4">
+            {eventAvailabilityBadge && eventAvailabilityBadge.type === 'sold-out' && (
+              <div className="absolute -top-2 -right-2 z-30">
+                <span className={eventAvailabilityBadge.className}>
+                  <span className="font-bold text-xs tracking-wide">
+                    {eventAvailabilityBadge.text}
+                  </span>
+                </span>
+              </div>
+            )}
+            
+            {eventAvailabilityBadge && eventAvailabilityBadge.type === 'low' && (
+              <div className="absolute top-16 right-4 z-30">
+                <span className={eventAvailabilityBadge.className}>
+                  <span className="font-bold text-xs tracking-wide">
+                    {eventAvailabilityBadge.text}
+                  </span>
+                </span>
+              </div>
+            )}
+            
+            <div className="absolute top-4 right-4 z-20">
               <span className={`px-3 py-1 rounded-full text-sm font-medium ${
                 event.event_status === 'active' ? 'bg-green-100 text-green-800' :
                 event.event_status === 'draft' ? 'bg-gray-100 text-gray-800' :
@@ -476,7 +566,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 e.stopPropagation();
                 handleShare();
               }}
-              className="absolute top-4 left-4 bg-white/80 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all"
+              className="absolute top-4 left-4 bg-white/80 backdrop-blur-sm p-2 rounded-full hover:bg-white transition-all z-20"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z" />
@@ -484,7 +574,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
             </button>
 
             {hasImages && eventImages.length > 1 && (
-              <div className="absolute top-4 left-1/2 transform -translate-x-1/2">
+              <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-20">
                 <div className="bg-black/60 backdrop-blur-sm text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -529,6 +619,38 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 <h2 className="text-xl font-semibold text-gray-900 mb-4">About This Event</h2>
                 <div className="prose prose-gray max-w-none">
                   <p className="text-gray-700 whitespace-pre-line">{event.description}</p>
+                </div>
+              </div>
+            )}
+
+            {/* NEW: Live Stream Banner */}
+            {streamIsLive && (
+              <div className="mb-8 bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200 rounded-2xl p-6">
+                <div className="flex items-center justify-between flex-wrap gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center animate-pulse">
+                      <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
+                        <span className="text-red-600 font-bold text-sm uppercase tracking-wide">Live Now</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900">This event is streaming live!</h3>
+                      <p className="text-sm text-gray-600">Watch now with your online ticket</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setShowViewerStream(true)}
+                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold transition-colors flex items-center gap-2 shadow-lg"
+                  >
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                      <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
+                    </svg>
+                    Watch Live
+                  </button>
                 </div>
               </div>
             )}
@@ -781,6 +903,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         </div>
       </div>
 
+      {/* Image Lightbox */}
       {showImageLightbox && hasImages && (
         <div 
           className="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-4"
@@ -883,6 +1006,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         </div>
       )}
 
+      {/* Selected Ticket Bottom Bar */}
       {selectedTicket && user && (
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50">
           <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4">
@@ -942,6 +1066,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         </div>
       )}
 
+      {/* Payment Modal */}
       {selectedTicket && user && (
         <PaymentModal
           isOpen={showPaymentModal}
@@ -959,6 +1084,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         />
       )}
 
+      {/* Payment Success Screen */}
       <PaymentSuccessScreen
         isOpen={showSuccessScreen}
         tickets={purchasedTickets}
@@ -968,6 +1094,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         onClose={handleCloseSuccessScreen}
       />
 
+      {/* Login Prompt Modal */}
       {showLoginPrompt && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 transform transition-all">
@@ -1017,12 +1144,22 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         </div>
       )}
 
+      {/* Auth Modal */}
       <AuthModal
         type={authModalType}
         isOpen={showAuthModal}
         onClose={() => setShowAuthModal(false)}
         onSuccess={handleAuthSuccess}
       />
+
+      {/* NEW: Viewer Stream Modal */}
+      {showViewerStream && (
+        <ViewerStream
+          eventId={event.id}
+          eventTitle={event.title}
+          onClose={() => setShowViewerStream(false)}
+        />
+      )}
     </div>
   );
 };

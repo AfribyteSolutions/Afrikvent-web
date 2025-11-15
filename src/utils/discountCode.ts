@@ -1,9 +1,24 @@
 import { supabase } from '@/lib/supabaseClient';
 
+interface DiscountCode {
+  id: number;
+  event_id: number;
+  code: string;
+  discount_type: 'percentage' | 'fixed' | 'free';
+  discount_value: number;
+  max_uses: number | null;
+  current_uses: number;
+  valid_from: string | null;
+  valid_until: string | null;
+  is_active: boolean;
+  created_at: string;
+  created_by: string;
+}
+
 export async function validateDiscountCode(
   code: string,
   eventId: number
-): Promise<{ valid: boolean; error?: string }> {
+): Promise<{ valid: boolean; error?: string; discount?: DiscountCode }> {
   try {
     const { data: discount, error } = await supabase
       .from('DISCOUNT_CODES')
@@ -42,15 +57,8 @@ export async function validateDiscountCode(
       }
     }
 
-    // Accept free ticket codes OR 100% percentage discount codes
-    const isFreeTicket = discount.discount_type === 'free';
-    const is100PercentOff = discount.discount_type === 'percentage' && discount.discount_value === 100;
-    
-    if (!isFreeTicket && !is100PercentOff) {
-      return { valid: false, error: 'This code is not valid for free tickets' };
-    }
-
-    return { valid: true };
+    // Return valid for ALL discount types (percentage, fixed, free)
+    return { valid: true, discount };
   } catch (error) {
     console.error('Error validating discount code:', error);
     return { valid: false, error: 'Failed to validate discount code' };

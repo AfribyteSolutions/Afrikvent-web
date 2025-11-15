@@ -8,8 +8,7 @@ import { Database } from '@/types/database.types';
 import { EnhancedTicket } from '@/types/ticket';
 import { getCurrencyInfo } from '@/utils/currency';
 import StripeCheckoutButton from '@/components/StripeCheckoutButton';
-import { supabase } from '@/lib/supabaseClient'; 
-import { validateDiscountCode, incrementDiscountCodeUsage } from '@/utils/discountCode';
+import { supabase } from '@/lib/supabaseClient';
 
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
 
@@ -251,7 +250,7 @@ interface EnhancedPaymentModalProps {
   eventId?: number;
   eventImage?: string;
   onPaymentSuccess?: (tickets: EnhancedTicket[]) => void;
-  eventCurrency: string | null; 
+  eventCurrency: string | null;
 }
 
 const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
@@ -280,10 +279,39 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const [discountCode, setDiscountCode] = useState('');
   const [discountError, setDiscountError] = useState('');
   const [isValidatingCode, setIsValidatingCode] = useState(false);
-  const [hasValidDiscount, setHasValidDiscount] = useState(false);
+  const [appliedDiscount, setAppliedDiscount] = useState<{
+    code: string;
+    type: 'percentage' | 'fixed' | 'free';
+    value: number;
+  } | null>(null);
 
-  const totalAmount = (selectedTicket.price || 0) * quantity;
+  // Calculate amounts
+  const baseAmount = (selectedTicket.price || 0) * quantity;
+  
+  const calculateFinalAmount = () => {
+    if (!appliedDiscount) return baseAmount;
 
+    if (appliedDiscount.type === 'free') {
+      return 0;
+    }
+
+    if (appliedDiscount.type === 'percentage') {
+      const discountAmount = (baseAmount * appliedDiscount.value) / 100;
+      return Math.max(0, baseAmount - discountAmount);
+    }
+
+    if (appliedDiscount.type === 'fixed') {
+      return Math.max(0, baseAmount - appliedDiscount.value);
+    }
+
+    return baseAmount;
+  };
+
+  const finalAmount = calculateFinalAmount();
+  const discountAmount = baseAmount - finalAmount;
+  const isFreeTicket = finalAmount === 0;
+
+  // Validate discount code
   const handleValidateDiscount = async () => {
     if (!discountCode.trim()) {
       setDiscountError('Please enter a discount code');
@@ -298,42 +326,105 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     setIsValidatingCode(true);
     setDiscountError('');
 
-    const result = await validateDiscountCode(discountCode.trim(), eventId);
+    try {
+      const { data: discount, error } = await supabase
+        .from('DISCOUNT_CODES')
+        .select('*')
+        .eq('code', discountCode.toUpperCase())
+        .eq('event_id', eventId)
+        .eq('is_active', true)
+        .single();
 
-    setIsValidatingCode(false);
+      if (error || !discount) {
+        setAppliedDiscount(null);
+        setDiscountError('Invalid discount code');
+        return;
+      }
 
-    if (result.valid) {
-      setHasValidDiscount(true);
+      // Check usage limit
+      if (discount.max_uses && discount.current_uses >= discount.max_uses) {
+        setAppliedDiscount(null);
+        setDiscountError('This discount code has reached its usage limit');
+        return;
+      }
+
+      // Check valid dates
+      if (discount.valid_from) {
+        const validFrom = new Date(discount.valid_from);
+        if (new Date() < validFrom) {
+          setAppliedDiscount(null);
+          setDiscountError(`This code is not valid until ${validFrom.toLocaleDateString()}`);
+          return;
+        }
+      }
+
+      if (discount.valid_until) {
+        const validUntil = new Date(discount.valid_until);
+        if (new Date() > validUntil) {
+          setAppliedDiscount(null);
+          setDiscountError('This discount code has expired');
+          return;
+        }
+      }
+
+      // Apply discount
+      setAppliedDiscount({
+        code: discount.code,
+        type: discount.discount_type,
+        value: discount.discount_value,
+      });
       setDiscountError('');
-    } else {
-      setHasValidDiscount(false);
-      setDiscountError(result.error || 'Invalid discount code');
+      
+      console.log('Discount applied:', {
+        type: discount.discount_type,
+        value: discount.discount_value,
+        baseAmount,
+        finalAmount: calculateFinalAmount()
+      });
+      
+    } catch (error) {
+      console.error('Error validating discount code:', error);
+      setAppliedDiscount(null);
+      setDiscountError('Failed to validate discount code');
+    } finally {
+      setIsValidatingCode(false);
     }
   };
 
   const handleRemoveDiscount = () => {
     setDiscountCode('');
     setDiscountError('');
-    setHasValidDiscount(false);
+    setAppliedDiscount(null);
   };
 
+  // Handle free checkout (only for 100% free tickets)
   const handleFreeCheckout = async () => {
     if (!user || !eventId) {
       setDiscountError('Missing user or event information');
       return;
     }
-  
-    if (!hasValidDiscount) {
-      setDiscountError('Please apply a valid discount code first');
+
+    if (!appliedDiscount) {
+      setDiscountError('Please apply a discount code first');
       return;
     }
-  
+
+    console.log('Attempting free checkout:', {
+      discountType: appliedDiscount.type,
+      discountValue: appliedDiscount.value,
+      finalAmount,
+      isFreeTicket
+    });
+
+    if (!isFreeTicket) {
+      setDiscountError('This discount requires payment. Please use the payment options below.');
+      return;
+    }
+
     try {
       setIsValidatingCode(true);
       setDiscountError('');
-  
-      // Call a server-side endpoint to generate free tickets
-      // This bypasses RLS issues
+
       const response = await fetch('/api/generate-free-tickets', {
         method: 'POST',
         headers: {
@@ -347,19 +438,18 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           discount_code: discountCode,
         }),
       });
-  
+
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Failed to generate tickets');
       }
-  
+
       const { tickets } = await response.json();
-  
+
       if (!tickets || tickets.length === 0) {
         throw new Error('No tickets were generated');
       }
-  
-      // Define the ticket type from API response
+
       interface GeneratedTicket {
         id: number;
         qr_code_data: string;
@@ -372,8 +462,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         total: number;
         ticket_status: string;
       }
-  
-      // Convert to EnhancedTicket format
+
       const enhancedTickets: EnhancedTicket[] = (tickets as GeneratedTicket[]).map((ticket) => ({
         id: ticket.id.toString(),
         orderId: ticket.qr_code_data,
@@ -390,13 +479,12 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         purchaseDate: ticket.created_at || new Date().toISOString(),
         userName: user?.user_metadata?.name || user?.email || 'Guest',
       }));
-  
-      // Send email with tickets
+
       try {
         const isVirtual = eventLocation?.toLowerCase().includes('online') || 
                          eventLocation?.toLowerCase().includes('virtual') || 
                          eventLocation?.toLowerCase().includes('zoom');
-  
+
         const ticketsWithAccessCodes = enhancedTickets.map(ticket => ({
           id: ticket.id,
           orderId: ticket.orderId,
@@ -404,10 +492,8 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           qrCode: ticket.qrCode,
           accessCode: ticket.qrCode.slice(-6)
         }));
-  
-        console.log('Sending free ticket email...');
-        
-        const emailResponse = await supabase.functions.invoke('send-ticket-email', {
+
+        await supabase.functions.invoke('send-ticket-email', {
           body: {
             userEmail: user.email,
             userName: user?.user_metadata?.name || user?.email?.split('@')[0],
@@ -418,20 +504,12 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
             isVirtual
           }
         });
-  
-        if (emailResponse.error) {
-          console.error('Email send error:', emailResponse.error);
-        } else {
-          console.log('Free ticket email sent successfully');
-        }
       } catch (emailError) {
         console.error('Error sending email:', emailError);
-        // Don't throw - tickets are already created
       }
-  
-      // Call success handler to show success screen
+
       await handlePaymentSuccess(enhancedTickets);
-  
+
     } catch (error) {
       console.error('Error generating free tickets:', error);
       setDiscountError(
@@ -465,7 +543,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     setGeneratedTickets(tickets);
     setStep('success');
 
-    // Send email with tickets
     try {
       const isVirtual = eventLocation?.toLowerCase().includes('online') || 
                        eventLocation?.toLowerCase().includes('virtual') || 
@@ -481,9 +558,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       
-      console.log('Sending ticket email...');
-      
-      const emailResponse = await supabase.functions.invoke('send-ticket-email', {
+      await supabase.functions.invoke('send-ticket-email', {
         body: {
           userEmail: currentUser?.email,
           userName: currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0],
@@ -494,12 +569,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
           isVirtual
         }
       });
-
-      if (emailResponse.error) {
-        console.error('Email send error:', emailResponse.error);
-      } else {
-        console.log('Ticket email sent successfully');
-      }
     } catch (emailError) {
       console.error('Email send error:', emailError);
     }
@@ -522,7 +591,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       setGeneratedTickets([]);
       setDiscountCode('');
       setDiscountError('');
-      setHasValidDiscount(false);
+      setAppliedDiscount(null);
     }, 300);
   };
 
@@ -654,12 +723,34 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Price per ticket</span>
-                      <span className="font-medium text-gray-900">{formatCurrency(selectedTicket.price as unknown as number, eventCurrency)}</span>
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(selectedTicket.price as unknown as number, eventCurrency)}
+                      </span>
                     </div>
+                    
+                    {appliedDiscount && (
+                      <div className="flex justify-between text-green-600">
+                        <span>Discount ({appliedDiscount.code})</span>
+                        <span className="font-medium">
+                          -{appliedDiscount.type === 'percentage' 
+                            ? `${appliedDiscount.value}%` 
+                            : formatCurrency(discountAmount, eventCurrency)}
+                        </span>
+                      </div>
+                    )}
+                    
                     <hr className="my-2" />
+                    
                     <div className="flex justify-between text-lg font-bold">
                       <span>Total</span>
-                      <span className="text-blue-600">{formatCurrency(totalAmount, eventCurrency)}</span>
+                      <span className={appliedDiscount ? 'text-green-600' : 'text-blue-600'}>
+                        {appliedDiscount && baseAmount !== finalAmount && (
+                          <span className="text-sm text-gray-400 line-through mr-2">
+                            {formatCurrency(baseAmount, eventCurrency)}
+                          </span>
+                        )}
+                        {formatCurrency(finalAmount, eventCurrency)}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -671,23 +762,21 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                   animate={{ opacity: 1, x: 0 }}
                   className="space-y-4"
                 >
-                  <h3 className="font-semibold text-gray-900 mb-4">Choose Payment Method</h3>
-                  
                   {/* Discount Code Section */}
                   <div className="bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200 rounded-xl p-4 mb-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
+                      <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
                         <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
-                      <h4 className="font-semibold text-gray-900">Have a Free Ticket Code?</h4>
+                      <h4 className="font-semibold text-gray-900">Have a Discount Code?</h4>
                     </div>
 
-                    {!hasValidDiscount ? (
+                    {!appliedDiscount ? (
                       <>
                         <p className="text-sm text-gray-600 mb-3">
-                          Enter your discount code to get free tickets
+                          Enter your discount code to save on tickets
                         </p>
                         <div className="flex gap-2">
                           <input
@@ -698,82 +787,68 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                               setDiscountError('');
                             }}
                             onKeyPress={(e) => e.key === 'Enter' && handleValidateDiscount()}
-                            placeholder="Enter code (e.g. FREE100)"
-                            className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 uppercase font-mono text-gray-600 text-sm"
+                            placeholder="Enter code"
+                            className="flex-1 border-2 border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-green-500 uppercase font-mono text-base font-bold text-gray-900"
                             disabled={isValidatingCode}
                           />
                           <button
                             onClick={handleValidateDiscount}
                             disabled={isValidatingCode || !discountCode.trim()}
-                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm whitespace-nowrap"
+                            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium disabled:bg-gray-300 disabled:cursor-not-allowed"
                           >
                             {isValidatingCode ? 'Checking...' : 'Apply'}
                           </button>
                         </div>
                         {discountError && (
-                          <p className="text-red-600 text-xs mt-2 flex items-center gap-1">
-                            <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            {discountError}
-                          </p>
+                          <p className="text-red-600 text-xs mt-2">{discountError}</p>
                         )}
                       </>
                     ) : (
                       <div className="space-y-3">
                         <div className="bg-white rounded-lg p-3 border border-green-200">
                           <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span className="font-bold text-green-800">Code &quot;{discountCode}&quot; Applied!</span>
-                            </div>
-                            <button
-                              onClick={handleRemoveDiscount}
-                              className="text-gray-500 hover:text-gray-700 text-xs"
-                            >
+                            <span className="font-bold text-green-800">Code -{appliedDiscount.code}- Applied!</span>
+                            <button onClick={handleRemoveDiscount} className="text-gray-500 text-xs">
                               Remove
                             </button>
                           </div>
-                          <p className="text-sm text-green-700">✨ You&apos;re getting {quantity} free ticket{quantity > 1 ? 's' : ''}!</p>
+                          
+                          {isFreeTicket ? (
+                            <p className="text-sm text-green-700">
+                              ✨ You are getting {quantity} free ticket{quantity > 1 ? 's' : ''}!
+                            </p>
+                          ) : (
+                            <p className="text-sm text-green-700">
+                              ✨ Saving {formatCurrency(discountAmount, eventCurrency)}
+                              {appliedDiscount.type === 'percentage' && ` (${appliedDiscount.value}% off)`}
+                            </p>
+                          )}
                         </div>
 
-                        <button
-                          onClick={handleFreeCheckout}
-                          disabled={isValidatingCode}
-                          className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-bold text-base transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                        >
-                          {isValidatingCode ? (
-                            <>
-                              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                              </svg>
-                              Generating Tickets...
-                            </>
-                          ) : (
-                            <>
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                              </svg>
-                              Get Free Tickets
-                            </>
-                          )}
-                        </button>
+                        {isFreeTicket && (
+                          <button
+                            onClick={handleFreeCheckout}
+                            disabled={isValidatingCode}
+                            className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-bold"
+                          >
+                            {isValidatingCode ? 'Generating...' : 'Get Free Tickets'}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* Only show payment options if no valid discount */}
-                  {!hasValidDiscount && (
+                  {/* Payment Options - Show when no free ticket */}
+                  {!isFreeTicket && (
                     <>
                       <div className="relative my-6">
                         <div className="absolute inset-0 flex items-center">
                           <div className="w-full border-t border-gray-300"></div>
                         </div>
                         <div className="relative flex justify-center text-sm">
-                          <span className="px-2 bg-white text-gray-500">Or pay with</span>
+                          <span className="px-2 bg-white text-gray-500">
+                            {appliedDiscount ? 'Complete payment' : 'Pay with'}
+                          </span>
                         </div>
                       </div>
 
@@ -787,7 +862,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                           </div>
                           <div>
                             <h4 className="font-semibold text-gray-900">Mobile Money</h4>
-                            <p className="text-sm text-gray-600">MTN For Now</p>
+                            <p className="text-sm text-gray-600">MTN, Vodafone, AirtelTigo</p>
                           </div>
                           <Globe className="w-5 h-5 text-gray-400 ml-auto" />
                         </div>

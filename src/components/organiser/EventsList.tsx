@@ -5,34 +5,29 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
+import { DatabaseEvent } from '@/types/event';
 import CreateEventModal from './CreateEventModal';
 import EditEventModal from './EditEventModal';
 import DiscountCodeManager from './DiscountCodeManager';
 
-interface Event {
-  id: number;
-  title: string;
-  event_date: string | null;
-  location_name: string | null;
-  images: string[] | null;
-  event_status: string;
+interface EventWithStats extends DatabaseEvent {
   ticketsSold: number;
   totalTickets: number;
   revenue: number;
-  currency: string;
-  description: string | null;
 }
 
 interface EventsListProps {
   limit?: number;
   showCreateButton?: boolean;
   user: User | null;
+  onGoLive?: (event: DatabaseEvent) => void;
 }
 
 const EventsList: React.FC<EventsListProps> = ({ 
   limit, 
   showCreateButton = true,
-  user
+  user,
+  onGoLive
 }) => {
   const router = useRouter();
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -41,7 +36,7 @@ const EventsList: React.FC<EventsListProps> = ({
   const [editingEventId, setEditingEventId] = useState<number | null>(null);
   const [isDiscountManagerOpen, setIsDiscountManagerOpen] = useState(false);
   const [selectedEventForDiscount, setSelectedEventForDiscount] = useState<{ id: number; title: string } | null>(null);
-  const [events, setEvents] = useState<Event[]>([]);
+  const [events, setEvents] = useState<EventWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
 
@@ -113,7 +108,20 @@ const EventsList: React.FC<EventsListProps> = ({
           images,
           event_status,
           description,
-          currency
+          currency,
+          start_time,
+          end_time,
+          address,
+          organizer_id,
+          created_at,
+          updated_at,
+          latitude,
+          longitude,
+          is_featured,
+          is_sponsored,
+          sponsor_name,
+          sponsor_logo_url,
+          currency_symbol
         `) 
         .eq('organizer_id', user.id)
         .order('created_at', { ascending: false });
@@ -158,7 +166,7 @@ const EventsList: React.FC<EventsListProps> = ({
         })
       );
 
-      setEvents(eventsWithStats as Event[]);
+      setEvents(eventsWithStats as EventWithStats[]);
 
     } catch (error) {
       console.error('Error fetching events:', error);
@@ -288,6 +296,16 @@ const EventsList: React.FC<EventsListProps> = ({
     setOpenDropdownId(openDropdownId === eventId ? null : eventId);
   };
 
+  const handleGoLiveClick = (event: EventWithStats, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onGoLive) {
+      // Convert to DatabaseEvent by removing the extra stats fields
+      const { ticketsSold, totalTickets, revenue, ...dbEvent } = event;
+      onGoLive(dbEvent as DatabaseEvent);
+    }
+    setOpenDropdownId(null);
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -395,7 +413,7 @@ const EventsList: React.FC<EventsListProps> = ({
                       </div>
                       <div>
                         <span className="text-gray-500 block">Revenue</span>
-                        <p className="font-medium">{formatCurrency(event.revenue, event.currency)}</p>
+                        <p className="font-medium">{formatCurrency(event.revenue, event.currency || 'GHS')}</p>
                       </div>
                     </div>
                   </div>
@@ -419,6 +437,20 @@ const EventsList: React.FC<EventsListProps> = ({
                         className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50 animate-fade-in"
                         onClick={(e) => e.stopPropagation()}
                       >
+                        {onGoLive && (event.event_status === 'active' || event.event_status === 'published') && (
+                          <>
+                            <button
+                              onClick={(e) => handleGoLiveClick(event, e)}
+                              className="w-full px-4 py-3 text-left text-sm text-white bg-red-600 hover:bg-red-700 flex items-center gap-3 touch-manipulation active:bg-red-800"
+                            >
+                              <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                              </svg>
+                              <span className="font-bold">Go Live</span>
+                            </button>
+                            <div className="my-1 border-t border-gray-200"></div>
+                          </>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();

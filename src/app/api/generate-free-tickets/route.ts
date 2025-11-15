@@ -47,13 +47,13 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    // Check if discount is for free tickets
+    // Check if discount is for 100% free tickets (free type or 100% percentage)
     const isFreeTicket = discount.discount_type === 'free';
     const is100PercentOff = discount.discount_type === 'percentage' && discount.discount_value === 100;
 
     if (!isFreeTicket && !is100PercentOff) {
       return NextResponse.json(
-        { error: "This discount code is not valid for free tickets" },
+        { error: "This discount code requires payment. Please use the payment options below." },
         { status: 400 }
       );
     }

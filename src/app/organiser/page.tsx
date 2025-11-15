@@ -9,30 +9,10 @@ import CreateEventModal from "@/components/organiser/CreateEventModal";
 import TicketManagement from "@/components/organiser/TicketManagement";
 import AnalyticsOverview from "@/components/organiser/AnalyticsOverview";
 import OrganiserProfileSetup from "@/components/organiser/OrganizerProfileSetUp";
+import OrganizerStream from "@/components/stream/OrganizerStream";
+import { DatabaseEvent, OrganizerProfile } from "@/types/event";
 
 type TabType = 'overview' | 'events' | 'tickets' | 'analytics';
-
-interface SocialLinks {
-  website?: string;
-  facebook?: string;
-  twitter?: string;
-  instagram?: string;
-}
-
-interface OrganizerProfile {
-  user_id: string;
-  organization_name: string;
-  bio: string;
-  social_links: SocialLinks;
-  passport_photo_url: string;
-  id_front_photo_url: string;
-  id_back_photo_url: string;
-  selfie_with_id_url: string;
-  kyc_status: string;
-  rejection_reason: string;
-  created_at: string;
-  updated_at: string;
-}
 
 export default function OrganiserPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -43,15 +23,15 @@ export default function OrganiserPage() {
   const [organizerProfile, setOrganizerProfile] = useState<OrganizerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [showOrganizerStream, setShowOrganizerStream] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<DatabaseEvent | null>(null);
 
   useEffect(() => {
-    // Get current user
     const getCurrentUser = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         setUser(session.user);
         
-        // Fetch user profile from USERS table
         const { data: profile } = await supabase
           .from('USERS')
           .select('name, email')
@@ -63,7 +43,6 @@ export default function OrganiserPage() {
           email: profile?.email || session.user.email || ''
         });
 
-        // Fetch organizer profile from ORGANIZER_KYC table
         await fetchOrganizerProfile(session.user.id);
       }
       setLoading(false);
@@ -71,7 +50,6 @@ export default function OrganiserPage() {
 
     getCurrentUser();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
         setUser(session.user);
@@ -95,10 +73,10 @@ export default function OrganiserPage() {
         .eq('user_id', userId)
         .single();
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 is "not found" error
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching organizer profile:', error);
       } else if (orgProfile) {
-        setOrganizerProfile(orgProfile);
+        setOrganizerProfile(orgProfile as OrganizerProfile);
       }
     } catch (error) {
       console.error('Error fetching organizer profile:', error);
@@ -120,8 +98,12 @@ export default function OrganiserPage() {
     if (user) {
       fetchOrganizerProfile(user.id);
     }
-    // After profile setup, show create event modal
     setShowCreateEvent(true);
+  };
+
+  const handleGoLive = (event: DatabaseEvent) => {
+    setSelectedEvent(event);
+    setShowOrganizerStream(true);
   };
 
   const tabs = [
@@ -138,13 +120,18 @@ export default function OrganiserPage() {
           <div className="space-y-8">
             <DashboardStats user={user} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <EventsList limit={5} showCreateButton={false} user={user} />
+              <EventsList 
+                limit={5} 
+                showCreateButton={false} 
+                user={user}
+                onGoLive={handleGoLive}
+              />
               <AnalyticsOverview user={user} />
             </div>
           </div>
         );
       case 'events':
-        return <EventsList user={user} />;
+        return <EventsList user={user} onGoLive={handleGoLive} />;
       case 'tickets':
         return <TicketManagement user={user} />;
       case 'analytics':
@@ -187,7 +174,6 @@ export default function OrganiserPage() {
       );
     }
 
-    // Show status based on KYC status
     if (organizerProfile.kyc_status === 'pending') {
       return (
         <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -240,7 +226,6 @@ export default function OrganiserPage() {
       );
     }
 
-    // Approved status - show success banner (optional, can be removed after some time)
     if (organizerProfile.kyc_status === 'approved') {
       return (
         <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
@@ -280,7 +265,6 @@ export default function OrganiserPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2 sm:gap-0 h-auto sm:h-16">
@@ -324,12 +308,9 @@ export default function OrganiserPage() {
         </div>
       </header>
 
-      {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 sm:pt-10 pb-8">
-        {/* Profile Status Banner */}
         {renderProfileStatusBanner()}
 
-        {/* Tab Navigation */}
         <div className="mb-6 sm:mb-8">
           <nav className="flex flex-wrap gap-4 border-b border-gray-200">
             {tabs.map((tab) => (
@@ -349,11 +330,9 @@ export default function OrganiserPage() {
           </nav>
         </div>
 
-        {/* Tab Content */}
         {renderContent()}
       </div>
 
-      {/* Create Event Modal */}
       <CreateEventModal
         isOpen={showCreateEvent}
         onClose={() => setShowCreateEvent(false)}
@@ -363,7 +342,6 @@ export default function OrganiserPage() {
         user={user}
       />
 
-      {/* Profile Setup Modal */}
       <OrganiserProfileSetup
         isOpen={showProfileSetup}
         onClose={() => setShowProfileSetup(false)}
@@ -371,6 +349,18 @@ export default function OrganiserPage() {
         user={user}
         existingProfile={organizerProfile || undefined}
       />
+
+      {showOrganizerStream && selectedEvent && user && (
+        <OrganizerStream
+          eventId={selectedEvent.id}
+          userId={user.id}
+          eventTitle={selectedEvent.title}
+          onClose={() => {
+            setShowOrganizerStream(false);
+            setSelectedEvent(null);
+          }}
+        />
+      )}
     </div>
   );
 }

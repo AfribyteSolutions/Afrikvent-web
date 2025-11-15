@@ -3,28 +3,7 @@
 import React, { useState, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import type { User } from '@supabase/supabase-js';
-
-interface SocialLinks {
-  website?: string;
-  facebook?: string;
-  twitter?: string;
-  instagram?: string;
-}
-
-interface OrganizerProfile {
-  user_id: string;
-  organization_name: string;
-  bio: string;
-  social_links: SocialLinks;
-  passport_photo_url: string;
-  id_front_photo_url: string;
-  id_back_photo_url: string;
-  selfie_with_id_url: string;
-  kyc_status: string;
-  rejection_reason?: string;
-  created_at: string;
-  updated_at: string;
-}
+import { OrganizerProfile, SocialLinks } from '@/types/event';
 
 interface OrganiserProfileSetupProps {
   isOpen: boolean;
