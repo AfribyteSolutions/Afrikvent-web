@@ -17,11 +17,14 @@ export function generateRtcToken(
   const currentTimestamp = Math.floor(Date.now() / 1000);
   const privilegeExpiredTs = currentTimestamp + expirationTimeInSeconds;
 
+  // Convert string uid to number - Agora needs a numeric UID
+  const numericUid = parseInt(uid.replace(/\D/g, '').slice(-9)) || 0;
+
   const token = RtcTokenBuilder.buildTokenWithUid(
     APP_ID,
     APP_CERTIFICATE,
     channelName,
-    parseInt(uid),
+    numericUid, // Pass as number, not parseInt(uid)
     role,
     privilegeExpiredTs
   );
