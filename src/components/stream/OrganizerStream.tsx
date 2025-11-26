@@ -6,6 +6,7 @@ import AgoraRTC, {
   IMicrophoneAudioTrack,
 } from 'agora-rtc-sdk-ng';
 import { supabase } from '@/lib/supabaseClient';
+import RTMPSetup from './RTMPSetup'; // Make sure to import the RTMP component
 
 interface OrganizerStreamProps {
   eventId: number;
@@ -25,6 +26,13 @@ interface Comment {
   } | null;
 }
 
+interface StreamConfig {
+  serverUrl: string;
+  streamKey: string;
+  streamName: string;
+  streamId: number;
+}
+
 const OrganizerStream: React.FC<OrganizerStreamProps> = ({
   eventId,
   userId,
@@ -42,6 +50,9 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>('');
   const [showDeviceMenu, setShowDeviceMenu] = useState(false);
+  const [showStreamOptions, setShowStreamOptions] = useState(true); // New state for stream options
+  const [showRTMPSetup, setShowRTMPSetup] = useState(false); // New state for RTMP setup
+  const [streamType, setStreamType] = useState<'webrtc' | 'rtmp' | null>(null); // Track stream type
 
   const clientRef = useRef<IAgoraRTCClient | null>(null);
   const audioTrackRef = useRef<IMicrophoneAudioTrack | null>(null);
@@ -51,13 +62,15 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
   const commentsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    loadCameraDevices();
+    if (streamType === 'webrtc') {
+      loadCameraDevices();
+    }
     subscribeToComments();
     
     return () => {
       cleanup();
     };
-  }, []);
+  }, [streamType]);
 
   useEffect(() => {
     scrollToBottom();
@@ -251,6 +264,7 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
       });
 
       setIsStreaming(true);
+      setShowStreamOptions(false);
       setIsLoading(false);
     } catch (err) {
       console.error('Error starting stream:', err);
@@ -260,6 +274,37 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
     }
   };
 
+  const startRTMPStream = async () => {
+    setStreamType('rtmp');
+    setIsLoading(true); // Add loading state
+    setError(null);
+  
+    try {
+      const response = await fetch('/api/stream/rtmp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventId, userId }),
+      });
+  
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to setup RTMP stream');
+      }
+  
+      const data = await response.json();
+      streamIdRef.current = data.streamId;
+      setIsStreaming(true);
+      setShowStreamOptions(false);
+      setShowRTMPSetup(true); // Show RTMP setup modal
+    } catch (err) {
+      console.error('Error setting up RTMP:', err);
+      setError(err instanceof Error ? err.message : 'Failed to setup RTMP stream');
+      setStreamType(null);
+      setShowStreamOptions(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const endStream = async () => {
     if (!streamIdRef.current) return;
 
@@ -278,7 +323,8 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
 
       await cleanup();
       setIsStreaming(false);
-      onClose();
+      setStreamType(null);
+      setShowStreamOptions(true);
     } catch (err) {
       console.error('Error ending stream:', err);
       setError('Failed to end stream');
@@ -301,6 +347,72 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
     }
   };
 
+  const handleRTMPClose = () => {
+    setShowRTMPSetup(false);
+    setShowStreamOptions(true);
+    setStreamType(null);
+  };
+
+  // Show stream options modal
+  if (showStreamOptions && !isStreaming) {
+    return (
+      <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50">
+        <div className="bg-gray-900 rounded-2xl p-8 max-w-md w-full text-center">
+          <div className="w-20 h-20 bg-purple-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-3">Start Streaming</h2>
+          <p className="text-gray-400 mb-6">Choose how you want to stream your event</p>
+          
+          <div className="space-y-4 mb-6">
+            {/* WebRTC Option */}
+            <button
+              onClick={() => {
+                setStreamType('webrtc');
+                setShowStreamOptions(false);
+              }}
+              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+              Stream from Browser
+            </button>
+
+            {/* RTMP Option */}
+            <button
+              onClick={startRTMPStream}
+              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Advance Software
+            </button>
+          </div>
+
+          <button onClick={onClose} className="text-gray-400 hover:text-white">
+            Cancel
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Show RTMP setup modal
+  if (showRTMPSetup) {
+    return (
+      <RTMPSetup
+        eventId={eventId}
+        userId={userId}
+        onClose={handleRTMPClose}
+      />
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black z-50 flex flex-col">
       {/* Header - Responsive */}
@@ -310,6 +422,9 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
             <div className="flex items-center gap-1.5 md:gap-2 flex-shrink-0">
               <div className="w-2 h-2 md:w-3 md:h-3 bg-white rounded-full animate-pulse"></div>
               <span className="font-bold text-xs md:text-sm">LIVE</span>
+              {streamType === 'rtmp' && (
+                <span className="bg-green-600 px-2 py-0.5 rounded text-xs font-medium">RTMP</span>
+              )}
             </div>
           )}
           <h2 className="font-bold text-sm md:text-lg truncate">{eventTitle}</h2>
@@ -344,13 +459,32 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
             ref={videoContainerRef}
             className="absolute inset-0 flex items-center justify-center"
           >
-            {!isStreaming && (
+            {!isStreaming && streamType === 'webrtc' && (
               <div className="text-center text-white px-4">
                 <svg className="w-16 h-16 md:w-24 md:h-24 mx-auto mb-3 md:mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
                 </svg>
                 <p className="text-lg md:text-xl font-semibold mb-2">Ready to go live?</p>
                 <p className="text-sm md:text-base text-gray-400">Click -Go Live- to start streaming</p>
+              </div>
+            )}
+            {streamType === 'rtmp' && (
+              <div className="text-center text-white px-4">
+                <div className="w-24 h-24 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <svg className="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <p className="text-lg md:text-xl font-semibold mb-2">RTMP Stream Active</p>
+                <p className="text-sm md:text-base text-gray-400 mb-4">
+                  Stream is ready for OBS/Streamlabs input
+                </p>
+                <div className="bg-gray-800 rounded-lg p-4 max-w-md mx-auto">
+                  <p className="text-green-400 text-sm font-medium mb-2">✓ Stream is waiting for RTMP input</p>
+                  <p className="text-gray-400 text-xs">
+                    Use the RTMP settings in your streaming software to start broadcasting
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -411,7 +545,7 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
       <div className="bg-gray-800 p-3 md:p-6 border-t border-gray-700">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-2 md:gap-0">
           <div className="flex gap-2 md:gap-3">
-            {isStreaming && (
+            {isStreaming && streamType === 'webrtc' && (
               <>
                 <button
                   onClick={toggleMute}
@@ -486,14 +620,14 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
           </div>
 
           <div className="flex gap-2 md:gap-3">
-            {!isStreaming ? (
+            {!isStreaming && streamType === 'webrtc' ? (
               <>
                 <button
-                  onClick={onClose}
+                  onClick={() => setShowStreamOptions(true)}
                   disabled={isLoading}
                   className="px-3 py-2 md:px-6 md:py-3 bg-gray-700 hover:bg-gray-600 text-white rounded-lg font-semibold text-sm md:text-base transition-colors disabled:opacity-50"
                 >
-                  Cancel
+                  Back
                 </button>
                 <button
                   onClick={startStream}
@@ -515,7 +649,7 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
                   )}
                 </button>
               </>
-            ) : (
+            ) : isStreaming ? (
               <button
                 onClick={endStream}
                 disabled={isLoading}
@@ -523,7 +657,7 @@ const OrganizerStream: React.FC<OrganizerStreamProps> = ({
               >
                 {isLoading ? 'Ending...' : 'End Stream'}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
