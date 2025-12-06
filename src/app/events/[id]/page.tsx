@@ -777,7 +777,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
             <WatchLiveButton
       eventId={event.id}
       eventTitle={event.title}
-      isStreamLive={streamIsLive}
     />
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
