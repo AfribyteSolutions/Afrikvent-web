@@ -11,6 +11,7 @@ import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
 import AuthModal from '@/components/auth/AuthModal';
 import { getCurrencyInfo } from '@/utils/currency';
 import ViewerStream from '@/components/stream/ViewerStream';
+import WatchLiveButton from '@/components/stream/WatchLiveButton';
 
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
@@ -623,38 +624,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             )}
 
-            {/* NEW: Live Stream Banner */}
-            {streamIsLive && (
-              <div className="mb-8 bg-gradient-to-r from-red-50 to-pink-50 border-2 border-red-200 rounded-2xl p-6">
-                <div className="flex items-center justify-between flex-wrap gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-red-600 rounded-full flex items-center justify-center animate-pulse">
-                      <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 20 20">
-                        <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                      </svg>
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse"></div>
-                        <span className="text-red-600 font-bold text-sm uppercase tracking-wide">Live Now</span>
-                      </div>
-                      <h3 className="text-lg font-bold text-gray-900">This event is streaming live!</h3>
-                      <p className="text-sm text-gray-600">Watch now with your online ticket</p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setShowViewerStream(true)}
-                    className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-bold transition-colors flex items-center gap-2 shadow-lg"
-                  >
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                      <path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" />
-                    </svg>
-                    Watch Live
-                  </button>
-                </div>
-              </div>
-            )}
-
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Organizer</h2>
               <div className="flex items-center">
@@ -672,7 +641,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </div>
               </div>
             </div>
-
+                  
             {event.ticketTypes.length > 0 && (
               <div className="mb-8">
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">Select Tickets</h2>
@@ -805,7 +774,11 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </div>
               </div>
             )}
-
+            <WatchLiveButton
+      eventId={event.id}
+      eventTitle={event.title}
+      isStreamLive={streamIsLive}
+    />
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 Comments ({event.comments.length})
@@ -1063,7 +1036,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             </div>
           </div>
-        </div>
+        u7</div>
       )}
 
       {/* Payment Modal */}
@@ -1160,6 +1133,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
           onClose={() => setShowViewerStream(false)}
         />
       )}
+      
     </div>
   );
 };
