@@ -2,7 +2,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import type { User } from '@supabase/supabase-js';
+import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
 import type { Database } from '@/types/database.types'; // Adjust path as needed
 
 // Use your actual database types

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
-import type { User } from '@supabase/supabase-js';
+import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
 import { DatabaseEvent } from '@/types/event';
 import CreateEventModal from './CreateEventModal';
 import EditEventModal from './EditEventModal';

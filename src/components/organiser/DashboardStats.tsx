@@ -2,7 +2,7 @@
 'use client';
 import React, { useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import type { User } from '@supabase/supabase-js';
+import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 interface DashboardStatsProps {

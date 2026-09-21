@@ -2,7 +2,7 @@
 'use client';
 import React, { useState, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import type { User } from '@supabase/supabase-js';
+import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
 import { OrganizerProfile, SocialLinks } from '@/types/event';
 
 interface OrganiserProfileSetupProps {
