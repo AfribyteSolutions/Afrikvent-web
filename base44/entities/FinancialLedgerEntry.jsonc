@@ -1,0 +1,103 @@
+{
+  "type": "object",
+  "properties": {
+    "organizer_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "order_id": {
+      "type": "string"
+    },
+    "payment_id": {
+      "type": "string"
+    },
+    "refund_request_id": {
+      "type": "string"
+    },
+    "payout_id": {
+      "type": "string"
+    },
+    "entry_type": {
+      "type": "string",
+      "enum": [
+        "sale_gross",
+        "platform_fee",
+        "buyer_fee",
+        "processor_fee",
+        "refund",
+        "refund_fee_adjustment",
+        "reserve_hold",
+        "reserve_release",
+        "payout",
+        "payout_reversal",
+        "manual_adjustment"
+      ]
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "credit",
+        "debit"
+      ]
+    },
+    "amount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "default": "XAF"
+    },
+    "balance_bucket": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "available",
+        "held",
+        "external"
+      ]
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "organizer_id",
+    "entry_type",
+    "direction",
+    "amount",
+    "currency",
+    "balance_bucket",
+    "idempotency_key"
+  ],
+  "rls": {
+    "create": false,
+    "read": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": false,
+    "delete": false
+  },
+  "name": "FinancialLedgerEntry"
+}

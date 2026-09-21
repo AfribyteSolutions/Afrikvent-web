@@ -22,6 +22,7 @@
         "paid",
         "failed",
         "cancelled",
+        "partially_refunded",
         "refunded"
       ],
       "default": "pending"
@@ -35,6 +36,35 @@
       "minimum": 0
     },
     "discount_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "platform_fee_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "buyer_service_fee_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "processor_fee_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "organizer_fee_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "organizer_net_amount": {
+      "type": "number",
+      "default": 0
+    },
+    "reserve_amount": {
       "type": "number",
       "minimum": 0,
       "default": 0
@@ -64,6 +94,12 @@
     "discount_code_id": {
       "type": "string"
     },
+    "fee_policy_snapshot": {
+      "type": "object"
+    },
+    "payout_policy_snapshot": {
+      "type": "object"
+    },
     "cancellation_policy_snapshot": {
       "type": "object"
     },
@@ -73,6 +109,15 @@
     "policy_accepted_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "terms_accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "refunded_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
     }
   },
   "required": [
