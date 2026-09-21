@@ -47,7 +47,8 @@ export default function HomePage() {
       .catch(() => setSiteSections({}));
   }, []);
 
-  const sectionEnabled = (key: string) => siteSections[key]?.is_enabled !== false;
+  const hasCmsSections = Object.keys(siteSections).length > 0;
+  const sectionEnabled = (key: string) => !hasCmsSections || siteSections[key]?.is_enabled === true;
   const sectionTitle = (key: string, fallback: string) => siteSections[key]?.title || fallback;
 
   const {
