@@ -1,8 +1,7 @@
 // EditEventModal.tsx - Real-time event editing with pre-populated data
 'use client';
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
+import { mwakwaData, mwakwaFiles, type MwakwaUser as User } from '@/lib/mwakwaBackend';
 
 interface EditEventModalProps {
   isOpen: boolean;
@@ -37,6 +36,7 @@ interface TicketTypeData {
   description: string;
   price: number;
   max_quatity: number;
+  max_quantity?: number;
   currency: string;
   currency_symbol: string;
   tickets_sold: number;
@@ -159,34 +159,15 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     setError('');
 
     try {
-      const { data: event, error: eventError } = await supabase
-        .from('EVENTS')
-        .select('*')
-        .eq('id', eventId)
-        .eq('organizer_id', user.id)
-        .single();
-
-      if (eventError) {
-        throw new Error(eventError.message);
-      }
-
-      if (!event) {
+      const event = await mwakwaData.events.get(String(eventId));
+      if (!event || event.organizer_id !== user.id) {
         throw new Error('Event not found or you do not have permission to edit it.');
       }
-
-      setEventData(event);
-
-      // ✅ Fetch ticket types with format field
-      const { data: tickets, error: ticketsError } = await supabase
-        .from('TICKET_TYPES')
-        .select('*')
-        .eq('event_id', eventId);
-
-      if (ticketsError) {
-        console.warn('Error loading tickets:', ticketsError);
-      }
-
-      setOriginalTickets(tickets || []);
+      const normalizedEvent = { ...event, created_at: event.created_date, updated_at: event.updated_date } as EventData;
+      setEventData(normalizedEvent);
+      const rawTickets = await mwakwaData.ticketTypes.filter({ event_id: eventId });
+      const tickets = rawTickets.map(ticket => ({ ...ticket, max_quatity: ticket.max_quantity })) as TicketTypeData[];
+      setOriginalTickets(tickets);
 
       const eventDate = new Date(event.event_date);
       const formattedDate = eventDate.toISOString().split('T')[0];
@@ -342,31 +323,10 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
   };
 
   const uploadEventImage = async (): Promise<string | null> => {
-    if (!formData.image || !user || !eventId) return formData.existingImageUrl || null;
-
+    if (!formData.image) return formData.existingImageUrl || null;
     try {
-      const fileExt = formData.image.name.split('.').pop();
-      const fileName = `event-${eventId}-${Math.random().toString(36).substring(2, 9)}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('event-images')
-        .upload(filePath, formData.image, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Image upload error:', uploadError);
-        return formData.existingImageUrl || null;
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('event-images')
-        .getPublicUrl(filePath);
-
-      return publicUrlData.publicUrl;
-
+      const result = await mwakwaFiles.uploadPublic(formData.image);
+      return result.file_url;
     } catch (error) {
       console.error('Error uploading image:', error);
       return formData.existingImageUrl || null;
@@ -383,100 +343,33 @@ const EditEventModal: React.FC<EditEventModalProps> = ({
     setError('');
 
     try {
-      const eventDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
-
       let imageUrl = formData.existingImageUrl;
-      if (formData.image) {
-        const uploadedUrl = await uploadEventImage();
-        if (uploadedUrl) {
-          imageUrl = uploadedUrl;
-        }
-      }
-
+      if (formData.image) imageUrl = (await uploadEventImage()) || imageUrl;
       const currentCurrency = currencies.find(c => c.code === formData.currency) || currencies[0];
       const currencySymbol = currentCurrency.symbol;
 
-      const { error: eventError } = await supabase
-        .from('EVENTS')
-        .update({
-          title: formData.title,
-          description: formData.description,
-          event_date: eventDateTime,
-          start_time: formData.time,
-          location_name: formData.location,
-          address: formData.venue,
-          category: formData.category,
-          event_status: formData.eventStatus,
-          currency: formData.currency,
-          currency_symbol: currencySymbol,
-          images: imageUrl ? [imageUrl] : [],
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', eventId)
-        .eq('organizer_id', user.id);
-
-      if (eventError) {
-        throw new Error(`Failed to update event details: ${eventError.message}`);
-      }
-
-      // ✅ Handle ticket types with format field
-      const ticketUpdates = formData.ticketTypes.map(async (ticketType) => {
-        if (ticketType.isNew) {
-          const { error: ticketError } = await supabase
-            .from('TICKET_TYPES')
-            .insert([{
-              event_id: eventId,
-              name: ticketType.name,
-              description: ticketType.description,
-              price: ticketType.price,
-              max_quatity: ticketType.quantity,
-              currency: formData.currency,
-              currency_symbol: currencySymbol,
-              format: ticketType.format // ✅ Save format for new tickets
-            }]);
-
-          if (ticketError) {
-            console.error('Error creating ticket type:', ticketError);
-          }
-        } else {
-          const { error: ticketError } = await supabase
-            .from('TICKET_TYPES')
-            .update({
-              name: ticketType.name,
-              description: ticketType.description,
-              price: ticketType.price,
-              max_quatity: Math.max(ticketType.quantity, ticketType.ticketsSold || 0),
-              currency: formData.currency,
-              currency_symbol: currencySymbol,
-              format: ticketType.format // ✅ Update format for existing tickets
-            })
-            .eq('id', ticketType.id);
-
-          if (ticketError) {
-            console.error('Error updating ticket type:', ticketError);
-          }
-        }
+      await mwakwaData.events.update(String(eventId), {
+        title: formData.title, description: formData.description, event_date: formData.date,
+        start_time: formData.time, location_name: formData.location, address: formData.venue,
+        category: formData.category, event_status: formData.eventStatus, currency: formData.currency,
+        currency_symbol: currencySymbol, images: imageUrl ? [imageUrl] : []
       });
 
-      await Promise.all(ticketUpdates);
+      await Promise.all(formData.ticketTypes.map(async (ticketType) => {
+        const data = {
+          event_id: eventId, organizer_id: user.id, name: ticketType.name, description: ticketType.description,
+          price: ticketType.price, max_quantity: Math.max(ticketType.quantity, ticketType.ticketsSold || 0),
+          currency: formData.currency, currency_symbol: currencySymbol, format: ticketType.format, is_active: true
+        };
+        if (ticketType.isNew) await mwakwaData.ticketTypes.create(data);
+        else await mwakwaData.ticketTypes.update(String(ticketType.id), data);
+      }));
 
-      const deletedTicketIds = originalTickets
-        .filter(original => 
-          !formData.ticketTypes.find(current => current.id === original.id) &&
-          (original.tickets_sold === 0 || original.tickets_sold === null)
-        )
-        .map(ticket => ticket.id);
-
-      if (deletedTicketIds.length > 0) {
-        const { error: deleteError } = await supabase
-          .from('TICKET_TYPES')
-          .delete()
-          .in('id', deletedTicketIds);
-
-        if (deleteError) {
-          console.error('Error deleting ticket types:', deleteError);
-        }
-      }
+      const deletedTicketIds = originalTickets.filter(original =>
+        !formData.ticketTypes.find(current => String(current.id) === String(original.id)) &&
+        (original.tickets_sold === 0 || original.tickets_sold == null)
+      ).map(ticket => ticket.id);
+      await Promise.all(deletedTicketIds.map(id => mwakwaData.ticketTypes.delete(String(id))));
 
       setHasUnsavedChanges(false);
       onSuccess();
