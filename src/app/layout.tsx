@@ -1,5 +1,10 @@
 import "./globals.css";
 import type { Metadata } from "next";
+
+const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+const metadataBase = appUrl && /^https?:\/\//i.test(appUrl)
+  ? new URL(appUrl.replace(/\/$/, ""))
+  : new URL("https://mwakwa.com");
 import Header from "@/components/header/Header";
 import Footer from "@/components/footer/Footer";
 import Preloader from "@/components/preloader/preloader";
@@ -15,6 +20,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
+  metadataBase,
   title: {
     default: "Mwakwa",
     template: "%s | Mwakwa",
