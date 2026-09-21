@@ -278,7 +278,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const [paidPaymentsEnabled, setPaidPaymentsEnabled] = useState(false);
 
   useEffect(() => {
-    mwakwaData.brandSettings.filter({}, undefined, 1, 0)
+    mwakwaData.platformSettings.filter({}, undefined, 1, 0)
       .then((rows) => setPaidPaymentsEnabled(Boolean(rows?.[0]?.paid_payments_enabled)))
       .catch(() => setPaidPaymentsEnabled(false));
   }, []);
