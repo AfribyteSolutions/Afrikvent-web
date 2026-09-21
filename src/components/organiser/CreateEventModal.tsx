@@ -690,6 +690,21 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
                   </div>
                 </div>
 
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">Buyer voluntary refund policy</h4>
+                  <p className="text-sm text-gray-600 mb-4">Choose a fixed Mwakwa template for buyer change-of-mind cancellations. This does not override the separate event cancellation/postponement policy.</p>
+                  <div className="space-y-3">
+                    {refundPolicies.map(policy => (
+                      <label key={policy.id} className={`block rounded-lg border-2 p-4 cursor-pointer ${selectedRefundPolicyId === policy.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'}`}>
+                        <div className="flex gap-3">
+                          <input type="radio" name="refund-policy" checked={selectedRefundPolicyId === policy.id} onChange={() => setSelectedRefundPolicyId(policy.id)} />
+                          <div><div className="font-semibold">{policy.name}</div><p className="text-sm text-gray-600 mt-1">{policy.description}</p><p className="text-xs text-gray-500 mt-2">{policy.buyer_disclosure}</p></div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
                 {/* Commercial policy disclaimer — values are controlled in CMS, not hard-coded here. */}
                 <div className="bg-amber-50 border border-amber-200 rounded-lg p-6">
                   <div className="flex items-start space-x-3">
