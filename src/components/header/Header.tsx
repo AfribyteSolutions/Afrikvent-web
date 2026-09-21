@@ -32,6 +32,16 @@ const Header = () => {
     ]).then(([nav, brands]) => { setNavItems(nav as unknown as NavItem[]); setBrand((brands?.[0] || null) as BrandConfig | null); }).catch(() => {});
   }, []);
 
+  useEffect(() => {
+    if (!brand) return;
+    const root = document.documentElement;
+    const configured = brand as BrandConfig & { primary_color?: string; secondary_color?: string; background_color?: string; text_color?: string };
+    if (configured.primary_color) root.style.setProperty("--mwakwa-primary", configured.primary_color);
+    if (configured.secondary_color) root.style.setProperty("--mwakwa-secondary", configured.secondary_color);
+    if (configured.background_color) root.style.setProperty("--mwakwa-background", configured.background_color);
+    if (configured.text_color) root.style.setProperty("--mwakwa-text", configured.text_color);
+  }, [brand]);
+
   const handleSignOut = async () => {
     await mwakwaAuth.logout("/");
     setUser(null);
