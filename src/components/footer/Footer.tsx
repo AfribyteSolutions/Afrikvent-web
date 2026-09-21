@@ -11,7 +11,7 @@ const Footer = () => {
   const [brand, setBrand] = useState<BrandConfig | null>(null);
   const [links, setLinks] = useState<NavItem[] | null>(null);
   useEffect(() => {
-    Promise.all([mwakwaData.brandSettings.filter({}, undefined, 1, 0), mwakwaData.navigationItems.filter({ is_enabled: true }, "sort_order", 100, 0)])
+    Promise.all([mwakwaData.brandSettings.filter({}, undefined, 1, 0), mwakwaData.navigationItems.list("sort_order", 100, 0)])
       .then(([brands, items]) => { setBrand((brands?.[0] || null) as BrandConfig | null); setLinks(items as unknown as NavItem[]); }).catch(() => {});
   }, []);
   const platformLinks = links?.filter((x) => x.location === "footer_platform") ?? null;
