@@ -1,0 +1,55 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "NEXT_PUBLIC_SUPABASE_URL",
+      "description": "Supabase project URL (e.g. https://<project>.supabase.co). Already set to the project URL from next.config.ts; override only if the project changes.",
+      "requiredAtBoot": true,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+      "description": "Supabase anon/publishable key from your Supabase dashboard (Settings → API). Needed for client-side auth and data fetching.",
+      "requiredAtBoot": true,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "SUPABASE_SERVICE_ROLE_KEY",
+      "description": "Supabase service role key from your Supabase dashboard (Settings → API). Used by server-side API routes for payments, tickets, and streaming.",
+      "requiredAtBoot": true,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "SUPABASE_URL",
+      "description": "Supabase project URL (same as NEXT_PUBLIC_SUPABASE_URL). Used by some server-side API routes.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "NEXT_PUBLIC_AGORA_APP_ID",
+      "description": "Agora App ID from the Agora console. Needed for live streaming features.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "AGORA_APP_CERTIFICATE",
+      "description": "Agora App Certificate from the Agora console. Needed for generating streaming tokens server-side.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "FAPSHI_API_USER",
+      "description": "Fapshi API username for mobile money payments. Optional — defaults to empty string.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    },
+    {
+      "name": "FAPSHI_API_KEY",
+      "description": "Fapshi API key for mobile money payments. Optional — defaults to empty string.",
+      "requiredAtBoot": false,
+      "generatedForDevelopment": false
+    }
+  ]
+}
