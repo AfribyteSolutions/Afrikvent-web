@@ -27,6 +27,7 @@ export const metadata: Metadata = {
   },
   description: "Discover, connect around, and access social events with Mwakwa.",
   applicationName: "Mwakwa",
+  alternates: { canonical: metadataBase },
   openGraph: {
     title: "Mwakwa",
     description: "Discover, connect around, and access social events with Mwakwa.",
