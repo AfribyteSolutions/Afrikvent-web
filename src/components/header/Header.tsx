@@ -19,6 +19,7 @@ const Header = () => {
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [navItems, setNavItems] = useState<NavItem[]>([]);
   const [brand, setBrand] = useState<BrandConfig | null>(null);
+  const isAdmin = user?.role === "admin";
 
   useEffect(() => {
     const getUser = async () => {
@@ -117,6 +118,7 @@ const Header = () => {
                         <UserIcon className="w-4 h-4 mr-2" />
                         Manage Profile
                       </Link>
+                      {isAdmin && <Link href="/admin/cms" onClick={() => setIsProfileDropdownOpen(false)} className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">CMS</Link>}
                       <button
                         onClick={handleSignOut}
                         className="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-100"
@@ -214,6 +216,7 @@ const Header = () => {
                     >
                       Manage Profile
                     </Link>
+                    {isAdmin && <Link href="/admin/cms" onClick={closeMobileMenu} className="px-8 py-3 text-blue-600 rounded-full border border-blue-600 text-lg hover:bg-blue-50 w-full max-w-sm text-center">CMS</Link>}
                     <button
                       onClick={handleSignOut}
                       className="px-8 py-3 text-red-600 rounded-full border border-red-600 text-lg hover:bg-red-50 w-full max-w-sm"
