@@ -84,7 +84,7 @@ async function initiatePay({
 
   const data = (await response.json()) as FapshiResponse;
   if (data.transId) {
-    data.redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL || "https://mwakwa.com"}/payment-success?transId=${data.transId}`;
+    data.redirectUrl = `${(process.env.NEXT_PUBLIC_APP_URL || "https://mwakwa.com").replace(/\/$/, "")}/payment-success?transId=${data.transId}`;
   }
 
   return data;
