@@ -28,45 +28,20 @@ export const currencies: Currency[] = [
 // Helper function
 export function getCurrencyInfo(code?: string): Currency {
   return currencies.find(c => c.code === code) 
-    || currencies.find(c => c.code === 'XOF') // fallback to XOF (CFA) if code is missing
+    || currencies.find(c => c.code === 'XAF') // Cameroon-first fallback
     || currencies[0];
 }
 
 /**
-* 💥 THE FIX: Export the convertCurrency function 💥
-* Placeholder for real-world currency conversion logic.
-*/
+ * Currency conversion is deliberately disabled until a trusted rate provider
+ * is configured. Checkout always charges the event's stored currency, so a
+ * guessed exchange rate must never influence a transaction.
+ */
 export async function convertCurrency(
   amount: number,
   fromCurrency: string,
   toCurrency: string
 ): Promise<number> {
-  // ⚠️ WARNING: In a production app, this must fetch live rates.
-  // This is a simplified mock using hardcoded ratios relative to XOF for demonstration.
-  
-  // Placeholder Rates (Relative to 1 XOF, simplified and NOT accurate for production)
-  const MOCK_RATES: { [key: string]: number } = {
-      'XOF': 1,
-      'GHS': 0.02,  // 1 GHS ≈ 50 XOF
-      'NGN': 0.76,  // 1 NGN ≈ 1.3 XOF
-      'USD': 0.0016, // 1 USD ≈ 625 XOF
-      'EUR': 0.0015, // 1 EUR ≈ 656 XOF
-      'GBP': 0.0013, // 1 GBP ≈ 780 XOF
-  };
-
-  const rateFrom = MOCK_RATES[fromCurrency] || 1;
-  const rateTo = MOCK_RATES[toCurrency] || 1;
-
-  // Simulate an API delay
-  await new Promise(resolve => setTimeout(resolve, 50)); 
-
-  // Convert to a base currency (like XOF in this mock), then to the target currency
-  // amount_in_XOF = amount * rateFrom
-  // amount_in_target = amount_in_XOF * (1 / rateTo)
-  
-  if (rateFrom === 0 || rateTo === 0) {
-      throw new Error("Invalid mock rate for conversion.");
-  }
-
-  return (amount / rateFrom) * rateTo; 
+  if (fromCurrency === toCurrency) return amount;
+  throw new Error('Live currency conversion is not configured.');
 }
