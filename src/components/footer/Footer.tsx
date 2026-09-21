@@ -6,16 +6,18 @@ import { mwakwaAuth, mwakwaData } from "@/lib/mwakwaBackend";
 
 type NavItem = { id?: string; label: string; url: string; location?: string; is_enabled?: boolean; requires_auth?: boolean };
 type BrandConfig = { brand_name?: string; logo_url?: string; footer_description?: string; copyright_text?: string };
+type BusinessInfo = { legal_name?: string; address_line1?: string; address_line2?: string; city?: string; region?: string; postal_code?: string; country?: string; email?: string; phone?: string }; 
 
 const Footer = () => {
   const [brand, setBrand] = useState<BrandConfig | null>(null);
   const [links, setLinks] = useState<NavItem[] | null>(null);
+  const [business, setBusiness] = useState<BusinessInfo | null>(null);
   const [linksLoaded, setLinksLoaded] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   useEffect(() => {
     mwakwaAuth.me().then((u) => setSignedIn(!!u));
-    Promise.all([mwakwaData.brandSettings.filter({}, undefined, 1, 0), mwakwaData.navigationItems.list("sort_order", 100, 0)])
-      .then(([brands, items]) => { setBrand((brands?.[0] || null) as BrandConfig | null); setLinks(items as unknown as NavItem[]); }).catch(() => { setLinks(null); }).finally(() => setLinksLoaded(true));
+    Promise.all([mwakwaData.brandSettings.filter({}, undefined, 1, 0), mwakwaData.navigationItems.list("sort_order", 100, 0), mwakwaData.businessInfo.filter({ is_active: true }, undefined, 1, 0)])
+      .then(([brands, items, businesses]) => { setBrand((brands?.[0] || null) as BrandConfig | null); setLinks(items as unknown as NavItem[]); setBusiness((businesses?.[0] || null) as BusinessInfo | null); }).catch(() => { setLinks(null); }).finally(() => setLinksLoaded(true));
   }, []);
   const platformLinks = links?.filter((x) => x.is_enabled !== false && (!x.requires_auth || signedIn) && x.location === "footer_platform") ?? null;
   const supportLinks = links?.filter((x) => x.is_enabled !== false && (!x.requires_auth || signedIn) && (x.location === "footer_support" || x.location === "footer_legal")) ?? null;
@@ -70,9 +72,10 @@ const Footer = () => {
             <p className="text-gray-500 text-xs sm:text-sm text-center sm:text-left">
               {brand?.copyright_text || `© ${new Date().getFullYear()} ${brand?.brand_name || "Mwakwa"}. All rights reserved.`}
             </p>
-            <p className="text-gray-400 text-xs sm:text-sm text-center sm:text-right">
-              Legal pages will be published before public launch.
-            </p>
+            <div className="text-gray-400 text-xs sm:text-sm text-center sm:text-right">
+              {business?.legal_name && <p>{business.legal_name}</p>}
+              {business && <p>{[business.address_line1, business.address_line2, business.city, business.region, business.postal_code, business.country].filter(Boolean).join(", ")}</p>}
+            </div>
           </div>
         </div>
       </div>
