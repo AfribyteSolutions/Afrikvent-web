@@ -77,7 +77,7 @@ const Header = () => {
           <nav className="hidden md:flex items-center space-x-6 text-black">
             {(navLoaded ? (navItems ?? []) : [
               { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
-            ]).filter((item: NavItem) => item.is_enabled !== false).map((item: NavItem) => (
+            ]).filter((item: NavItem) => item.is_enabled !== false && (!item.requires_auth || !!user)).map((item: NavItem) => (
               <Link key={item.id || item.url} href={item.url} className="hover:cms-primary-text">{item.label}</Link>
             ))}
           </nav>
@@ -190,7 +190,7 @@ const Header = () => {
                 <div className="flex flex-col items-center space-y-8">
                   {(navLoaded ? (navItems ?? []) : [
                     { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
-                  ]).filter((item: NavItem) => item.is_enabled !== false).map((item: NavItem) => (
+                  ]).filter((item: NavItem) => item.is_enabled !== false && (!item.requires_auth || !!user)).map((item: NavItem) => (
                     <Link key={item.id || item.url} href={item.url} onClick={closeMobileMenu} className="text-gray-700 hover:cms-primary-text font-medium text-2xl py-3">
                       {item.label}
                     </Link>
