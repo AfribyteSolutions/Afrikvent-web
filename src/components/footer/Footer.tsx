@@ -44,7 +44,7 @@ const Footer = () => {
             <div>
               <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base">Platform</h3>
               <ul className="space-y-2 sm:space-y-3">
-                {(platformLinks ?? [{label:"Discover Events",url:"/events"},{label:"My Events",url:"/organiser"}]).map((item: NavItem) => (
+                {(linksLoaded ? (platformLinks ?? []) : [{label:"Discover Events",url:"/events"},{label:"My Events",url:"/organiser"}]).map((item: NavItem) => (
                   <li key={item.id || item.url}><Link href={item.url} className="text-gray-600 hover:cms-primary-text text-xs sm:text-sm transition-colors">{item.label}</Link></li>
                 ))}
               </ul>
