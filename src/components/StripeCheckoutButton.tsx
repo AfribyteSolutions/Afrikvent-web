@@ -74,7 +74,7 @@ const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
       });
 
       const response = await base44.functions.invoke('initiate-payment', { provider: 'stripe', customer_email: customerEmail, user_id: userId, tickets });
-      const result = (response as { data?: any }).data || response;
+      const result = ((response as { data?: Record<string, unknown> }).data || response) as Record<string, unknown>;
       if (result.error) throw new Error(result.error);
       if (!result.checkout_url) throw new Error("No checkout URL received from server");
 

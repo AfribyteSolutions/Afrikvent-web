@@ -422,7 +422,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       setDiscountError('');
 
       const response = await base44.functions.invoke('free-checkout', { event_id: String(eventId), ticket_type_id: String(selectedTicket.id), quantity, discount_code: discountCode });
-      const freeResult = (response as { data?: any }).data || response;
+      const freeResult = ((response as { data?: { tickets?: GeneratedTicket[] } }).data || response) as { tickets?: GeneratedTicket[] };
       const tickets = freeResult.tickets;
       if (!tickets || tickets.length === 0) throw new Error('No tickets were generated');
 

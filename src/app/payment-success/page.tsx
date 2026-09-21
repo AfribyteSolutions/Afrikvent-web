@@ -68,7 +68,7 @@ function PaymentSuccessContent() {
           : { provider: 'stripe', session_id: sessionId, order_id: searchParams.get('order_id') };
         console.log(`🔎 Attempt ${retries + 1}: Verifying payment`, body);
         const response = await base44.functions.invoke('verify-payment', body);
-        const data = (response as { data?: any }).data || response;
+        const data = ((response as { data?: Record<string, unknown> }).data || response) as Record<string, unknown>;
 
         console.log('API verification response:', data);
 
