@@ -45,6 +45,13 @@ export const mwakwaData = {
   brandSettings: base44.entities.BrandSettings,
   platformSettings: base44.entities.PlatformSettings,
   contentPages: base44.entities.ContentPage,
+  siteSections: base44.entities.SiteSection,
+  navigationItems: base44.entities.NavigationItem,
+  feePolicies: base44.entities.FeePolicy,
+  payoutPolicies: base44.entities.PayoutPolicy,
+  refundPolicies: base44.entities.RefundPolicy,
+  cancellationPolicies: base44.entities.CancellationPolicy,
+  eventPolicyOverrides: base44.entities.EventPolicyOverride,
 };
 
 export const mwakwaFiles = {
