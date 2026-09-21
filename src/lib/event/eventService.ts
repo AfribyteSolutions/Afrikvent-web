@@ -1,8 +1,26 @@
 import { mwakwaData } from '@/lib/mwakwaBackend';
 import { TransformedEvent } from '@/utils/eventdatatransformer';
 
-type NativeEvent = Record<string, any>;
-type NativeTicketType = Record<string, any>;
+type NativeEvent = Record<string, unknown> & {
+  id: string;
+  title: string;
+  description?: string;
+  event_date?: string;
+  start_time?: string;
+  location_name?: string;
+  address?: string;
+  organizer_name?: string;
+  images?: string[];
+  is_sponsored?: boolean;
+  currency?: string;
+  currency_symbol?: string;
+};
+type NativeTicketType = Record<string, unknown> & {
+  price?: number;
+  currency?: string;
+  currency_symbol?: string;
+  is_active?: boolean;
+};
 
 async function transformEventRow(row: NativeEvent): Promise<TransformedEvent> {
   const ticketTypes = (await mwakwaData.ticketTypes.filter({ event_id: row.id })) as NativeTicketType[];
