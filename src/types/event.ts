@@ -103,39 +103,6 @@ export interface OrganizerProfile {
   updated_at?: string;  // ✅ Use optional instead of null
 }
 
-// Live Streaming types
-export interface LiveStream {
-  id: number;
-  event_id: number;
-  channel_name: string;
-  status: 'scheduled' | 'live' | 'ended';
-  started_at: string | null;
-  ended_at: string | null;
-  organizer_id: string;
-  viewer_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface StreamTokenResponse {
-  token: string;
-  channel: string;
-  uid: string;
-  appId: string;
-  expiresAt: number;
-}
-
-export interface StartStreamResponse {
-  success: boolean;
-  stream: {
-    id: number;
-    channel: string;
-    token: string;
-    uid: string;
-    appId: string;
-  };
-}
-
 // Ticket with code for online events
 export interface TicketWithCode extends TicketRow {
   ticket_code?: string;
