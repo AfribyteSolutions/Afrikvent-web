@@ -1,0 +1,90 @@
+{
+  "type": "object",
+  "properties": {
+    "area": {
+      "type": "string",
+      "enum": [
+        "fee_policy",
+        "payout_policy",
+        "refund_policy",
+        "cancellation_policy",
+        "event_override",
+        "site_content",
+        "branding"
+      ]
+    },
+    "target_entity": {
+      "type": "string"
+    },
+    "target_id": {
+      "type": "string"
+    },
+    "requested_by": {
+      "type": "string"
+    },
+    "requested_changes": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "pending",
+        "approved",
+        "rejected",
+        "applied"
+      ],
+      "default": "draft"
+    },
+    "reviewed_by": {
+      "type": "string"
+    },
+    "review_notes": {
+      "type": "string"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "area",
+    "requested_by",
+    "requested_changes"
+  ],
+  "rls": {
+    "create": {
+      "data.requested_by": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.requested_by": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.requested_by": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "CmsChangeRequest"
+}
