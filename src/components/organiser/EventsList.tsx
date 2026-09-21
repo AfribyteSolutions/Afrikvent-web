@@ -3,8 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { supabase } from '@/lib/supabaseClient';
-import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
+import { mwakwaData, type MwakwaUser as User } from '@/lib/mwakwaBackend';
 import { DatabaseEvent } from '@/types/event';
 import CreateEventModal from './CreateEventModal';
 import EditEventModal from './EditEventModal';
@@ -96,70 +95,25 @@ const EventsList: React.FC<EventsListProps> = ({
     try {
       setLoading(true);
 
-      const { data: eventsData, error: eventsError } = await supabase
-        .from('EVENTS')
-        .select(`
-          id,
-          title,
-          event_date,
-          location_name,
-          images,
-          event_status,
-          description,
-          currency,
-          start_time,
-          end_time,
-          address,
-          organizer_id,
-          created_at,
-          updated_at,
-          latitude,
-          longitude,
-          is_featured,
-          is_sponsored,
-          sponsor_name,
-          sponsor_logo_url,
-          currency_symbol
-        `) 
-        .eq('organizer_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (eventsError) {
-        console.error('Error fetching events:', eventsError);
-        return;
-      }
+      const eventsData = await mwakwaData.events.filter({ organizer_id: user.id }, '-created_date');
 
       const eventsWithStats = await Promise.all(
-        (eventsData || []).map(async (event) => {
-          const { data: ticketTypes } = await supabase
-            .from('TICKET_TYPES')
-            .select('max_quatity')
-            .eq('event_id', event.id);
-
-          const totalTickets = ticketTypes?.reduce((sum, type) => 
-            sum + (type.max_quatity || 0), 0
-          ) || 0;
-
-          const { data: soldTickets } = await supabase
-            .from('TICKETS')
-            .select('quantity, total, ticket_status')
-            .eq('event_id', event.id)
-            .in('ticket_status', ['paid', 'used']);
-
-          const ticketsSold = soldTickets?.reduce((sum, ticket) => 
-            sum + parseInt(ticket.quantity || '0'), 0
-          ) || 0;
-
-          const revenue = soldTickets?.reduce((sum, ticket) => 
-            sum + (ticket.total || 0), 0
-          ) || 0;
+        eventsData.map(async (event) => {
+          const ticketTypes = await mwakwaData.ticketTypes.filter({ event_id: event.id });
+          const totalTickets = ticketTypes.reduce((sum, type) => sum + Number(type.max_quantity || 0), 0);
+          const allTickets = await mwakwaData.tickets.filter({ event_id: event.id });
+          const soldTickets = allTickets.filter((ticket) => ['confirmed', 'used'].includes(ticket.ticket_status || ''));
+          const ticketsSold = soldTickets.reduce((sum, ticket) => sum + Number(ticket.quantity || 0), 0);
+          const revenue = soldTickets.reduce((sum, ticket) => sum + Number(ticket.total || 0), 0);
 
           return {
             ...event,
+            created_at: event.created_date,
+            updated_at: event.updated_date,
             ticketsSold,
             totalTickets,
             revenue,
-            currency: event.currency || 'GHS'
+            currency: event.currency || 'XAF'
           };
         })
       );
@@ -266,17 +220,9 @@ const EventsList: React.FC<EventsListProps> = ({
     }
 
     try {
-      const { error } = await supabase
-        .from('EVENTS')
-        .delete()
-        .eq('id', eventId)
-        .eq('organizer_id', user?.id);
-
-      if (error) {
-        console.error('Error deleting event:', error);
-        alert('Failed to delete event. Please try again.');
-        return;
-      }
+      const event = await mwakwaData.events.get(String(eventId));
+      if (!user || event.organizer_id !== user.id) throw new Error('Not authorized');
+      await mwakwaData.events.delete(String(eventId));
 
       fetchEvents();
       alert('Event deleted successfully.');
