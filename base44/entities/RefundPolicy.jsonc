@@ -27,9 +27,19 @@
       "type": "integer",
       "minimum": 0
     },
-    "organizer_can_override": {
+    "refund_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 100
+    },
+    "organizer_can_request_override": {
       "type": "boolean",
-      "default": false
+      "default": true
+    },
+    "event_override_requires_admin_approval": {
+      "type": "boolean",
+      "default": true
     },
     "buyer_fee_refundable": {
       "type": "boolean",
