@@ -7,6 +7,9 @@ import AuthModal from "@/components/auth/AuthModal";
 import { useRouter } from "next/navigation";
 import { ChevronDown, User as UserIcon, LogOut } from "lucide-react";
 
+type NavItem = { id?: string; label: string; url: string };
+type BrandConfig = { brand_name?: string; logo_url?: string };
+
 const Header = () => {
   const router = useRouter();
   const [user, setUser] = useState<MwakwaUser | null>(null);
@@ -14,8 +17,8 @@ const Header = () => {
   const [showSignUp, setShowSignUp] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [navItems, setNavItems] = useState<any[]>([]);
-  const [brand, setBrand] = useState<any>(null);
+  const [navItems, setNavItems] = useState<NavItem[]>([]);
+  const [brand, setBrand] = useState<BrandConfig | null>(null);
 
   useEffect(() => {
     const getUser = async () => {
@@ -62,7 +65,7 @@ const Header = () => {
           <nav className="hidden md:flex items-center space-x-6 text-black">
             {(navItems.length ? navItems : [
               { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
-            ]).map((item: any) => (
+            ]).map((item: NavItem) => (
               <Link key={item.id || item.url} href={item.url} className="hover:text-[#0052cc]">{item.label}</Link>
             ))}
           </nav>
@@ -174,7 +177,7 @@ const Header = () => {
                 <div className="flex flex-col items-center space-y-8">
                   {(navItems.length ? navItems : [
                     { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
-                  ]).map((item: any) => (
+                  ]).map((item: NavItem) => (
                     <Link key={item.id || item.url} href={item.url} onClick={closeMobileMenu} className="text-gray-700 hover:text-[#0052cc] font-medium text-2xl py-3">
                       {item.label}
                     </Link>

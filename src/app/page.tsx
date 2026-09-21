@@ -6,7 +6,6 @@ import { useRecommendedEvents, useSponsoredEvents, useUpcomingEvents, Event } fr
 import RecommendedEvents from "@/components/event/recommendedevents/RecommendedEvents";
 import SponsoredEvents from "@/components/event/sponsoredevents/SponsoredEvents";
 import UpcomingEvents from "@/components/event/upcomingevents/UpcomingEvents";
-import PromotionalBannerSection from "@/components/promotionbanner/PromotionBannerSection";
 import SearchResults from "@/components/event/SearchResults";
 import EventFilters, { FilterState } from "@/components/event/EventFilters";
 import { mwakwaData } from "@/lib/mwakwaBackend";
@@ -25,6 +24,8 @@ const slides = [
 // Mobile vertical video (reel format)
 const mobileVideoSrc = "/videos/mobile-reel.mp4"; // Replace with your actual mobile video path
 
+type SiteSectionConfig = { id?: string; section_key?: string; title?: string; body?: string; button_text?: string; button_url?: string; is_enabled?: boolean };
+
 export default function HomePage() {
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,7 +33,7 @@ export default function HomePage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
-  const [siteSections, setSiteSections] = useState<Record<string, any>>({});
+  const [siteSections, setSiteSections] = useState<Record<string, SiteSectionConfig>>({});
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     location: "",
@@ -42,7 +43,7 @@ export default function HomePage() {
 
   useEffect(() => {
     mwakwaData.siteSections.filter({ page_slug: "home", is_enabled: true }, "sort_order", 100, 0)
-      .then((rows) => setSiteSections(Object.fromEntries(rows.map((row: any) => [row.section_key, row]))))
+      .then((rows) => setSiteSections(Object.fromEntries(rows.map((row) => [row.section_key, row as SiteSectionConfig]))))
       .catch(() => setSiteSections({}));
   }, []);
 

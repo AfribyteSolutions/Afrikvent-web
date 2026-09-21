@@ -4,9 +4,12 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { mwakwaData } from "@/lib/mwakwaBackend";
 
+type NavItem = { id?: string; label: string; url: string; location?: string };
+type BrandConfig = { brand_name?: string; logo_url?: string; footer_description?: string; copyright_text?: string };
+
 const Footer = () => {
-  const [brand, setBrand] = useState<any>(null);
-  const [links, setLinks] = useState<any[]>([]);
+  const [brand, setBrand] = useState<BrandConfig | null>(null);
+  const [links, setLinks] = useState<NavItem[]>([]);
   useEffect(() => {
     Promise.all([mwakwaData.brandSettings.filter({}, undefined, 1, 0), mwakwaData.navigationItems.filter({ is_enabled: true }, "sort_order", 100, 0)])
       .then(([brands, items]) => { setBrand(brands?.[0] || null); setLinks(items); }).catch(() => {});
@@ -40,7 +43,7 @@ const Footer = () => {
             <div>
               <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base">Platform</h3>
               <ul className="space-y-2 sm:space-y-3">
-                {(platformLinks.length ? platformLinks : [{label:"Discover Events",url:"/events"},{label:"My Events",url:"/organiser"}]).map((item:any) => (
+                {(platformLinks.length ? platformLinks : [{label:"Discover Events",url:"/events"},{label:"My Events",url:"/organiser"}]).map((item: NavItem) => (
                   <li key={item.id || item.url}><Link href={item.url} className="text-gray-600 hover:text-blue-500 text-xs sm:text-sm transition-colors">{item.label}</Link></li>
                 ))}
               </ul>
@@ -50,7 +53,7 @@ const Footer = () => {
             <div>
               <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base">Support</h3>
               <ul className="space-y-2 sm:space-y-3">
-                {supportLinks.length ? supportLinks.map((item:any) => (
+                {supportLinks.length ? supportLinks.map((item: NavItem) => (
                   <li key={item.id || item.url}><Link href={item.url} className="text-gray-600 hover:text-blue-500 text-xs sm:text-sm transition-colors">{item.label}</Link></li>
                 )) : <li><span className="text-gray-500 text-xs sm:text-sm">Support and legal pages are managed in CMS.</span></li>}
               </ul>
