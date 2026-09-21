@@ -86,7 +86,7 @@ function PaymentSuccessContent() {
             status: 'confirmed',
             userId: t.user_id,
             qrCode: t.qr_code_data,
-            orderId: data.payment?.id?.toString() || momoRef || sessionId || 'N/A',
+            orderId: String((data.payment as { id?: string } | undefined)?.id || momoRef || sessionId || 'N/A'),
             ticketStatus: 'active',
           }));
 
@@ -95,7 +95,7 @@ function PaymentSuccessContent() {
           return;
         }
 
-        if (['not_found', 'pending', 'no_tickets'].includes(data.status)) {
+        if (['not_found', 'pending', 'no_tickets'].includes(String(data.status || ''))) {
           console.log('⏳ Payment still processing, retrying...');
         } else if (data.status === 'failed') {
           setError('Payment failed. Please contact support.');

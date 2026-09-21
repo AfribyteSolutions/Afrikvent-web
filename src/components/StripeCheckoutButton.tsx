@@ -75,7 +75,7 @@ const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
 
       const response = await base44.functions.invoke('initiate-payment', { provider: 'stripe', customer_email: customerEmail, user_id: userId, tickets });
       const result = ((response as { data?: Record<string, unknown> }).data || response) as Record<string, unknown>;
-      if (result.error) throw new Error(result.error);
+      if (result.error) throw new Error(String(result.error));
       if (!result.checkout_url) throw new Error("No checkout URL received from server");
 
       console.log("🔗 Redirecting to Stripe Checkout:", result.checkout_url);
@@ -85,7 +85,7 @@ const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
 
       // Redirect to Stripe Checkout after a brief delay
       setTimeout(() => {
-        window.location.href = result.checkout_url;
+        window.location.href = String(result.checkout_url);
       }, 800);
 
     } catch (err) {

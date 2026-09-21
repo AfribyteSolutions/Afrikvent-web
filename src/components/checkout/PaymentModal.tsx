@@ -421,11 +421,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       setIsValidatingCode(true);
       setDiscountError('');
 
-      const response = await base44.functions.invoke('free-checkout', { event_id: String(eventId), ticket_type_id: String(selectedTicket.id), quantity, discount_code: discountCode });
-      const freeResult = ((response as { data?: { tickets?: GeneratedTicket[] } }).data || response) as { tickets?: GeneratedTicket[] };
-      const tickets = freeResult.tickets;
-      if (!tickets || tickets.length === 0) throw new Error('No tickets were generated');
-
       interface GeneratedTicket {
         id: number;
         qr_code_data: string;
@@ -438,6 +433,13 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         total: number;
         ticket_status: string;
       }
+
+      const response = await base44.functions.invoke('free-checkout', { event_id: String(eventId), ticket_type_id: String(selectedTicket.id), quantity, discount_code: discountCode });
+      const freeResult = ((response as { data?: { tickets?: GeneratedTicket[] } }).data || response) as { tickets?: GeneratedTicket[] };
+      const tickets = freeResult.tickets;
+      if (!tickets || tickets.length === 0) throw new Error('No tickets were generated');
+
+
 
       const enhancedTickets: EnhancedTicket[] = (tickets as GeneratedTicket[]).map((ticket) => ({
         id: ticket.id.toString(),
