@@ -35,6 +35,7 @@ export default function HomePage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
   const [siteSections, setSiteSections] = useState<Record<string, SiteSectionConfig>>({});
+  const [cmsLoaded, setCmsLoaded] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     location: "",
@@ -45,11 +46,12 @@ export default function HomePage() {
   useEffect(() => {
     mwakwaData.siteSections.filter({ page_slug: "home", is_enabled: true }, "sort_order", 100, 0)
       .then((rows) => setSiteSections(Object.fromEntries(rows.map((row) => [row.section_key, row as SiteSectionConfig]))))
-      .catch(() => setSiteSections({}));
+      .catch(() => setSiteSections({}))
+      .finally(() => setCmsLoaded(true));
   }, []);
 
   const hasCmsSections = Object.keys(siteSections).length > 0;
-  const sectionEnabled = (key: string) => !hasCmsSections || siteSections[key]?.is_enabled === true;
+  const sectionEnabled = (key: string) => !cmsLoaded || !hasCmsSections || siteSections[key]?.is_enabled === true;
   const sectionTitle = (key: string, fallback: string) => siteSections[key]?.title || fallback;
 
   const {
