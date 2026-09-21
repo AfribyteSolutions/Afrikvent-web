@@ -44,7 +44,7 @@ export default function HomePage() {
   });
 
   useEffect(() => {
-    mwakwaData.siteSections.filter({ page_slug: "home", is_enabled: true }, "sort_order", 100, 0)
+    mwakwaData.siteSections.filter({ page_slug: "home" }, "sort_order", 100, 0)
       .then((rows) => setSiteSections(Object.fromEntries(rows.map((row) => [row.section_key, row as SiteSectionConfig]))))
       .catch(() => setSiteSections({}))
       .finally(() => setCmsLoaded(true));
