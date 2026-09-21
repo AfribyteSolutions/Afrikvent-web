@@ -48,6 +48,12 @@
     "provider_transaction_id": {
       "type": "string"
     },
+    "provider_session_id": {
+      "type": "string"
+    },
+    "provider_checkout_url": {
+      "type": "string"
+    },
     "reference_number": {
       "type": "string"
     },
