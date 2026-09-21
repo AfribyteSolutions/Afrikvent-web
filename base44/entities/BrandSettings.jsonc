@@ -22,11 +22,37 @@
     "live_video_enabled": {
       "type": "boolean",
       "default": false
+    },
+    "paid_payments_enabled": {
+      "type": "boolean",
+      "default": false
+    },
+    "free_checkout_enabled": {
+      "type": "boolean",
+      "default": true
     }
   },
   "required": [
     "brand_name",
     "primary_domain"
   ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
   "name": "BrandSettings"
 }
