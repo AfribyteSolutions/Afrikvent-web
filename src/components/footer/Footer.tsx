@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import Image from "next/image";
-import { Facebook, Twitter, Instagram, Youtube } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -23,38 +22,6 @@ const Footer = () => {
             <p className="text-gray-600 text-xs sm:text-sm leading-relaxed max-w-md mb-4">
               Discover social events, connect around experiences, and get the access you need to show up.
             </p>
-            
-            {/* Social Links */}
-            <div className="flex space-x-3 sm:space-x-4 mt-4 sm:mt-6">
-              <Link 
-                href="https://facebook.com" 
-                target="_blank"
-                className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 hover:bg-blue-500 hover:text-white rounded-full flex items-center justify-center transition-all duration-200"
-              >
-                <Facebook className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </Link>
-              <Link 
-                href="https://twitter.com" 
-                target="_blank"
-                className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 hover:bg-blue-400 hover:text-white rounded-full flex items-center justify-center transition-all duration-200"
-              >
-                <Twitter className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </Link>
-              <Link 
-                href="https://instagram.com" 
-                target="_blank"
-                className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 hover:bg-pink-500 hover:text-white rounded-full flex items-center justify-center transition-all duration-200"
-              >
-                <Instagram className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </Link>
-              <Link 
-                href="https://youtube.com" 
-                target="_blank"
-                className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-100 hover:bg-red-500 hover:text-white rounded-full flex items-center justify-center transition-all duration-200"
-              >
-                <Youtube className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              </Link>
-            </div>
           </div>
 
           {/* Links Section - Two columns on mobile, stays same on larger screens */}
@@ -91,24 +58,19 @@ const Footer = () => {
               <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base">Support</h3>
               <ul className="space-y-2 sm:space-y-3">
                 <li>
-                  <Link href="/help" className="text-gray-600 hover:text-blue-500 text-xs sm:text-sm transition-colors">
-                    Help Center
-                  </Link>
+                  <span className="text-gray-500 text-xs sm:text-sm">
+                    Help Center — coming soon
+                  </span>
                 </li>
                 <li>
-                  <Link href="/contact" className="text-gray-600 hover:text-blue-500 text-xs sm:text-sm transition-colors">
-                    Contact Us
-                  </Link>
+                  <span className="text-gray-500 text-xs sm:text-sm">
+                    Contact — coming soon
+                  </span>
                 </li>
                 <li>
-                  <Link href="/privacy" className="text-gray-600 hover:text-blue-500 text-xs sm:text-sm transition-colors">
-                    Privacy Policy
-                  </Link>
-                </li>
-                <li>
-                  <Link href="/terms" className="text-gray-600 hover:text-blue-500 text-xs sm:text-sm transition-colors">
-                    Terms of Service
-                  </Link>
+                  <span className="text-gray-500 text-xs sm:text-sm">
+                    Privacy & Terms — publishing before launch
+                  </span>
                 </li>
               </ul>
             </div>
@@ -121,17 +83,9 @@ const Footer = () => {
             <p className="text-gray-500 text-xs sm:text-sm text-center sm:text-left">
               © {new Date().getFullYear()} Mwakwa. All rights reserved.
             </p>
-            <div className="flex items-center gap-4 sm:gap-6 text-xs sm:text-sm text-gray-500">
-              <Link href="/privacy" className="hover:text-gray-700 transition-colors">
-                Privacy
-              </Link>
-              <Link href="/terms" className="hover:text-gray-700 transition-colors">
-                Terms
-              </Link>
-              <Link href="/cookies" className="hover:text-gray-700 transition-colors">
-                Cookies
-              </Link>
-            </div>
+            <p className="text-gray-400 text-xs sm:text-sm text-center sm:text-right">
+              Legal pages will be published before public launch.
+            </p>
           </div>
         </div>
       </div>

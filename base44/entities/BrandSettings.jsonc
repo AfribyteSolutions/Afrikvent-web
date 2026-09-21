@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "properties": {
+    "brand_name": {
+      "type": "string"
+    },
+    "primary_domain": {
+      "type": "string"
+    },
+    "brand_origin": {
+      "type": "string"
+    },
+    "brand_meaning": {
+      "type": "string"
+    },
+    "platform_owner": {
+      "type": "string"
+    },
+    "live_video_provider": {
+      "type": "string"
+    },
+    "live_video_enabled": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "brand_name",
+    "primary_domain"
+  ],
+  "name": "BrandSettings"
+}
