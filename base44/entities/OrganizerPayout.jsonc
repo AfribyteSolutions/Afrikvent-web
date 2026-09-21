@@ -31,6 +31,16 @@
       "minimum": 0,
       "default": 0
     },
+    "reserve_held": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "negative_balance_offset": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
     "net_amount": {
       "type": "number",
       "minimum": 0
@@ -47,11 +57,21 @@
         "processing",
         "paid",
         "failed",
-        "held"
+        "held",
+        "cancelled"
       ],
       "default": "draft"
     },
+    "hold_reason": {
+      "type": "string"
+    },
+    "policy_snapshot": {
+      "type": "object"
+    },
     "provider_reference": {
+      "type": "string"
+    },
+    "idempotency_key": {
       "type": "string"
     },
     "paid_at": {
