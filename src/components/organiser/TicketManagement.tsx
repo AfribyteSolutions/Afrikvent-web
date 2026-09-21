@@ -1,15 +1,7 @@
 // src/components/organiser/TicketManagement.tsx
 'use client';
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
-import type { Database } from '@/types/database.types'; // Adjust path as needed
-
-// Use your actual database types
-type EventRow = Database['public']['Tables']['EVENTS']['Row'];
-type UserRow = Database['public']['Tables']['USERS']['Row'];
-type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
-type PaymentRow = Database['public']['Tables']['PAYMENTS']['Row'];
+import { mwakwaData, type MwakwaUser as User } from '@/lib/mwakwaBackend';
 
 interface TicketSale {
   id: number;
@@ -27,20 +19,6 @@ interface TicketSale {
 
 interface TicketManagementProps {
   user: User | null;
-}
-
-// Type for the joined query result
-interface SupabaseTicketWithJoins {
-  id: number;
-  quantity: string | null;
-  total: number | null;
-  unit_price: number | null;
-  ticket_status: string | null;
-  created_at: string;
-  EVENTS: EventRow[];
-  USERS: UserRow[];
-  TICKET_TYPES: TicketTypeRow[];
-  PAYMENTS: PaymentRow[];
 }
 
 const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
@@ -63,43 +41,29 @@ const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
     try {
       setLoading(true);
       
-      // Fetch tickets with related data
-      const { data: ticketsData, error } = await supabase
-        .from('TICKETS')
-        .select(`
-          id,
-          quantity,
-          total,
-          unit_price,
-          ticket_status,
-          created_at,
-          EVENTS!inner(title, event_date, organizer_id),
-          USERS!inner(name, email),
-          TICKET_TYPES(name),
-          PAYMENTS(payment_method, created_at)
-        `)
-        .eq('EVENTS.organizer_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching tickets:', error);
-        return;
-      }
-
-      // Transform data to match our interface
-      const transformedTickets: TicketSale[] = (ticketsData as SupabaseTicketWithJoins[])?.map(ticket => ({
-        id: ticket.id,
-        eventTitle: ticket.EVENTS?.[0]?.title || 'Unknown Event',
-        eventDate: ticket.EVENTS?.[0]?.event_date || '',
-        buyerName: ticket.USERS?.[0]?.name || 'Unknown',
-        buyerEmail: ticket.USERS?.[0]?.email || 'Unknown',
-        ticketType: ticket.TICKET_TYPES?.[0]?.name || 'General',
-        quantity: ticket.quantity || '1',
-        totalAmount: ticket.total || 0,
-        purchaseDate: ticket.created_at,
-        status: ticket.ticket_status as TicketSale['status'],
-        paymentMethod: ticket.PAYMENTS?.[0]?.payment_method || 'Unknown'
-      })) || [];
+      const [ticketsData, organizerEvents] = await Promise.all([
+        mwakwaData.tickets.filter({ organizer_id: user.id }, '-created_date'),
+        mwakwaData.events.filter({ organizer_id: user.id })
+      ]);
+      const eventMap = new Map(organizerEvents.map(event => [String(event.id), event]));
+      const transformedTickets: TicketSale[] = await Promise.all(ticketsData.map(async (ticket) => {
+        const event = eventMap.get(String(ticket.event_id));
+        const ticketType = ticket.ticket_type_id ? await mwakwaData.ticketTypes.get(String(ticket.ticket_type_id)).catch(() => null) : null;
+        const payments = await mwakwaData.payments.filter({ ticket_id: ticket.id }, '-created_date', 1, 0);
+        return {
+          id: Number(ticket.id),
+          eventTitle: event?.title || 'Unknown Event',
+          eventDate: event?.event_date || '',
+          buyerName: ticket.buyer_name || ticket.holder_name || 'Unknown',
+          buyerEmail: ticket.buyer_email || ticket.holder_email || 'Unknown',
+          ticketType: ticketType?.name || 'General',
+          quantity: String(ticket.quantity || 1),
+          totalAmount: Number(ticket.total || 0),
+          purchaseDate: ticket.created_date,
+          status: (ticket.ticket_status === 'confirmed' ? 'paid' : ticket.ticket_status) as TicketSale['status'],
+          paymentMethod: payments[0]?.payment_method || 'Unknown'
+        };
+      }));
 
       setTicketSales(transformedTickets);
 
@@ -187,19 +151,7 @@ const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
 
   const handleRefund = async (saleId: number) => {
     try {
-      const { error } = await supabase
-        .from('TICKETS')
-        .update({
-          ticket_status: 'refunded',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', saleId);
-
-      if (error) {
-        console.error('Error processing refund:', error);
-        alert('Failed to process refund');
-        return;
-      }
+      await mwakwaData.tickets.update(String(saleId), { ticket_status: 'refunded' });
 
       // Refresh data
       fetchTicketSales();
