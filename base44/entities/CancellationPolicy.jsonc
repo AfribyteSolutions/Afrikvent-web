@@ -4,19 +4,10 @@
     "name": {
       "type": "string"
     },
-    "scope": {
-      "type": "string",
-      "enum": [
-        "platform",
-        "organizer",
-        "event"
-      ],
-      "default": "platform"
-    },
-    "organizer_id": {
+    "template_code": {
       "type": "string"
     },
-    "event_id": {
+    "description": {
       "type": "string"
     },
     "event_cancellation_refund_mode": {
@@ -43,21 +34,29 @@
       "type": "integer",
       "minimum": 0
     },
-    "organizer_can_request_override": {
+    "organizer_liability": {
       "type": "boolean",
       "default": true
     },
-    "event_override_requires_admin_approval": {
-      "type": "boolean",
-      "default": true
+    "buyer_disclosure": {
+      "type": "string"
     },
     "is_active": {
       "type": "boolean",
       "default": false
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false
+    },
+    "sort_order": {
+      "type": "integer",
+      "default": 0
     }
   },
   "required": [
-    "name"
+    "name",
+    "template_code"
   ],
   "rls": {
     "create": {
