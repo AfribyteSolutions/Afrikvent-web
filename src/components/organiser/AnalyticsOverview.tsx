@@ -1,10 +1,9 @@
 // src/components/organiser/AnalyticsOverview.tsx
 'use client';
 import React, { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabaseClient';
+import { mwakwaData } from '@/lib/mwakwaBackend';
 import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
 import type { Database } from '@/types/database.types';
-import type { RealtimeChannel } from '@supabase/supabase-js';
 
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 
@@ -116,98 +115,15 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
   });
 
   const [toggleLoading, setToggleLoading] = useState<Record<number, boolean>>({});
-  const [realtimeChannel, setRealtimeChannel] = useState<RealtimeChannel | null>(null);
 
   useEffect(() => {
-    if (user) {
-      fetchAnalyticsData();
-      setupRealtimeSubscription();
-    }
-
-    return () => {
-      if (realtimeChannel) {
-        supabase.removeChannel(realtimeChannel);
-      }
-    };
-  }, [user]);
-
-  const setupRealtimeSubscription = () => {
     if (!user) return;
-
-    if (realtimeChannel) {
-      supabase.removeChannel(realtimeChannel);
-    }
-
-    const channel = supabase
-      .channel('analytics-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'PAYMENTS',
-        },
-        (payload) => {
-          console.log('Payment update detected:', payload);
-          handlePaymentUpdate(payload as RealtimePayload);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'TICKETS',
-        },
-        (payload) => {
-          console.log('Ticket update detected:', payload);
-          handleTicketUpdate(payload as RealtimePayload);
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'TICKET_TYPES',
-        },
-        (payload) => {
-          console.log('Ticket type update detected:', payload);
-          fetchAnalyticsData();
-        }
-      )
-      .subscribe();
-
-    setRealtimeChannel(channel);
-  };
-
-  const handlePaymentUpdate = async (payload: RealtimePayload) => {
-    if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-      const payment = payload.new;
-      const status = typeof payment?.payment_status === 'string' 
-        ? payment.payment_status.toUpperCase() 
-        : '';
-      
-      if (['SUCCESSFUL', 'COMPLETED', 'ACTIVE', 'PAID'].includes(status)) {
-        console.log('✅ Successful payment detected, refreshing analytics...');
-        await fetchAnalyticsData();
-      }
-    }
-  };
-
-  const handleTicketUpdate = async (payload: RealtimePayload) => {
-    if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-      const ticket = payload.new;
-      const status = typeof ticket?.ticket_status === 'string'
-        ? ticket.ticket_status.toUpperCase()
-        : '';
-      
-      if (['SUCCESSFUL', 'ACTIVE', 'CONFIRMED', 'VALID', 'PAID', 'USED'].includes(status)) {
-        console.log('🎟️ Ticket status updated, refreshing analytics...');
-        await fetchAnalyticsData();
-      }
-    }
-  };
+    fetchAnalyticsData();
+    const unsubPayments = mwakwaData.payments.subscribe(() => fetchAnalyticsData());
+    const unsubTickets = mwakwaData.tickets.subscribe(() => fetchAnalyticsData());
+    const unsubTicketTypes = mwakwaData.ticketTypes.subscribe(() => fetchAnalyticsData());
+    return () => { unsubPayments(); unsubTickets(); unsubTicketTypes(); };
+  }, [user]);
 
   const getCurrencySymbol = (currency: string): string => {
     switch (currency) {
@@ -251,49 +167,24 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     try {
       setAnalyticsData(prev => ({ ...prev, loading: true }));
 
-      const { data: eventsData } = await supabase
-        .from('EVENTS')
-        .select(`
-          id, 
-          title, 
-          event_status, 
-          event_date, 
-          created_at, 
-          currency,
-          TICKET_TYPES (
-            id,
-            quantity_available,
-            quantity_sold,
-            capacity
-          )
-        `)
-        .eq('organizer_id', user.id)
-        .order('created_at', { ascending: false });
-
-      const totalEvents = eventsData?.length || 0;
-      const typedEventsData = (eventsData || []) as EventWithTicketTypes[];
+      const rawEvents = await mwakwaData.events.filter({ organizer_id: user.id }, '-created_date');
+      const eventsData = await Promise.all(rawEvents.map(async event => ({
+        ...event,
+        created_at: event.created_date,
+        TICKET_TYPES: (await mwakwaData.ticketTypes.filter({ event_id: event.id })).map(tt => ({
+          id: tt.id, quantity_available: Math.max(Number(tt.max_quantity || 0) - Number(tt.tickets_sold || 0), 0),
+          quantity_sold: Number(tt.tickets_sold || 0), capacity: Number(tt.max_quantity || 0)
+        }))
+      })));
+      const totalEvents = eventsData.length;
+      const typedEventsData = eventsData as EventWithTicketTypes[];
       const primaryCurrency = getPrimaryCurrency(typedEventsData);
-
-      const { data: ticketsData } = await supabase
-        .from('TICKETS')
-        .select(`
-          total,
-          unit_price,
-          quantity,
-          ticket_status,
-          created_at,
-          event_id,
-          EVENTS!inner(id, title, organizer_id, currency),
-          USERS!inner(name)
-        `)
-        .eq('EVENTS.organizer_id', user.id);
-
-      const confirmedTickets = (ticketsData as SupabaseTicketWithJoins[] | null)?.filter(ticket => 
-        ticket.ticket_status === 'paid' || 
-        ticket.ticket_status === 'used' || 
-        ticket.ticket_status === 'active' ||
-        ticket.ticket_status === 'confirmed'
-      ) || [];
+      const eventMap = new Map(rawEvents.map(event => [String(event.id), event]));
+      const ticketsData = await mwakwaData.tickets.filter({ organizer_id: user.id });
+      const confirmedTickets = ticketsData.filter(ticket => ['confirmed', 'used'].includes(ticket.ticket_status || '')).map(ticket => {
+        const event = eventMap.get(String(ticket.event_id));
+        return { ...ticket, created_at: ticket.created_date, quantity: String(ticket.quantity || 1), EVENTS: event ? [event] : [], USERS: [{ name: ticket.buyer_name || ticket.holder_name || 'Unknown' }] };
+      }) as SupabaseTicketWithJoins[];
 
       const revenueByCurrency: Record<string, number> = {};
       confirmedTickets.forEach(ticket => {
@@ -438,15 +329,9 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
     try {
       const newStatus = currentStatus === 'draft' ? 'published' : 'draft';
       
-      const { error } = await supabase
-        .from('EVENTS')
-        .update({ event_status: newStatus })
-        .eq('id', eventId)
-        .eq('organizer_id', user.id);
-
-      if (error) {
-        throw error;
-      }
+      const event = await mwakwaData.events.get(String(eventId));
+      if (event.organizer_id !== user.id) throw new Error('Not authorized');
+      await mwakwaData.events.update(String(eventId), { event_status: newStatus });
 
       setAnalyticsData(prev => ({
         ...prev,
