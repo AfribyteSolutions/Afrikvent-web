@@ -21,7 +21,7 @@ const Footer = () => {
               />
             </Link>
             <p className="text-gray-600 text-xs sm:text-sm leading-relaxed max-w-md mb-4">
-              Discover, book, and stream African events worldwide. Your trusted platform for connecting with culture and community.
+              Discover social events, connect around experiences, and get the access you need to show up.
             </p>
             
             {/* Social Links */}
