@@ -17,7 +17,7 @@ const Header = () => {
   const [showSignUp, setShowSignUp] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
-  const [navItems, setNavItems] = useState<NavItem[]>([]);
+  const [navItems, setNavItems] = useState<NavItem[] | null>(null);
   const [brand, setBrand] = useState<BrandConfig | null>(null);
   const isAdmin = user?.role === "admin";
 
@@ -64,7 +64,7 @@ const Header = () => {
         <div className="flex items-center justify-between relative">
           {/* Left Nav (desktop) */}
           <nav className="hidden md:flex items-center space-x-6 text-black">
-            {(navItems.length ? navItems : [
+            {(navItems ?? [
               { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
             ]).map((item: NavItem) => (
               <Link key={item.id || item.url} href={item.url} className="hover:text-[#0052cc]">{item.label}</Link>
@@ -177,7 +177,7 @@ const Header = () => {
             <div className="h-full flex flex-col">
               <div className="flex-1 flex flex-col justify-center px-4">
                 <div className="flex flex-col items-center space-y-8">
-                  {(navItems.length ? navItems : [
+                  {(navItems ?? [
                     { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
                   ]).map((item: NavItem) => (
                     <Link key={item.id || item.url} href={item.url} onClick={closeMobileMenu} className="text-gray-700 hover:text-[#0052cc] font-medium text-2xl py-3">
