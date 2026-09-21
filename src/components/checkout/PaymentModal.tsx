@@ -3,12 +3,13 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CreditCard, Smartphone, ArrowLeft, Globe, Download, Share2, MoreHorizontal, CheckCircle } from 'lucide-react';
 import CheckoutButton from '@/components/CheckOutButton';
-import { User } from '@supabase/supabase-js';
+import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
 import { Database } from '@/types/database.types';
 import { EnhancedTicket } from '@/types/ticket';
 import { getCurrencyInfo } from '@/utils/currency';
 import StripeCheckoutButton from '@/components/StripeCheckoutButton';
-import { supabase } from '@/lib/supabaseClient';
+import { mwakwaData } from '@/lib/mwakwaBackend';
+import { base44 } from '@/api/base44Client';
 
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
 
@@ -327,22 +328,17 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     setDiscountError('');
 
     try {
-      const { data: discount, error } = await supabase
-        .from('DISCOUNT_CODES')
-        .select('*')
-        .eq('code', discountCode.toUpperCase())
-        .eq('event_id', eventId)
-        .eq('is_active', true)
-        .single();
+      const discounts = await mwakwaData.discountCodes.filter({ code: discountCode.toUpperCase(), event_id: String(eventId), is_active: true });
+      const discount = discounts[0];
 
-      if (error || !discount) {
+      if (!discount) {
         setAppliedDiscount(null);
         setDiscountError('Invalid discount code');
         return;
       }
 
       // Check usage limit
-      if (discount.max_uses && discount.current_uses >= discount.max_uses) {
+      if (discount.max_uses && discount.uses_count >= discount.max_uses) {
         setAppliedDiscount(null);
         setDiscountError('This discount code has reached its usage limit');
         return;
@@ -425,30 +421,10 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
       setIsValidatingCode(true);
       setDiscountError('');
 
-      const response = await fetch('/api/generate-free-tickets', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          user_id: user.id,
-          event_id: eventId,
-          ticket_type_id: selectedTicket.id,
-          quantity: quantity,
-          discount_code: discountCode,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate tickets');
-      }
-
-      const { tickets } = await response.json();
-
-      if (!tickets || tickets.length === 0) {
-        throw new Error('No tickets were generated');
-      }
+      const response = await base44.functions.invoke('free-checkout', { event_id: String(eventId), ticket_type_id: String(selectedTicket.id), quantity, discount_code: discountCode });
+      const freeResult = (response as { data?: any }).data || response;
+      const tickets = freeResult.tickets;
+      if (!tickets || tickets.length === 0) throw new Error('No tickets were generated');
 
       interface GeneratedTicket {
         id: number;
@@ -477,36 +453,9 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
         quantity: 1,
         totalPrice: 0,
         purchaseDate: ticket.created_at || new Date().toISOString(),
-        userName: user?.user_metadata?.name || user?.email || 'Guest',
+        userName: user?.display_name || user?.full_name || user?.email || 'Guest',
       }));
 
-      try {
-        const isVirtual = eventLocation?.toLowerCase().includes('online') || 
-                         eventLocation?.toLowerCase().includes('virtual') || 
-                         eventLocation?.toLowerCase().includes('zoom');
-
-        const ticketsWithAccessCodes = enhancedTickets.map(ticket => ({
-          id: ticket.id,
-          orderId: ticket.orderId,
-          ticketType: ticket.ticketType,
-          qrCode: ticket.qrCode,
-          accessCode: ticket.qrCode.slice(-6)
-        }));
-
-        await supabase.functions.invoke('send-ticket-email', {
-          body: {
-            userEmail: user.email,
-            userName: user?.user_metadata?.name || user?.email?.split('@')[0],
-            tickets: ticketsWithAccessCodes,
-            eventTitle: eventTitle,
-            eventDate: eventDate || new Date().toISOString(),
-            eventLocation: eventLocation || 'TBA',
-            isVirtual
-          }
-        });
-      } catch (emailError) {
-        console.error('Error sending email:', emailError);
-      }
 
       await handlePaymentSuccess(enhancedTickets);
 
@@ -543,35 +492,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
     setGeneratedTickets(tickets);
     setStep('success');
 
-    try {
-      const isVirtual = eventLocation?.toLowerCase().includes('online') || 
-                       eventLocation?.toLowerCase().includes('virtual') || 
-                       eventLocation?.toLowerCase().includes('zoom');
-
-      const ticketsWithAccessCodes = tickets.map(ticket => ({
-        id: ticket.id,
-        orderId: ticket.orderId,
-        ticketType: ticket.ticketType,
-        qrCode: ticket.qrCode,
-        accessCode: ticket.qrCode.slice(-6)
-      }));
-
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      
-      await supabase.functions.invoke('send-ticket-email', {
-        body: {
-          userEmail: currentUser?.email,
-          userName: currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0],
-          tickets: ticketsWithAccessCodes,
-          eventTitle: eventTitle,
-          eventDate: eventDate || new Date().toISOString(),
-          eventLocation: eventLocation || 'TBA',
-          isVirtual
-        }
-      });
-    } catch (emailError) {
-      console.error('Email send error:', emailError);
-    }
 
     if (onPaymentSuccess) {
       onPaymentSuccess(tickets);
