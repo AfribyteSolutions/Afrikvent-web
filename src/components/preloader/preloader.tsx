@@ -38,7 +38,7 @@ const Preloader: React.FC = () => {
       <div className="mb-12">
         <Image
           src="/images/logo.png"
-          alt="Afrikvent Logo"
+          alt="Mwakwa Logo"
           width={120}
           height={120}
           className="object-contain"
