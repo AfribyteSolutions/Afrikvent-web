@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/lib/supabaseClient";
-import type { AuthError, Provider } from "@supabase/supabase-js";
+import { mwakwaAuth } from "@/lib/mwakwaBackend";
 import { Eye, EyeOff, X, Mail, Lock, User, Phone } from "lucide-react";
 
 interface AuthModalProps {
@@ -45,80 +44,45 @@ const AuthModal: React.FC<AuthModalProps> = ({
           throw new Error("Password must be at least 6 characters");
         }
 
-        const { data, error: authError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { name, phone },
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
-
-        if (authError) throw authError;
-
-        if (data.user) {
-          // Only create user record if email confirmation is disabled
-          // Otherwise, this will be done in the callback after email confirmation
-          const { data: { user: currentUser } } = await supabase.auth.getUser();
-          
-          if (currentUser) {
-            await supabase.from("users").insert({
-              user_id: data.user.id,
-              name,
-              email,
-              phone,
-              role: "attendee",
-              is_active: true,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            });
-          }
+        const result = await mwakwaAuth.register(email, password);
+        const currentUser = await mwakwaAuth.me();
+        if (currentUser) {
+          await mwakwaAuth.updateMe({
+            display_name: name,
+            phone,
+            account_type: "attendee",
+            is_active: true,
+          });
         }
 
-        onSuccess(data.user?.email || "");
+        onSuccess(currentUser?.email || email);
         onClose();
         router.push("/");
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        
-        onSuccess(data.user?.email || "");
+        await mwakwaAuth.login(email, password);
+        const currentUser = await mwakwaAuth.me();
+        onSuccess(currentUser?.email || email);
         onClose();
         router.push("/");
       }
     } catch (err) {
-      const e = err as AuthError;
+      const e = err as Error;
       setError(e.message);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSocialAuth = async (provider: Provider) => {
+  const handleSocialAuth = async (provider: "google") => {
     try {
       setLoading(true);
       setError("");
       
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        },
-      });
-      
-      if (error) throw error;
-      
-      // The redirect will happen automatically
-      // Don't set loading to false here as the page will redirect
+      if (provider === "google") {
+        await mwakwaAuth.loginWithGoogle(`${window.location.origin}/profile`);
+      }
     } catch (err) {
-      const e = err as AuthError;
+      const e = err as Error;
       setError(e.message);
       setLoading(false);
     }
