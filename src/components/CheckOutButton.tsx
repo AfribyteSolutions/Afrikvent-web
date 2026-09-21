@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Loader2,
@@ -8,7 +8,7 @@ import {
   Smartphone,
 } from "lucide-react";
 
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { base44 } from "@/api/base44Client";
 import { EnhancedTicket } from "@/types/ticket";
 
 interface FunctionResponseData {
@@ -46,19 +46,6 @@ interface CheckoutButtonProps {
   ticketPrice: number; 
 }
 
-const useSupabaseClient = (): SupabaseClient | null => {
-  return useMemo(() => {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-    if (supabaseUrl && supabaseAnonKey) {
-        return createClient(supabaseUrl, supabaseAnonKey);
-    }
-    return null;
-  }, []);
-};
-
-
 const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   ticketId,
   userId,
@@ -82,7 +69,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [selectedMethod, setSelectedMethod] = useState<'mobile_money' | 'stripe'>(paymentMethod);
 
-  const supabase = useSupabaseClient();
   
   const handleMobileMoneyCheckout = async () => {
     try {
@@ -90,10 +76,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("Missing required information: userId, phone, or ticketId");
       }
       
-      if (!supabase) {
-        throw new Error("Supabase client not initialized. Check Supabase URL and Key.");
-      }
-  
       const phoneRegex = /^(\+?[1-9]\d{2})[1-9]\d{7,9}$/;
       if (!phoneRegex.test(phone.replace(/\s+/g, ""))) {
         throw new Error(
@@ -117,16 +99,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   
       console.log("Invoking Edge Function with body:", functionBody);
   
-      const { data, error: funcError } = await supabase.functions.invoke<FunctionResponseData>('initiate-payment-url', {
-        body: functionBody,
-      });
-  
-      if (funcError) {
-        console.error("Supabase Functions Error:", funcError);
-        throw new Error(funcError.message || `Payment service error: ${funcError.status}`);
-      }
-  
-      const result = data;
+      const response = await base44.functions.invoke('initiate-payment', { provider: 'fapshi', ...functionBody });
+      const result = (response as { data?: FunctionResponseData }).data || response as FunctionResponseData;
   
       if (result?.error) {
         throw new Error(result.error);
@@ -191,10 +165,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("Ticket price is missing or invalid.");
       }
       
-      if (!supabase) {
-        throw new Error("Supabase client not initialized. Check configuration.");
-      }
-
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(userEmail)) {
         throw new Error("Please provide a valid email address");
@@ -214,21 +184,8 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         tickets,
       });
 
-      const { data, error: funcError } = await supabase.functions.invoke<FunctionResponseData>('initiate-payment-url', {
-        body: {
-          user_id: userId,
-          email: userEmail,
-          payment_method: "stripe",
-          tickets,
-        },
-      });
-
-      if (funcError) {
-        console.error("Supabase Functions Error:", funcError);
-        throw new Error(funcError.message || `API error: ${funcError.status}`);
-      }
-
-      const result = data;
+      const response = await base44.functions.invoke('initiate-payment', { provider: 'stripe', user_id: userId, email: userEmail, tickets });
+      const result = (response as { data?: FunctionResponseData }).data || response as FunctionResponseData;
       console.log("Stripe payment result:", result);
 
       if (result?.error) {

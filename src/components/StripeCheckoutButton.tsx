@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, CreditCard, CheckCircle, AlertCircle } from "lucide-react";
+import { base44 } from "@/api/base44Client";
 
 interface StripeCheckoutButtonProps {
   ticketId: number;
@@ -72,34 +73,10 @@ const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
         quantity,
       });
 
-      // Call your Supabase edge function via your API route
-      const response = await fetch("/api/initiate-stripe-payment", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          return_url: `${window.location.origin}/payment-success`,
-          customer_email: customerEmail,
-          user_id: userId,
-          tickets,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `API error: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      console.log("✅ Stripe checkout response:", result);
-
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      // Check if we got the checkout URL
-      if (!result.checkout_url) {
-        throw new Error("No checkout URL received from server");
-      }
+      const response = await base44.functions.invoke('initiate-payment', { provider: 'stripe', customer_email: customerEmail, user_id: userId, tickets });
+      const result = (response as { data?: any }).data || response;
+      if (result.error) throw new Error(result.error);
+      if (!result.checkout_url) throw new Error("No checkout URL received from server");
 
       console.log("🔗 Redirecting to Stripe Checkout:", result.checkout_url);
 
