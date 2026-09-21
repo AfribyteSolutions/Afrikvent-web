@@ -560,6 +560,16 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
               </div>
             </div>
                   
+            {((event as any).refund_policy_snapshot || (event as any).cancellation_policy_snapshot) && (
+              <div className="bg-white rounded-2xl shadow-sm p-6 mb-6">
+                <h2 className="text-xl font-semibold text-gray-900 mb-4">Ticket & event policies</h2>
+                <div className="space-y-4 text-sm">
+                  {(event as any).refund_policy_snapshot && <div><div className="font-semibold text-gray-900">{(event as any).refund_policy_snapshot.name}</div><p className="text-gray-600 mt-1">{(event as any).refund_policy_snapshot.buyer_disclosure || (event as any).refund_policy_snapshot.description}</p></div>}
+                  {(event as any).cancellation_policy_snapshot && <div><div className="font-semibold text-gray-900">Cancellation & postponement</div><p className="text-gray-600 mt-1">{(event as any).cancellation_policy_snapshot.buyer_disclosure || (event as any).cancellation_policy_snapshot.description}</p></div>}
+                </div>
+              </div>
+            )}
+
             {event.ticketTypes.length > 0 && (
               <div className="mb-8">
                 <h2 className="text-xl font-semibold text-gray-900 mb-6">Select Tickets</h2>
