@@ -281,16 +281,14 @@ export default function HomePage() {
         <VideoSlider 
           slides={siteSections.hero?.media_url ? [{ src: siteSections.hero.media_url }] : slides}
           mobileVideoSrc={siteSections.hero?.mobile_media_url || mobileVideoSrc}
+          title={siteSections.hero?.title || "Discover Amazing Events"}
+          subtitle={siteSections.hero?.subtitle || siteSections.hero?.body || "Find the perfect event for you - from conferences to concerts, workshops to festivals"}
           interval={4000} 
           onSearch={handleSearch}
           searchQuery={searchQuery}
           onSearchQueryChange={setSearchQuery}
           isSearching={isSearching}
         />
-        {(siteSections.hero?.title || siteSections.hero?.subtitle) && <div className="absolute inset-x-0 top-24 z-20 text-center text-white px-4 pointer-events-none">
-          {siteSections.hero?.title && <h1 className="text-3xl md:text-5xl font-bold drop-shadow-lg">{siteSections.hero.title}</h1>}
-          {siteSections.hero?.subtitle && <p className="mt-3 text-base md:text-xl drop-shadow-lg">{siteSections.hero.subtitle}</p>}
-        </div>}
       </section>}
 
       {/* CMS-controlled homepage blocks */}
