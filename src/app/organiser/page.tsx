@@ -1,8 +1,7 @@
 // src/app/organiser/page.tsx
 'use client';
 import React, { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import type { User } from "@supabase/supabase-js";
+import { mwakwaAuth, mwakwaData, type MwakwaUser } from "@/lib/mwakwaBackend";
 import DashboardStats from "@/components/organiser/DashboardStats";
 import EventsList from "@/components/organiser/EventsList";
 import CreateEventModal from "@/components/organiser/CreateEventModal";
@@ -19,7 +18,7 @@ export default function OrganiserPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<MwakwaUser | null>(null);
   const [userProfile, setUserProfile] = useState<{ name: string; email: string } | null>(null);
   const [organizerProfile, setOrganizerProfile] = useState<OrganizerProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -27,55 +26,30 @@ export default function OrganiserPage() {
 
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        
-        const { data: profile } = await supabase
-          .from('USERS')
-          .select('name, email')
-          .eq('user_id', session.user.id)
-          .single();
-        
+      const currentUser = await mwakwaAuth.me();
+      if (currentUser) {
+        setUser(currentUser);
         setUserProfile({
-          name: profile?.name || session.user.user_metadata?.name || session.user.email?.split('@')[0] || 'Organiser',
-          email: profile?.email || session.user.email || ''
+          name: currentUser.display_name || currentUser.full_name || currentUser.email?.split('@')[0] || 'Organiser',
+          email: currentUser.email || '',
         });
-
-        await fetchOrganizerProfile(session.user.id);
+        await fetchOrganizerProfile(currentUser.id);
       }
       setLoading(false);
     };
 
     getCurrentUser();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        setUser(session.user);
-        fetchOrganizerProfile(session.user.id);
-      } else {
-        setUser(null);
-        setUserProfile(null);
-        setOrganizerProfile(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
   const fetchOrganizerProfile = async (userId: string) => {
     setProfileLoading(true);
     try {
-      const { data: orgProfile, error } = await supabase
-        .from('ORGANIZER_KYC')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching organizer profile:', error);
-      } else if (orgProfile) {
+      const profiles = await mwakwaData.organizerProfiles.filter({ user_id: userId }, undefined, 1, 0);
+      const orgProfile = profiles[0];
+      if (orgProfile) {
         setOrganizerProfile(orgProfile as OrganizerProfile);
+      } else {
+        setOrganizerProfile(null);
       }
     } catch (error) {
       console.error('Error fetching organizer profile:', error);
