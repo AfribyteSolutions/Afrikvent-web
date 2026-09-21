@@ -1,17 +1,42 @@
 {
+  "type": "object",
   "properties": {
     "role": {
       "type": "string",
-      "description": "The role of the user in the app",
+      "description": "Base44 platform role",
       "enum": [
         "admin",
         "user"
       ]
+    },
+    "display_name": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "avatar_url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "account_type": {
+      "type": "string",
+      "enum": [
+        "attendee",
+        "organizer"
+      ],
+      "default": "attendee"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "legacy_supabase_user_id": {
+      "type": "string"
     }
   },
   "required": [
     "role"
   ],
-  "name": "User",
-  "type": "object"
+  "name": "User"
 }
