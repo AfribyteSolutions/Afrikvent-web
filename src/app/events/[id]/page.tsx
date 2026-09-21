@@ -2,9 +2,8 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { supabase } from '@/lib/supabaseClient';
+import { mwakwaAuth, mwakwaData, type MwakwaUser as User } from '@/lib/mwakwaBackend';
 import { Database } from '@/types/database.types';
-import { User } from '@supabase/supabase-js';
 import { EnhancedTicket } from '@/types/ticket';
 import PaymentModal from '@/components/checkout/PaymentModal';
 import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
@@ -146,8 +145,8 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      const currentUser = await mwakwaAuth.me();
+      setUser(currentUser);
     };
 
     getCurrentUser();
@@ -162,57 +161,16 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
       setLoading(true);
       setError(null);
 
-      const { data: simpleEventData, error: simpleError } = await supabase
-        .from('EVENTS')
-        .select('*')
-        .eq('id', eventId);
-
-      if (simpleError) {
-        setError(`Database error: ${simpleError.message}`);
-        return;
-      }
-
-      if (!simpleEventData || simpleEventData.length === 0) {
-        setError('Event not found in database');
-        return;
-      }
-
-      const eventData = simpleEventData[0];
-
-      const { data: organizerData } = await supabase
-        .from('USERS')
-        .select('*')
-        .eq('user_id', eventData.organizer_id)
-        .single();
-
-      let organizationName = null;
-      try {
-        const { data: kycData } = await supabase
-          .from('ORGANIZER_KYC')
-          .select('organization_name')
-          .eq('user_id', eventData.organizer_id)
-          .single();
-        
-        organizationName = kycData?.organization_name || null;
-      } catch (error) {
-        console.log('No organization data found');
-      }
-
-      const { data: ticketTypes } = await supabase
-        .from('TICKET_TYPES')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('price', { ascending: true });
-
-      const { data: comments } = await supabase
-        .from('EVENT_COMMENTS')
-        .select(`
-          *,
-          USERS (*)
-        `)
-        .eq('event_id', eventId)
-        .eq('is_deleted', false)
-        .order('created_at', { ascending: true });
+      const rawEvent = await mwakwaData.events.get(String(eventId));
+      if (!rawEvent) { setError('Event not found'); return; }
+      const eventData = { ...rawEvent, id: Number(rawEvent.id), created_at: rawEvent.created_date, updated_at: rawEvent.updated_date };
+      const organizerData = null;
+      const kyc = await mwakwaData.organizerProfiles.filter({ user_id: rawEvent.organizer_id }, undefined, 1, 0);
+      const organizationName = kyc[0]?.organization_name || null;
+      const rawTicketTypes = await mwakwaData.ticketTypes.filter({ event_id: String(rawEvent.id) }, 'price');
+      const ticketTypes = rawTicketTypes.map(ticket => ({ ...ticket, id: Number(ticket.id), event_id: Number(ticket.event_id), max_quatity: Math.max(0, Number(ticket.max_quantity || 0) - Number(ticket.sold_quantity || 0)), quantity_sold: Number(ticket.sold_quantity || 0), created_at: ticket.created_date, updated_at: ticket.updated_date }));
+      const rawComments = await mwakwaData.eventComments.filter({ event_id: String(rawEvent.id), is_deleted: false }, 'created_date');
+      const comments = rawComments.map((comment: any) => ({ ...comment, id: Number(comment.id), event_id: Number(comment.event_id), created_at: comment.created_date, updated_at: comment.updated_date, USERS: comment.user_name ? { name: comment.user_name } : null }));
 
       setEvent({
         ...eventData,
@@ -250,15 +208,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
 
     try {
       setSubmittingComment(true);
-      const { error } = await supabase
-        .from('EVENT_COMMENTS')
-        .insert({
-          event_id: event.id,
-          user_id: user.id,
-          message: newComment.trim()
-        });
-
-      if (error) throw error;
+      await mwakwaData.eventComments.create({ event_id: String(event.id), user_id: user.id, user_name: user.display_name || user.full_name || user.email || 'User', message: newComment.trim(), is_deleted: false });
 
       setNewComment('');
       await fetchEventDetails();
@@ -290,15 +240,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     if (!confirm('Are you sure you want to delete this comment?')) return;
 
     try {
-      const { error } = await supabase
-        .from('EVENT_COMMENTS')
-        .delete()
-        .eq('id', commentId);
-
-      if (error) {
-        console.error('Delete error:', error);
-        throw error;
-      }
+      await mwakwaData.eventComments.delete(String(commentId));
 
       setEvent(prevEvent => {
         if (!prevEvent) return null;

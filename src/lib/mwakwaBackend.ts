@@ -40,6 +40,7 @@ export const mwakwaData = {
   comments: base44.entities.EventComment,
   savedEvents: base44.entities.SavedEvent,
   discountCodes: base44.entities.DiscountCode,
+  eventComments: base44.entities.EventComment,
   promotionBanners: base44.entities.PromotionBanner,
 };
 
