@@ -150,7 +150,7 @@ const Header = () => {
                 </button>
                 <button
                   onClick={() => setShowSignIn(true)}
-                  className="px-3 py-1.5 text-blue-600 rounded-full border border-blue-600 text-sm hover:bg-blue-50"
+                  className="px-3 py-1.5 cms-primary-text rounded-full border text-sm hover:bg-gray-50" style={{ borderColor: "var(--mwakwa-primary)" }}
                 >
                   Sign In
                 </button>
@@ -226,7 +226,7 @@ const Header = () => {
                     >
                       Manage Profile
                     </Link>
-                    {isAdmin && <Link href="/admin/cms" onClick={closeMobileMenu} className="px-8 py-3 text-blue-600 rounded-full border border-blue-600 text-lg hover:bg-blue-50 w-full max-w-sm text-center">CMS</Link>}
+                    {isAdmin && <Link href="/admin/cms" onClick={closeMobileMenu} className="px-8 py-3 cms-primary-text rounded-full border text-lg hover:bg-gray-50 w-full max-w-sm text-center" style={{ borderColor: "var(--mwakwa-primary)" }}>CMS</Link>}
                     <button
                       onClick={handleSignOut}
                       className="px-8 py-3 text-red-600 rounded-full border border-red-600 text-lg hover:bg-red-50 w-full max-w-sm"
@@ -250,7 +250,7 @@ const Header = () => {
                         setShowSignIn(true);
                         closeMobileMenu();
                       }}
-                      className="px-8 py-3 text-blue-600 rounded-full border border-blue-600 text-lg hover:bg-blue-50 w-full max-w-sm"
+                      className="px-8 py-3 cms-primary-text rounded-full border text-lg hover:bg-gray-50 w-full max-w-sm" style={{ borderColor: "var(--mwakwa-primary)" }}
                     >
                       Sign In
                     </button>
