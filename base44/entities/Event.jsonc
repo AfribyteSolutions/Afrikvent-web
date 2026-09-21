@@ -103,6 +103,16 @@
       "type": "string",
       "format": "date-time"
     },
+    "refund_policy_id": {
+      "type": "string"
+    },
+    "refund_policy_snapshot": {
+      "type": "object"
+    },
+    "refund_policy_accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "legacy_supabase_id": {
       "type": "string"
     }
