@@ -1,0 +1,107 @@
+{
+  "type": "object",
+  "properties": {
+    "event_id": {
+      "type": "string"
+    },
+    "ticket_type_id": {
+      "type": "string"
+    },
+    "buyer_id": {
+      "type": "string"
+    },
+    "buyer_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "organizer_id": {
+      "type": "string"
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1
+    },
+    "unit_price": {
+      "type": "number",
+      "minimum": 0
+    },
+    "total": {
+      "type": "number",
+      "minimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "default": "XAF"
+    },
+    "ticket_status": {
+      "type": "string",
+      "enum": [
+        "reserved",
+        "confirmed",
+        "cancelled",
+        "used",
+        "refunded"
+      ],
+      "default": "reserved"
+    },
+    "qr_code_data": {
+      "type": "string"
+    },
+    "payment_id": {
+      "type": "string"
+    },
+    "used_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scanned_by": {
+      "type": "string"
+    },
+    "legacy_supabase_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_id",
+    "ticket_type_id",
+    "buyer_id",
+    "organizer_id"
+  ],
+  "rls": {
+    "create": false,
+    "read": {
+      "$or": [
+        {
+          "data.buyer_id": "{{user.id}}"
+        },
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "Ticket"
+}
