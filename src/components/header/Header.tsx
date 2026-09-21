@@ -89,7 +89,7 @@ const Header = () => {
                   <span className="w-7 h-7 rounded-full overflow-hidden">
                     {user.avatar_url ? (
                       <Image
-                        src={user.user_metadata.avatar_url}
+                        src={user.avatar_url!}
                         alt="Profile Picture"
                         width={28}
                         height={28}
@@ -202,7 +202,7 @@ const Header = () => {
                       <span className="w-8 h-8 rounded-full overflow-hidden">
                         {user.avatar_url ? (
                           <Image
-                            src={user.user_metadata.avatar_url}
+                            src={user.avatar_url!}
                             alt="Profile"
                             width={32}
                             height={32}
