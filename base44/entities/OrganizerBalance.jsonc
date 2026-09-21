@@ -20,6 +20,11 @@
       "type": "number",
       "default": 0
     },
+    "negative_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
     "lifetime_gross": {
       "type": "number",
       "default": 0
@@ -31,6 +36,17 @@
     "lifetime_fees": {
       "type": "number",
       "default": 0
+    },
+    "payouts_frozen": {
+      "type": "boolean",
+      "default": false
+    },
+    "freeze_reason": {
+      "type": "string"
+    },
+    "last_reconciled_at": {
+      "type": "string",
+      "format": "date-time"
     }
   },
   "required": [
