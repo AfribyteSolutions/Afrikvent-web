@@ -184,6 +184,19 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     }
   };
 
+  const [cancellationPolicies, setCancellationPolicies] = useState<any[]>([]);
+  const [selectedCancellationPolicyId, setSelectedCancellationPolicyId] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    mwakwaData.cancellationPolicies.list('sort_order', 50, 0).then((rows: any[]) => {
+      const active = rows.filter(r => r.is_active !== false);
+      setCancellationPolicies(active);
+      const preferred = active.find(r => r.is_default) || active[0];
+      setSelectedCancellationPolicyId(prev => prev || preferred?.id || '');
+    }).catch(() => setCancellationPolicies([]));
+  }, [isOpen]);
+
   const handleSubmit = async () => {
     if (!user) {
       setError('User not authenticated');
@@ -195,6 +208,20 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
   
     try {
       const imageUrl = formData.image ? await uploadEventImage() : null;
+      const selectedPolicy = cancellationPolicies.find(p => p.id === selectedCancellationPolicyId);
+      if (!selectedPolicy) throw new Error('Please select an event cancellation policy');
+      const policySnapshot = {
+        id: selectedPolicy.id,
+        template_code: selectedPolicy.template_code,
+        name: selectedPolicy.name,
+        description: selectedPolicy.description,
+        event_cancellation_refund_mode: selectedPolicy.event_cancellation_refund_mode,
+        postponement_mode: selectedPolicy.postponement_mode,
+        postponement_refund_window_hours: selectedPolicy.postponement_refund_window_hours,
+        organizer_liability: selectedPolicy.organizer_liability,
+        buyer_disclosure: selectedPolicy.buyer_disclosure,
+        snapshotted_at: new Date().toISOString(),
+      };
       const eventData = await mwakwaData.events.create({
         title: formData.title,
         description: formData.description,
@@ -210,6 +237,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
         images: imageUrl ? [imageUrl] : [],
         is_featured: false,
         is_sponsored: false,
+        cancellation_policy_id: selectedPolicy.id,
+        cancellation_policy_snapshot: policySnapshot,
+        cancellation_policy_accepted_at: new Date().toISOString(),
       });
       const eventId = eventData.id;
 
