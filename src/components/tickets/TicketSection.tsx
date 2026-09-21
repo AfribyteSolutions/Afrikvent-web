@@ -2,7 +2,7 @@
 "use client";
 import React, { useState, useEffect, useMemo } from "react";
 import { Calendar, Search, Filter, Download, Share2, Copy, Eye, Grid, List } from "lucide-react";
-import { supabase } from "@/lib/supabaseClient";
+import { mwakwaData } from "@/lib/mwakwaBackend";
 import { TicketCard } from "./TicketCard";
 
 // Database types
@@ -191,128 +191,19 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
         setDbLoading(true);
         setDbError(null);
 
-        const { data: tickets, error: ticketsError } = await supabase
-          .from("TICKETS")
-          .select("*, qr_code_data")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false });
-
-        if (ticketsError) {
-          console.error("Supabase tickets error:", ticketsError);
-          throw ticketsError;
-        }
-
-        if (!tickets || tickets.length === 0) {
-          setDbUserTickets([]);
-          return;
-        }
-
-        const ticketTypeIds = [...new Set(tickets.map(t => t.ticket_type_id).filter(Boolean))];
-        
-        const { data: ticketTypes, error: typesError } = await supabase
-            .from("TICKET_TYPES")
-            .select(`
-              id,
-              name,
-              event_id,
-              format,
-              EVENTS(
-                id,
-                title,
-                event_date,
-                location_name,
-                start_time
-              )
-            `)
-            .in("id", ticketTypeIds);
-        if (typesError) {
-          console.error("Ticket types error:", typesError);
-          throw typesError;
-        }
-        // ADD THIS:
-console.log('Raw ticketTypes from database:', ticketTypes);
-ticketTypes?.forEach(tt => {
-  console.log(`Ticket Type ${tt.id}: format="${tt.format}" (type: ${typeof tt.format})`);
-});
-
-        interface EventData {
-          id?: number;
-          title?: string;
-          event_date?: string;
-          location_name?: string;
-          start_time?: string;
-        }
-
-        interface TypeData {
-          name: string;
-          format?: 'in-person' | 'online';
-          event: EventData;
-        }
-
-        // In TicketsSection.tsx, replace the typeMap building section with this:
-
-const typeMap = new Map<number, TypeData>();
-ticketTypes?.forEach(type => {
-  if (type.EVENTS && !Array.isArray(type.EVENTS)) {
-    // CRITICAL FIX: Explicitly cast and default the format field
-    const ticketFormat = (type.format as string)?.toLowerCase().trim() === 'online' 
-  ? 'online' as const
-  : 'in-person' as const;
-    
-    console.log(`Building typeMap for ticket type ${type.id}:`, {
-      name: type.name,
-      rawFormat: type.format,
-      processedFormat: ticketFormat
-    });
-    
-    typeMap.set(type.id, {
-      name: type.name || "General",
-      format: ticketFormat,
-      event: type.EVENTS as EventData
-    });
-  }
-});
-
-// Later when mapping tickets, add logging:
-const transformedTickets: UserTicket[] = tickets
-  .map((ticket) => {
-    const typeData = typeMap.get(ticket.ticket_type_id);
-    
-    if (!typeData) {
-      return null;
-    }
-
-    console.log(`Mapping ticket ${ticket.id}:`, {
-      ticket_type_id: ticket.ticket_type_id,
-      format_from_typeData: typeData.format
-    });
-
-    const mapped: UserTicket = {
-      id: ticket.id.toString(),
-      eventId: typeData.event.id?.toString() ?? "",
-      eventTitle: typeData.event.title ?? "Unknown Event",
-      eventDate: typeData.event.event_date ?? "",
-      eventTime: typeData.event.start_time ?? "TBD",
-      eventLocation: typeData.event.location_name ?? "",
-      ticketType: typeData.name ?? "General",
-      ticketFormat: typeData.format, // This should now work
-      quantity: parseInt(ticket.quantity ?? "1", 10),
-      totalPrice: ticket.total ?? 0,
-      purchaseDate: ticket.created_at ?? new Date().toISOString(),
-      status: (ticket.ticket_status as UserTicket["status"]) ?? "confirmed",
-      userId: ticket.user_id ?? "",
-      qrCodeData: ticket.qr_code_data ?? undefined,
-    };
-
-    return mapped;
-  })
-  .filter((ticket): ticket is UserTicket => ticket !== null);
-
-console.log('Final transformed tickets:', transformedTickets.map(t => ({
-  id: t.id,
-  ticketFormat: t.ticketFormat,
-  eventTitle: t.eventTitle
-})));
+        const tickets = await mwakwaData.tickets.filter({ user_id: userId }, '-created_date');
+        if (!tickets.length) { setDbUserTickets([]); return; }
+        const transformedTickets: UserTicket[] = await Promise.all(tickets.map(async ticket => {
+          const type = ticket.ticket_type_id ? await mwakwaData.ticketTypes.get(String(ticket.ticket_type_id)).catch(() => null) : null;
+          const event = await mwakwaData.events.get(String(ticket.event_id)).catch(() => null);
+          return {
+            id: String(ticket.id), eventId: String(event?.id || ticket.event_id || ''), eventTitle: event?.title || 'Unknown Event',
+            eventDate: event?.event_date || '', eventTime: event?.start_time || 'TBD', eventLocation: event?.location_name || '',
+            ticketType: type?.name || 'General', ticketFormat: type?.format === 'online' ? 'online' as const : 'in-person' as const,
+            quantity: Number(ticket.quantity || 1), totalPrice: Number(ticket.total || 0), purchaseDate: ticket.created_date || new Date().toISOString(),
+            status: (ticket.ticket_status as UserTicket['status']) || 'confirmed', userId: ticket.user_id || '', qrCodeData: ticket.qr_code_data || undefined
+          };
+        }));
 
         setDbUserTickets(transformedTickets);
       } catch (err) {
