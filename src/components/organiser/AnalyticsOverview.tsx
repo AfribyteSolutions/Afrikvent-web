@@ -24,7 +24,7 @@ interface AnalyticsOverviewProps {
   detailed?: boolean;
 }
 
-interface SupabaseTicketWithJoins {
+interface TicketWithJoins {
   total: number | null;
   unit_price: number | null;
   quantity: string | null;
@@ -184,7 +184,7 @@ const AnalyticsOverview: React.FC<AnalyticsOverviewProps> = ({ user, detailed = 
       const confirmedTickets = ticketsData.filter(ticket => ['confirmed', 'used'].includes(ticket.ticket_status || '')).map(ticket => {
         const event = eventMap.get(String(ticket.event_id));
         return { ...ticket, created_at: ticket.created_date, quantity: String(ticket.quantity || 1), EVENTS: event ? [event] : [], USERS: [{ name: ticket.buyer_name || ticket.holder_name || 'Unknown' }] };
-      }) as SupabaseTicketWithJoins[];
+      }) as TicketWithJoins[];
 
       const revenueByCurrency: Record<string, number> = {};
       confirmedTickets.forEach(ticket => {

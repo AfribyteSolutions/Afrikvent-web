@@ -390,7 +390,7 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
                   ticketTypeName,
                 },
                 env_check: {
-                  has_supabase_url: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+                  backend: 'Base44',
                 },
                 timestamp: new Date().toISOString(),
               },

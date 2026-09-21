@@ -25,7 +25,7 @@ export interface Event {
   ticketOptions?: TicketOption[];
 }
 
-// Database types from Supabase
+// Legacy-compatible event database types
 export interface DatabaseEvent {
   id: number;
   title: string;

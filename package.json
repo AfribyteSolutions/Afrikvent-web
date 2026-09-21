@@ -11,8 +11,6 @@
   "dependencies": {
     "@base44/sdk": "^0.8.48",
     "@heroicons/react": "^2.2.0",
-    "@supabase/auth-helpers-react": "^0.5.0",
-    "@supabase/supabase-js": "^2.74.0",
     "framer-motion": "^12.23.12",
     "lucide-react": "^0.542.0",
     "next": "15.5.25",

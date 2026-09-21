@@ -1,7 +1,7 @@
 // utils/userUtils.ts
 import { User } from "@/types";
 
-export function transformSupabaseUser(user: User | null) {
+export function transformLegacyUser(user: User | null) {
   if (!user) return null;
   
   return {
