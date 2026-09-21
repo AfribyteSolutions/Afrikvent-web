@@ -43,6 +43,7 @@ export const mwakwaData = {
   eventComments: base44.entities.EventComment,
   promotionBanners: base44.entities.PromotionBanner,
   brandSettings: base44.entities.BrandSettings,
+  platformSettings: base44.entities.PlatformSettings,
 };
 
 export const mwakwaFiles = {
