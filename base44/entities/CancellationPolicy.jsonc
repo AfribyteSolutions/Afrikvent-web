@@ -24,6 +24,7 @@
       "enum": [
         "full",
         "ticket_price_only",
+        "credit",
         "manual"
       ],
       "default": "manual"
@@ -33,9 +34,22 @@
       "enum": [
         "tickets_remain_valid",
         "offer_refund",
+        "offer_credit",
         "manual"
       ],
       "default": "manual"
+    },
+    "postponement_refund_window_hours": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "organizer_can_request_override": {
+      "type": "boolean",
+      "default": true
+    },
+    "event_override_requires_admin_approval": {
+      "type": "boolean",
+      "default": true
     },
     "is_active": {
       "type": "boolean",
