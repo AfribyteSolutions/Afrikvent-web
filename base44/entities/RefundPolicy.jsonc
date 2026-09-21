@@ -4,24 +4,31 @@
     "name": {
       "type": "string"
     },
+    "template_code": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
     "scope": {
       "type": "string",
       "enum": [
-        "platform",
-        "organizer",
-        "event"
+        "platform"
       ],
       "default": "platform"
-    },
-    "organizer_id": {
-      "type": "string"
-    },
-    "event_id": {
-      "type": "string"
     },
     "refunds_allowed": {
       "type": "boolean",
       "default": false
+    },
+    "voluntary_cancellation_mode": {
+      "type": "string",
+      "enum": [
+        "no_refund",
+        "full_refund",
+        "partial_refund"
+      ],
+      "default": "no_refund"
     },
     "cutoff_hours_before_event": {
       "type": "integer",
@@ -33,14 +40,6 @@
       "maximum": 100,
       "default": 100
     },
-    "organizer_can_request_override": {
-      "type": "boolean",
-      "default": true
-    },
-    "event_override_requires_admin_approval": {
-      "type": "boolean",
-      "default": true
-    },
     "buyer_fee_refundable": {
       "type": "boolean",
       "default": false
@@ -49,13 +48,25 @@
       "type": "boolean",
       "default": false
     },
+    "buyer_disclosure": {
+      "type": "string"
+    },
     "is_active": {
       "type": "boolean",
       "default": false
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false
+    },
+    "sort_order": {
+      "type": "integer",
+      "default": 0
     }
   },
   "required": [
-    "name"
+    "name",
+    "template_code"
   ],
   "rls": {
     "create": {
