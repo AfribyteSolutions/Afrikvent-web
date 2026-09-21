@@ -10,9 +10,10 @@ type BrandConfig = { brand_name?: string; logo_url?: string; footer_description?
 const Footer = () => {
   const [brand, setBrand] = useState<BrandConfig | null>(null);
   const [links, setLinks] = useState<NavItem[] | null>(null);
+  const [linksLoaded, setLinksLoaded] = useState(false);
   useEffect(() => {
     Promise.all([mwakwaData.brandSettings.filter({}, undefined, 1, 0), mwakwaData.navigationItems.list("sort_order", 100, 0)])
-      .then(([brands, items]) => { setBrand((brands?.[0] || null) as BrandConfig | null); setLinks(items as unknown as NavItem[]); }).catch(() => { setLinks(null); });
+      .then(([brands, items]) => { setBrand((brands?.[0] || null) as BrandConfig | null); setLinks(items as unknown as NavItem[]); }).catch(() => { setLinks(null); }).finally(() => setLinksLoaded(true));
   }, []);
   const platformLinks = links?.filter((x) => x.is_enabled !== false && x.location === "footer_platform") ?? null;
   const supportLinks = links?.filter((x) => x.is_enabled !== false && (x.location === "footer_support" || x.location === "footer_legal")) ?? null;
@@ -53,7 +54,7 @@ const Footer = () => {
             <div>
               <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 text-sm sm:text-base">Support</h3>
               <ul className="space-y-2 sm:space-y-3">
-                {supportLinks === null ? <li><span className="text-gray-500 text-xs sm:text-sm">Support and legal pages are managed in CMS.</span></li> : supportLinks.map((item: NavItem) => (
+                {!linksLoaded ? <li><span className="text-gray-500 text-xs sm:text-sm">Support and legal pages are managed in CMS.</span></li> : (supportLinks ?? []).map((item: NavItem) => (
                   <li key={item.id || item.url}><Link href={item.url} className="text-gray-600 hover:cms-primary-text text-xs sm:text-sm transition-colors">{item.label}</Link></li>
                 ))}
               </ul>
