@@ -7,10 +7,23 @@
     "image_url": {
       "type": "string"
     },
+    "alt_text": {
+      "type": "string"
+    },
     "target_url": {
       "type": "string"
     },
     "event_id": {
+      "type": "string"
+    },
+    "open_in_new_tab": {
+      "type": "boolean",
+      "default": false
+    },
+    "subtitle": {
+      "type": "string"
+    },
+    "button_text": {
       "type": "string"
     },
     "is_active": {
@@ -27,6 +40,16 @@
     },
     "display_order": {
       "type": "integer",
+      "default": 0
+    },
+    "click_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "impression_count": {
+      "type": "integer",
+      "minimum": 0,
       "default": 0
     }
   },
