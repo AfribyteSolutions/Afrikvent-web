@@ -63,6 +63,16 @@
     },
     "discount_code_id": {
       "type": "string"
+    },
+    "cancellation_policy_snapshot": {
+      "type": "object"
+    },
+    "refund_policy_snapshot": {
+      "type": "object"
+    },
+    "policy_accepted_at": {
+      "type": "string",
+      "format": "date-time"
     }
   },
   "required": [
