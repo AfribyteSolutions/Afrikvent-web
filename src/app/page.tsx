@@ -277,8 +277,8 @@ export default function HomePage() {
       {/* Hero Section with Video Slider */}
       {sectionEnabled("hero") && <section className="w-full h-screen">
         <VideoSlider 
-          slides={slides}
-          mobileVideoSrc={mobileVideoSrc} // Pass mobile video here
+          slides={siteSections.hero?.media_url ? [{ src: siteSections.hero.media_url }] : slides}
+          mobileVideoSrc={siteSections.hero?.mobile_media_url || mobileVideoSrc}
           interval={4000} 
           onSearch={handleSearch}
           searchQuery={searchQuery}
