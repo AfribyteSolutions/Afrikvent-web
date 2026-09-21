@@ -1,0 +1,100 @@
+{
+  "type": "object",
+  "properties": {
+    "buyer_id": {
+      "type": "string"
+    },
+    "buyer_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "organizer_id": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "payment_pending",
+        "paid",
+        "failed",
+        "cancelled",
+        "refunded"
+      ],
+      "default": "pending"
+    },
+    "currency": {
+      "type": "string",
+      "default": "XAF"
+    },
+    "subtotal": {
+      "type": "number",
+      "minimum": 0
+    },
+    "discount_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "total": {
+      "type": "number",
+      "minimum": 0
+    },
+    "payment_id": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "legacy_supabase_id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "buyer_id",
+    "event_id",
+    "organizer_id",
+    "total"
+  ],
+  "rls": {
+    "create": false,
+    "read": {
+      "$or": [
+        {
+          "data.buyer_id": "{{user.id}}"
+        },
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "Order"
+}
