@@ -1,0 +1,74 @@
+{
+  "type": "object",
+  "properties": {
+    "organizer_id": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "owner",
+        "admin",
+        "checkin_staff",
+        "viewer"
+      ]
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "organizer_id",
+    "user_id",
+    "role"
+  ],
+  "rls": {
+    "create": {
+      "data.organizer_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  },
+  "name": "OrganizerMember"
+}

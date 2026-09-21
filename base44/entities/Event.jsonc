@@ -73,6 +73,26 @@
       "type": "string",
       "default": "FCFA"
     },
+    "category_id": {
+      "type": "string"
+    },
+    "visibility": {
+      "type": "string",
+      "enum": [
+        "public",
+        "unlisted",
+        "private"
+      ],
+      "default": "public"
+    },
+    "sales_start_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sales_end_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "legacy_supabase_id": {
       "type": "string"
     }

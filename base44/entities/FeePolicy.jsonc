@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string"
+    },
+    "platform_fee_percent": {
+      "type": "number",
+      "minimum": 0
+    },
+    "platform_fee_fixed": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "organizer_absorbs_processor_fee": {
+      "type": "boolean",
+      "default": true
+    },
+    "buyer_service_fee_percent": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "buyer_service_fee_fixed": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": false
+    },
+    "effective_from": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "FeePolicy"
+}

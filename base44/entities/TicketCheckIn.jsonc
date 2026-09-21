@@ -1,0 +1,77 @@
+{
+  "type": "object",
+  "properties": {
+    "ticket_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "organizer_id": {
+      "type": "string"
+    },
+    "scanned_by": {
+      "type": "string"
+    },
+    "scanned_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "already_used",
+        "invalid",
+        "cancelled",
+        "refunded"
+      ]
+    },
+    "device_reference": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "ticket_id",
+    "event_id",
+    "organizer_id",
+    "result"
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "TicketCheckIn"
+}

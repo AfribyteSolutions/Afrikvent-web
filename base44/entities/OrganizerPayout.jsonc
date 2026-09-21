@@ -1,0 +1,97 @@
+{
+  "type": "object",
+  "properties": {
+    "organizer_id": {
+      "type": "string"
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "gross_sales": {
+      "type": "number",
+      "minimum": 0
+    },
+    "refunds": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "platform_fees": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "processor_fees": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "net_amount": {
+      "type": "number",
+      "minimum": 0
+    },
+    "currency": {
+      "type": "string",
+      "default": "XAF"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "pending",
+        "processing",
+        "paid",
+        "failed",
+        "held"
+      ],
+      "default": "draft"
+    },
+    "provider_reference": {
+      "type": "string"
+    },
+    "paid_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "organizer_id",
+    "gross_sales",
+    "net_amount"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "OrganizerPayout"
+}
