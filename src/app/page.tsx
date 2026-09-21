@@ -8,6 +8,7 @@ import SponsoredEvents from "@/components/event/sponsoredevents/SponsoredEvents"
 import UpcomingEvents from "@/components/event/upcomingevents/UpcomingEvents";
 import SearchResults from "@/components/event/SearchResults";
 import EventFilters, { FilterState } from "@/components/event/EventFilters";
+import PromotionalBannerSection from "@/components/promotionbanner/PromotionBannerSection";
 import { mwakwaData } from "@/lib/mwakwaBackend";
 
 // Desktop slides
@@ -350,6 +351,8 @@ export default function HomePage() {
               />
             </div>
           ) : null)}
+
+          {sectionEnabled("promotion_banners") && <PromotionalBannerSection />}
 
           {sectionEnabled("final_cta") && <section className="py-16 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
             <div className="container mx-auto px-4 text-center">
