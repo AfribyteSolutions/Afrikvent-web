@@ -29,7 +29,7 @@ const Header = () => {
     Promise.all([
       mwakwaData.navigationItems.filter({ location: "header" }, "sort_order", 50, 0),
       mwakwaData.brandSettings.filter({}, undefined, 1, 0),
-    ]).then(([nav, brands]) => { setNavItems(nav as unknown as NavItem[]); setBrand((brands?.[0] || null) as BrandConfig | null); }).catch(() => {});
+    ]).then(([nav, brands]) => { setNavItems(nav as unknown as NavItem[]); setBrand((brands?.[0] || null) as BrandConfig | null); }).catch(() => { setNavItems(null); });
   }, []);
 
   useEffect(() => {
