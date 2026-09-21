@@ -144,7 +144,7 @@ const Header = () => {
               <>
                 <button
                   onClick={() => setShowSignUp(true)}
-                  className="px-3 py-1.5 bg-blue-600 text-white rounded-full text-sm hover:bg-blue-700"
+                  className="px-3 py-1.5 cms-primary-bg text-white rounded-full text-sm opacity-95 hover:opacity-100"
                 >
                   Sign Up
                 </button>
@@ -222,7 +222,7 @@ const Header = () => {
                     <Link
                       href="/profile"
                       onClick={closeMobileMenu}
-                      className="px-8 py-3 bg-blue-600 text-white rounded-full text-lg hover:bg-blue-700 w-full max-w-sm text-center"
+                      className="px-8 py-3 cms-primary-bg text-white rounded-full text-lg opacity-95 hover:opacity-100 w-full max-w-sm text-center"
                     >
                       Manage Profile
                     </Link>
@@ -241,7 +241,7 @@ const Header = () => {
                         setShowSignUp(true);
                         closeMobileMenu();
                       }}
-                      className="px-8 py-3 bg-blue-600 text-white rounded-full text-lg hover:bg-blue-700 w-full max-w-sm"
+                      className="px-8 py-3 cms-primary-bg text-white rounded-full text-lg opacity-95 hover:opacity-100 w-full max-w-sm"
                     >
                       Sign Up
                     </button>
