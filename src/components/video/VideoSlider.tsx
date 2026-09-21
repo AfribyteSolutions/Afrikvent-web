@@ -12,6 +12,8 @@ type Slide = {
 
 type VideoSliderProps = {
   slides: Slide[];
+  title?: string;
+  subtitle?: string;
   mobileVideoSrc?: string; // New prop for mobile vertical video
   interval?: number;
   transitionDuration?: number;
@@ -25,6 +27,8 @@ type VideoSliderProps = {
 const VideoSlider: React.FC<VideoSliderProps> = ({
   slides,
   mobileVideoSrc,
+  title = "Discover Amazing Events",
+  subtitle = "Find the perfect event for you - from conferences to concerts, workshops to festivals",
   interval = 4000,
   transitionDuration = 0.4,
   pauseOnHover = false,
@@ -183,10 +187,10 @@ const VideoSlider: React.FC<VideoSliderProps> = ({
           {/* Hero Text */}
           <div className="text-center mb-8">
             <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white mb-6 drop-shadow-2xl">
-              Discover Amazing Events
+              {title}
             </h1>
             <p className="text-xl sm:text-2xl text-white/90 max-w-2xl mx-auto drop-shadow-xl">
-              Find the perfect event for you - from conferences to concerts, workshops to festivals
+              {subtitle}
             </p>
           </div>
 
