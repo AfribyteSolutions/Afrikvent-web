@@ -275,7 +275,7 @@ export default function HomePage() {
   return (
     <main className="w-full bg-white text-gray-900 min-h-screen">
       {/* Hero Section with Video Slider */}
-      {sectionEnabled("hero") && <section className="w-full h-screen">
+      {sectionEnabled("hero") && <section className="w-full h-screen relative">
         <VideoSlider 
           slides={siteSections.hero?.media_url ? [{ src: siteSections.hero.media_url }] : slides}
           mobileVideoSrc={siteSections.hero?.mobile_media_url || mobileVideoSrc}
