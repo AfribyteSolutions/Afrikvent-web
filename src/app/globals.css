@@ -1,11 +1,11 @@
+@import "tailwindcss";
+
 :root {
   --mwakwa-primary: #2563eb;
   --mwakwa-secondary: #7c3aed;
   --mwakwa-background: #ffffff;
   --mwakwa-text: #111827;
 }
-
-@import "tailwindcss";
 
 /* ✅ Montserrat will be provided from next/font in layout.tsx */
 :root {
