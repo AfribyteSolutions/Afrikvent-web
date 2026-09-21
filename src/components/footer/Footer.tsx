@@ -12,7 +12,7 @@ const Footer = () => {
   const [links, setLinks] = useState<NavItem[]>([]);
   useEffect(() => {
     Promise.all([mwakwaData.brandSettings.filter({}, undefined, 1, 0), mwakwaData.navigationItems.filter({ is_enabled: true }, "sort_order", 100, 0)])
-      .then(([brands, items]) => { setBrand(brands?.[0] || null); setLinks(items); }).catch(() => {});
+      .then(([brands, items]) => { setBrand((brands?.[0] || null) as BrandConfig | null); setLinks(items as unknown as NavItem[]); }).catch(() => {});
   }, []);
   const platformLinks = links.filter((x) => x.location === "footer_platform");
   const supportLinks = links.filter((x) => x.location === "footer_support" || x.location === "footer_legal");
