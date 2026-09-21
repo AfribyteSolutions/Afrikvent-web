@@ -170,7 +170,7 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
       const rawTicketTypes = await mwakwaData.ticketTypes.filter({ event_id: String(rawEvent.id) }, 'price');
       const ticketTypes = rawTicketTypes.map(ticket => ({ ...ticket, id: Number(ticket.id), event_id: Number(ticket.event_id), max_quatity: Math.max(0, Number(ticket.max_quantity || 0) - Number(ticket.sold_quantity || 0)), quantity_sold: Number(ticket.sold_quantity || 0), created_at: ticket.created_date, updated_at: ticket.updated_date }));
       const rawComments = await mwakwaData.eventComments.filter({ event_id: String(rawEvent.id), is_deleted: false }, 'created_date');
-      const comments = rawComments.map((comment: any) => ({ ...comment, id: Number(comment.id), event_id: Number(comment.event_id), created_at: comment.created_date, updated_at: comment.updated_date, USERS: comment.user_name ? { name: comment.user_name } : null }));
+      const comments = rawComments.map((comment) => ({ ...comment, id: Number(comment.id), event_id: Number(comment.event_id), created_at: comment.created_date, updated_at: comment.updated_date, USERS: comment.user_name ? { name: comment.user_name } : null }));
 
       setEvent({
         ...eventData,
