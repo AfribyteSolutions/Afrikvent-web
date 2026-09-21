@@ -14,7 +14,7 @@ const Footer = () => {
             <Link href="/" className="inline-block mb-3 sm:mb-4">
               <Image
                 src="/logo.png"
-                alt="Afrikvent Logo"
+                alt="Mwakwa Logo"
                 width={120}
                 height={38}
                 className="h-8 sm:h-10 w-auto"
@@ -119,7 +119,7 @@ const Footer = () => {
         <div className="pt-6 sm:pt-8 border-t border-gray-100">
           <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
             <p className="text-gray-500 text-xs sm:text-sm text-center sm:text-left">
-              © {new Date().getFullYear()} Afrikvent. All rights reserved.
+              © {new Date().getFullYear()} Mwakwa. All rights reserved.
             </p>
             <div className="flex items-center gap-4 sm:gap-6 text-xs sm:text-sm text-gray-500">
               <Link href="/privacy" className="hover:text-gray-700 transition-colors">
