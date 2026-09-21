@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { mwakwaAuth, type MwakwaUser } from "@/lib/mwakwaBackend";
+import { mwakwaAuth, mwakwaData, type MwakwaUser } from "@/lib/mwakwaBackend";
 import AuthModal from "@/components/auth/AuthModal";
 import { useRouter } from "next/navigation";
 import { ChevronDown, User as UserIcon, LogOut } from "lucide-react";
@@ -14,12 +14,18 @@ const Header = () => {
   const [showSignUp, setShowSignUp] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const [navItems, setNavItems] = useState<any[]>([]);
+  const [brand, setBrand] = useState<any>(null);
 
   useEffect(() => {
     const getUser = async () => {
       setUser(await mwakwaAuth.me());
     };
     getUser();
+    Promise.all([
+      mwakwaData.navigationItems.filter({ location: "header", is_enabled: true }, "sort_order", 50, 0),
+      mwakwaData.brandSettings.filter({}, undefined, 1, 0),
+    ]).then(([nav, brands]) => { setNavItems(nav); setBrand(brands?.[0] || null); }).catch(() => {});
   }, []);
 
   const handleSignOut = async () => {
@@ -54,23 +60,19 @@ const Header = () => {
         <div className="flex items-center justify-between relative">
           {/* Left Nav (desktop) */}
           <nav className="hidden md:flex items-center space-x-6 text-black">
-            <Link href="/" className="hover:text-[#0052cc]">
-              Home
-            </Link>
-            <Link href="/events" className="hover:text-[#0052cc]">
-              Events
-            </Link>
-            <Link href="/organiser" className="hover:text-[#0052cc]">
-              Organiser Space
-            </Link>
+            {(navItems.length ? navItems : [
+              { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
+            ]).map((item: any) => (
+              <Link key={item.id || item.url} href={item.url} className="hover:text-[#0052cc]">{item.label}</Link>
+            ))}
           </nav>
 
           {/* Logo Center */}
           <div className="absolute left-1/2 transform -translate-x-1/2">
             <Link href="/">
               <Image
-                src="/images/logo.png"
-                alt="Mwakwa Logo"
+                src={brand?.logo_url || "/images/logo.png"}
+                alt={`${brand?.brand_name || "Mwakwa"} Logo`}
                 width={110}
                 height={35}
                 className="mx-auto"
@@ -170,27 +172,13 @@ const Header = () => {
             <div className="h-full flex flex-col">
               <div className="flex-1 flex flex-col justify-center px-4">
                 <div className="flex flex-col items-center space-y-8">
-                  <Link
-                    href="/"
-                    onClick={closeMobileMenu}
-                    className="text-gray-700 hover:text-[#0052cc] font-medium text-2xl py-3"
-                  >
-                    Home
-                  </Link>
-                  <Link
-                    href="/events"
-                    onClick={closeMobileMenu}
-                    className="text-gray-700 hover:text-[#0052cc] font-medium text-2xl py-3"
-                  >
-                    Events
-                  </Link>
-                  <Link
-                    href="/organiser"
-                    onClick={closeMobileMenu}
-                    className="text-gray-700 hover:text-[#0052cc] font-medium text-2xl py-3"
-                  >
-                    Organiser Space
-                  </Link>
+                  {(navItems.length ? navItems : [
+                    { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
+                  ]).map((item: any) => (
+                    <Link key={item.id || item.url} href={item.url} onClick={closeMobileMenu} className="text-gray-700 hover:text-[#0052cc] font-medium text-2xl py-3">
+                      {item.label}
+                    </Link>
+                  ))}
                 </div>
               </div>
 
