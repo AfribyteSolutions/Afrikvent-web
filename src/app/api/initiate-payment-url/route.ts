@@ -75,7 +75,7 @@ async function initiatePay({
     userId: user.user_id,
     externalId: user.user_id,
     message: "Making a payment transaction",
-    redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || "https://mwakwa.com"}/payment-success`,
+    redirectUrl: `${(process.env.NEXT_PUBLIC_APP_URL || "https://mwakwa.com").replace(/\/$/, "")}/payment-success`,
   });
 
   const response = await fetch(url, { method: "POST", headers, body });
