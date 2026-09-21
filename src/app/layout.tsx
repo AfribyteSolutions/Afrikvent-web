@@ -14,10 +14,11 @@ const montserrat = Montserrat({
   variable: "--font-montserrat",
 });
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-const metadataBase = appUrl && /^https?:\/\//i.test(appUrl)
-  ? new URL(appUrl.replace(/\/$/, ""))
-  : new URL("https://mwakwa.com");
+const configuredAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+const appUrl = configuredAppUrl && /^https?:\/\//i.test(configuredAppUrl)
+  ? configuredAppUrl.replace(/\/$/, "")
+  : "https://mwakwa.com";
+const metadataBase = new URL(appUrl);
 
 export const metadata: Metadata = {
   metadataBase,
