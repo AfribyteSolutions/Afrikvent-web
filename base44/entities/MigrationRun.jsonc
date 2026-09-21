@@ -1,0 +1,71 @@
+{
+  "type": "object",
+  "properties": {
+    "source_system": {
+      "type": "string"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "planned",
+        "running",
+        "completed",
+        "failed",
+        "rolled_back"
+      ],
+      "default": "planned"
+    },
+    "records_discovered": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "records_migrated": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "records_failed": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_system"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "MigrationRun"
+}

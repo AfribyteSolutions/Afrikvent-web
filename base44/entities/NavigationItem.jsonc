@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string"
+    },
+    "location": {
+      "type": "string",
+      "enum": [
+        "header",
+        "footer_platform",
+        "footer_support",
+        "footer_legal"
+      ],
+      "default": "header"
+    },
+    "is_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "requires_auth": {
+      "type": "boolean",
+      "default": false
+    },
+    "sort_order": {
+      "type": "integer",
+      "default": 0
+    }
+  },
+  "required": [
+    "label",
+    "url"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "NavigationItem"
+}

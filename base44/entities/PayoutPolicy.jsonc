@@ -1,0 +1,81 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "schedule_type": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly",
+        "biweekly",
+        "monthly",
+        "after_event",
+        "manual"
+      ],
+      "default": "weekly"
+    },
+    "payout_weekday": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6
+    },
+    "payout_day_of_month": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 28
+    },
+    "delay_days": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "reserve_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 0
+    },
+    "reserve_release_days": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "minimum_payout_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "currency": {
+      "type": "string",
+      "default": "XAF"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "PayoutPolicy"
+}

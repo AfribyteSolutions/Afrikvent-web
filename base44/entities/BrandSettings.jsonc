@@ -16,6 +16,40 @@
     "platform_owner": {
       "type": "string"
     },
+    "logo_url": {
+      "type": "string"
+    },
+    "logo_dark_url": {
+      "type": "string"
+    },
+    "favicon_url": {
+      "type": "string"
+    },
+    "primary_color": {
+      "type": "string",
+      "default": "#2563eb"
+    },
+    "secondary_color": {
+      "type": "string",
+      "default": "#7c3aed"
+    },
+    "accent_color": {
+      "type": "string"
+    },
+    "background_color": {
+      "type": "string",
+      "default": "#ffffff"
+    },
+    "text_color": {
+      "type": "string",
+      "default": "#111827"
+    },
+    "footer_description": {
+      "type": "string"
+    },
+    "copyright_text": {
+      "type": "string"
+    },
     "live_video_provider": {
       "type": "string"
     },

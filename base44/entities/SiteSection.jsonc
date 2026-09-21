@@ -1,0 +1,89 @@
+{
+  "type": "object",
+  "properties": {
+    "page_slug": {
+      "type": "string",
+      "default": "home"
+    },
+    "section_key": {
+      "type": "string"
+    },
+    "section_type": {
+      "type": "string",
+      "enum": [
+        "hero",
+        "recommended_events",
+        "sponsored_events",
+        "upcoming_events",
+        "promotion_banners",
+        "cta",
+        "custom"
+      ],
+      "default": "custom"
+    },
+    "title": {
+      "type": "string"
+    },
+    "subtitle": {
+      "type": "string"
+    },
+    "body": {
+      "type": "string"
+    },
+    "button_text": {
+      "type": "string"
+    },
+    "button_url": {
+      "type": "string"
+    },
+    "media_url": {
+      "type": "string"
+    },
+    "mobile_media_url": {
+      "type": "string"
+    },
+    "media_type": {
+      "type": "string",
+      "enum": [
+        "image",
+        "video",
+        "none"
+      ],
+      "default": "none"
+    },
+    "is_enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "sort_order": {
+      "type": "integer",
+      "default": 0
+    },
+    "settings": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "page_slug",
+    "section_key"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "SiteSection"
+}

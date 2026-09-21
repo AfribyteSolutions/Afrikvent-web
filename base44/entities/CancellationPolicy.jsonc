@@ -1,0 +1,67 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "platform",
+        "organizer",
+        "event"
+      ],
+      "default": "platform"
+    },
+    "organizer_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "event_cancellation_refund_mode": {
+      "type": "string",
+      "enum": [
+        "full",
+        "ticket_price_only",
+        "manual"
+      ],
+      "default": "manual"
+    },
+    "postponement_mode": {
+      "type": "string",
+      "enum": [
+        "tickets_remain_valid",
+        "offer_refund",
+        "manual"
+      ],
+      "default": "manual"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "CancellationPolicy"
+}
