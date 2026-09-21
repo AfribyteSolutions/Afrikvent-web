@@ -331,9 +331,9 @@ export default function HomePage() {
           )}</div>}
 
           {sectionEnabled("sponsored") && (sponsoredLoading ? (
-            <CarouselSkeleton title="Sponsored Events" />
+            <CarouselSkeleton title={sectionTitle("sponsored", "Sponsored Events")} />
           ) : sponsoredError ? (
-            <CarouselError error={sponsoredError} title="Sponsored Events" />
+            <CarouselError error={sponsoredError} title={sectionTitle("sponsored", "Sponsored Events")} />
           ) : sponsoredEvents.length > 0 ? (
             <div className="bg-white">
               <SponsoredEvents
@@ -345,9 +345,9 @@ export default function HomePage() {
           ) : null)}
 
           {sectionEnabled("upcoming") && (upcomingLoading ? (
-            <CarouselSkeleton title="Upcoming Events" />
+            <CarouselSkeleton title={sectionTitle("upcoming", "Upcoming Events")} />
           ) : upcomingError ? (
-            <CarouselError error={upcomingError} title="Upcoming Events" />
+            <CarouselError error={upcomingError} title={sectionTitle("upcoming", "Upcoming Events")} />
           ) : upcomingEvents.length > 0 ? (
             <div className="bg-white">
               <UpcomingEvents
