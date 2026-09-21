@@ -2,7 +2,7 @@ import { base44 } from '@/api/base44Client';
 
 export type MwakwaUser = {
   id: string;
-  email: string;
+  email?: string;
   full_name?: string | null;
   display_name?: string | null;
   avatar_url?: string | null;
