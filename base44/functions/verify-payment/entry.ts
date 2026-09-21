@@ -1,0 +1,24 @@
+import { createClientFromRequest } from "npm:@base44/sdk";
+
+const appUrl = () => (Deno.env.get("APP_URL") || "https://mwakwa.com").replace(/\/$/, "");
+const code = () => crypto.randomUUID().replaceAll("-", "").slice(0, 20).toUpperCase();
+
+async function finalize(svc:any,payment:any,order:any){
+ if(payment.payment_status==="completed"&&order.status==="paid"){const ts=await svc.entities.Ticket.filter({payment_id:String(payment.id)});return ts;}
+ const existing=await svc.entities.Ticket.filter({payment_id:String(payment.id)}); if(existing.length) return existing;
+ const created:any[]=[];
+ for(const item of order.items||[]){
+  const tt=await svc.entities.TicketType.get(String(item.ticket_type_id)); const sold=Number(tt.sold_quantity||0), max=Number(tt.max_quantity||0), qty=Number(item.quantity||1); if(sold+qty>max) throw new Error(`Ticket inventory exhausted for ${tt.name}`);
+  const ticket=await svc.entities.Ticket.create({event_id:order.event_id,ticket_type_id:String(tt.id),buyer_id:order.buyer_id,buyer_email:order.buyer_email,organizer_id:order.organizer_id,quantity:qty,unit_price:Number(item.unit_price||0),total:Number(item.total||0),currency:order.currency||"XAF",ticket_status:"confirmed",qr_code_data:code(),payment_id:String(payment.id),order_id:String(order.id)}); created.push(ticket);
+  await svc.entities.TicketType.update(String(tt.id),{sold_quantity:sold+qty});
+ }
+ await svc.entities.Payment.update(String(payment.id),{payment_status:"completed",completed_at:new Date().toISOString()}); await svc.entities.Order.update(String(order.id),{status:"paid"});
+ if(order.discount_code_id){const d=await svc.entities.DiscountCode.get(String(order.discount_code_id));await svc.entities.DiscountCode.update(String(d.id),{uses_count:Number(d.uses_count||0)+1});}
+ try{const ev=await svc.entities.Event.get(String(order.event_id));await svc.integrations.Core.SendEmail({to:order.buyer_email,subject:`Your tickets for ${ev.title}`,from_name:"Mwakwa",body:`<h2>Payment confirmed</h2><p>Your Mwakwa order ${order.id} is confirmed.</p><p>${created.map(t=>`Ticket ${t.id}: <strong>${t.qr_code_data}</strong>`).join("<br>")}</p>`});}catch(e){console.error("ticket email failed",e)}
+ return created;
+}
+
+Deno.serve(async(req)=>{try{const base44=createClientFromRequest(req);const user=await base44.auth.me();if(!user)return Response.json({error:"Unauthorized"},{status:401});const {provider,session_id,trans_id,order_id}=await req.json();const svc=base44.asServiceRole;let payments:any[]=[];if(session_id)payments=await svc.entities.Payment.filter({provider_session_id:String(session_id)});else if(trans_id)payments=await svc.entities.Payment.filter({provider_transaction_id:String(trans_id)});else if(order_id)payments=await svc.entities.Payment.filter({order_id:String(order_id)});const payment=payments[0];if(!payment||payment.buyer_id!==user.id)return Response.json({success:false,status:"not_found"});const order=await svc.entities.Order.get(String(payment.order_id));let paid=false,raw:any={};
+ if((provider||payment.provider)==="stripe"){const key=Deno.env.get("STRIPE_SECRET_KEY");if(!key)return Response.json({error:"Stripe is not configured",code:"PROVIDER_NOT_CONFIGURED"},{status:503});const id=session_id||payment.provider_session_id;const r=await fetch(`https://api.stripe.com/v1/checkout/sessions/${id}`,{headers:{Authorization:`Bearer ${key}`}});raw=await r.json();if(!r.ok)throw new Error(raw?.error?.message||"Stripe verification failed");paid=raw.payment_status==="paid"&&raw.status==="complete";}
+ else{const apiuser=Deno.env.get("FAPSHI_API_USER"),apikey=Deno.env.get("FAPSHI_API_KEY"),apiurl=Deno.env.get("FAPSHI_API_URL")||"https://api.fapshi.com";if(!apiuser||!apikey)return Response.json({error:"Fapshi is not configured",code:"PROVIDER_NOT_CONFIGURED"},{status:503});const id=trans_id||payment.provider_transaction_id;const r=await fetch(`${apiurl}/payment-status/${id}`,{headers:{apiuser,apikey}});raw=await r.json();if(!r.ok)throw new Error(raw?.message||"Fapshi verification failed");paid=["SUCCESSFUL","SUCCESS","COMPLETED","PAID"].includes(String(raw.status||raw.paymentStatus||"").toUpperCase());}
+ await svc.entities.Payment.update(String(payment.id),{provider_response:raw});if(!paid)return Response.json({success:false,status:"pending",payment_status:payment.payment_status});const tickets=await finalize(svc,payment,order);const ev=await svc.entities.Event.get(String(order.event_id));const enriched=await Promise.all(tickets.map(async(t:any)=>({...t,created_at:t.created_date,user_id:t.buyer_id,EVENTS:ev,TICKET_TYPES:await svc.entities.TicketType.get(String(t.ticket_type_id))})));return Response.json({success:true,status:"completed",payment:{id:payment.id,amount:payment.amount,currency:payment.currency,status:"completed"},order_id:order.id,tickets:enriched});}catch(e){console.error(e);return Response.json({error:e instanceof Error?e.message:"Verification failed"},{status:500});}});

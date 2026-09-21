@@ -60,6 +60,9 @@
     },
     "legacy_supabase_id": {
       "type": "string"
+    },
+    "discount_code_id": {
+      "type": "string"
     }
   },
   "required": [

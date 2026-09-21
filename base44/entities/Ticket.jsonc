@@ -60,6 +60,9 @@
     },
     "legacy_supabase_id": {
       "type": "string"
+    },
+    "order_id": {
+      "type": "string"
     }
   },
   "required": [
