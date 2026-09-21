@@ -186,15 +186,24 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
 
   const [cancellationPolicies, setCancellationPolicies] = useState<any[]>([]);
   const [selectedCancellationPolicyId, setSelectedCancellationPolicyId] = useState('');
+  const [refundPolicies, setRefundPolicies] = useState<any[]>([]);
+  const [selectedRefundPolicyId, setSelectedRefundPolicyId] = useState('');
 
   useEffect(() => {
     if (!isOpen) return;
-    mwakwaData.cancellationPolicies.list('sort_order', 50, 0).then((rows: any[]) => {
-      const active = rows.filter(r => r.is_active !== false);
-      setCancellationPolicies(active);
-      const preferred = active.find(r => r.is_default) || active[0];
-      setSelectedCancellationPolicyId(prev => prev || preferred?.id || '');
-    }).catch(() => setCancellationPolicies([]));
+    Promise.all([
+      mwakwaData.cancellationPolicies.list('sort_order', 50, 0),
+      mwakwaData.refundPolicies.list('sort_order', 50, 0),
+    ]).then(([cancellationRows, refundRows]: any[]) => {
+      const activeCancellation = cancellationRows.filter((r: any) => r.is_active !== false);
+      const activeRefunds = refundRows.filter((r: any) => r.is_active !== false);
+      setCancellationPolicies(activeCancellation);
+      setRefundPolicies(activeRefunds);
+      const preferredCancellation = activeCancellation.find((r: any) => r.is_default) || activeCancellation[0];
+      const preferredRefund = activeRefunds.find((r: any) => r.is_default) || activeRefunds[0];
+      setSelectedCancellationPolicyId(prev => prev || preferredCancellation?.id || '');
+      setSelectedRefundPolicyId(prev => prev || preferredRefund?.id || '');
+    }).catch(() => { setCancellationPolicies([]); setRefundPolicies([]); });
   }, [isOpen]);
 
   const handleSubmit = async () => {
@@ -210,6 +219,8 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
       const imageUrl = formData.image ? await uploadEventImage() : null;
       const selectedPolicy = cancellationPolicies.find(p => p.id === selectedCancellationPolicyId);
       if (!selectedPolicy) throw new Error('Please select an event cancellation policy');
+      const selectedRefundPolicy = refundPolicies.find(p => p.id === selectedRefundPolicyId);
+      if (!selectedRefundPolicy) throw new Error('Please select a buyer refund policy');
       const policySnapshot = {
         id: selectedPolicy.id,
         template_code: selectedPolicy.template_code,
@@ -220,6 +231,20 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
         postponement_refund_window_hours: selectedPolicy.postponement_refund_window_hours,
         organizer_liability: selectedPolicy.organizer_liability,
         buyer_disclosure: selectedPolicy.buyer_disclosure,
+        snapshotted_at: new Date().toISOString(),
+      };
+      const refundPolicySnapshot = {
+        id: selectedRefundPolicy.id,
+        template_code: selectedRefundPolicy.template_code,
+        name: selectedRefundPolicy.name,
+        description: selectedRefundPolicy.description,
+        refunds_allowed: selectedRefundPolicy.refunds_allowed,
+        voluntary_cancellation_mode: selectedRefundPolicy.voluntary_cancellation_mode,
+        cutoff_hours_before_event: selectedRefundPolicy.cutoff_hours_before_event,
+        refund_percent: selectedRefundPolicy.refund_percent,
+        buyer_fee_refundable: selectedRefundPolicy.buyer_fee_refundable,
+        processor_fee_refundable: selectedRefundPolicy.processor_fee_refundable,
+        buyer_disclosure: selectedRefundPolicy.buyer_disclosure,
         snapshotted_at: new Date().toISOString(),
       };
       const eventData = await mwakwaData.events.create({
@@ -240,6 +265,9 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
         cancellation_policy_id: selectedPolicy.id,
         cancellation_policy_snapshot: policySnapshot,
         cancellation_policy_accepted_at: new Date().toISOString(),
+        refund_policy_id: selectedRefundPolicy.id,
+        refund_policy_snapshot: refundPolicySnapshot,
+        refund_policy_accepted_at: new Date().toISOString(),
       });
       const eventId = eventData.id;
 
