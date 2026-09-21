@@ -25,7 +25,7 @@ const slides = [
 // Mobile vertical video (reel format)
 const mobileVideoSrc = "/videos/mobile-reel.mp4"; // Replace with your actual mobile video path
 
-type SiteSectionConfig = { id?: string; section_key?: string; title?: string; body?: string; button_text?: string; button_url?: string; is_enabled?: boolean };
+type SiteSectionConfig = { id?: string; section_key?: string; title?: string; body?: string; button_text?: string; button_url?: string; is_enabled?: boolean; sort_order?: number; section_type?: string; subtitle?: string; media_url?: string; mobile_media_url?: string; media_type?: string };
 
 export default function HomePage() {
   const router = useRouter();
