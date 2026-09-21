@@ -761,7 +761,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                   </div>
 
                   {/* Payment Options - Show when no free ticket */}
-                  {!isFreeTicket && (
+                  {!isFreeTicket && paidPaymentsEnabled && (
                     <>
                       <div className="relative my-6">
                         <div className="absolute inset-0 flex items-center">
@@ -807,6 +807,12 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                     </>
                   )}
                 </motion.div>
+              )}
+
+              {!isFreeTicket && !paidPaymentsEnabled && step === 'method' && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                  Paid checkout is temporarily unavailable while payment providers are being configured. Free tickets and 100% discount tickets remain available.
+                </div>
               )}
 
               {step === 'details' && paymentMethod === 'mobile_money' && (

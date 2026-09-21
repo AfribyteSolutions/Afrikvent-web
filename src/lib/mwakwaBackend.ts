@@ -42,6 +42,7 @@ export const mwakwaData = {
   discountCodes: base44.entities.DiscountCode,
   eventComments: base44.entities.EventComment,
   promotionBanners: base44.entities.PromotionBanner,
+  brandSettings: base44.entities.BrandSettings,
 };
 
 export const mwakwaFiles = {
