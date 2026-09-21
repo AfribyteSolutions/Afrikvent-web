@@ -5,6 +5,7 @@ import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
 import { motion } from 'framer-motion';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { EnhancedTicket } from '@/types/ticket';
+import { base44 } from '@/api/base44Client';
 
 interface TicketData {
   id: number;
@@ -54,7 +55,6 @@ function PaymentSuccessContent() {
     }
 
     const isMomo = provider === 'momo' || (!!momoRef && !sessionId);
-    const verifyUrl = isMomo ? '/api/verify-momo' : '/api/verify-payment';
 
     let retries = 0;
     const maxRetries = 25;
@@ -64,29 +64,11 @@ function PaymentSuccessContent() {
       try {
         setAttempt(retries + 1);
         const body = isMomo
-          ? { momo_ref: momoRef }
-          : { session_id: sessionId };
-
-        console.log(`🔎 Attempt ${retries + 1}: Verifying via ${verifyUrl}`, body);
-
-        const res = await fetch(verifyUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-        });
-
-        if (!res.ok) {
-          throw new Error(`API returned ${res.status}`);
-        }
-
-        const rawText = await res.text();
-        let data;
-        try {
-          data = JSON.parse(rawText);
-        } catch (err) {
-          console.error('JSON parse error:', rawText);
-          throw new Error('Invalid JSON from verification API.');
-        }
+          ? { provider: 'fapshi', trans_id: momoRef, order_id: searchParams.get('order_id') }
+          : { provider: 'stripe', session_id: sessionId, order_id: searchParams.get('order_id') };
+        console.log(`🔎 Attempt ${retries + 1}: Verifying payment`, body);
+        const response = await base44.functions.invoke('verify-payment', body);
+        const data = (response as { data?: any }).data || response;
 
         console.log('API verification response:', data);
 
