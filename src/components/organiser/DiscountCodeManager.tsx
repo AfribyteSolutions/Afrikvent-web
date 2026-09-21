@@ -1,12 +1,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Trash2, Copy, Check, Edit2, Ticket, AlertCircle } from 'lucide-react';
-import { createClient, PostgrestError } from '@supabase/supabase-js';
-
-// Initialize Supabase client - replace with your actual values
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { mwakwaData } from '@/lib/mwakwaBackend';
 
 interface DiscountCode {
   id: number;
@@ -59,17 +54,8 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
 
   const fetchDiscountCodes = async (): Promise<void> => {
     try {
-      const { data, error } = await supabase
-        .from('DISCOUNT_CODES')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Fetch error:', error);
-        throw error;
-      }
-      setDiscountCodes(data || []);
+      const data = await mwakwaData.discountCodes.filter({ event_id: eventId }, '-created_date');
+      setDiscountCodes(data as DiscountCode[]);
     } catch (err) {
       console.error('Error fetching discount codes:', err);
       setError('Failed to load discount codes');
@@ -120,26 +106,13 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
 
       if (editingCode) {
         // Update existing code
-        const { error } = await supabase
-          .from('DISCOUNT_CODES')
-          .update(codeData)
-          .eq('id', editingCode.id);
-
-        if (error) {
-          console.error('Update error:', error);
-          throw error;
-        }
+        await mwakwaData.discountCodes.update(String(editingCode.id), codeData);
         alert('Discount code updated successfully!');
       } else {
         // Insert new code
-        const { error } = await supabase
-          .from('DISCOUNT_CODES')
-          .insert([{ ...codeData, current_uses: 0 }]);
-
-        if (error) {
-          console.error('Insert error:', error);
-          throw error;
-        }
+        const duplicates = await mwakwaData.discountCodes.filter({ event_id: eventId, code: codeData.code });
+        if (duplicates.length) throw new Error('This discount code already exists. Please use a different code.');
+        await mwakwaData.discountCodes.create({ ...codeData, current_uses: 0 });
         alert('Discount code created successfully!');
       }
 
@@ -147,21 +120,8 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
       handleCloseModal();
     } catch (err) {
       console.error('Error saving discount code:', err);
-      const e = err as PostgrestError | Error;
-
-      if ('code' in e && e.code === '23505') {
-        setError('This discount code already exists. Please use a different code.');
-      } else if ('code' in e && e.code === '42501') {
-        setError('Permission denied. You may not have access to manage discount codes for this event.');
-      } else if ('code' in e && e.code === '23503') {
-        setError('Invalid event or user reference. Please refresh the page and try again.');
-      } else if ('message' in e && e.message.includes('violates foreign key')) {
-        setError('Invalid event. Please refresh the page and try again.');
-      } else if ('message' in e) {
-        setError(`Failed to save: ${e.message}`);
-      } else {
-        setError('Failed to save discount code. Please check your connection and try again.');
-      }
+      const e = err as Error;
+      setError(e.message || 'Failed to save discount code. Please check your connection and try again.');
     } finally {
       setLoading(false);
     }
@@ -171,12 +131,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
     if (!confirm(`Are you sure you want to delete the discount code "${code}"?`)) return;
 
     try {
-      const { error } = await supabase
-        .from('DISCOUNT_CODES')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await mwakwaData.discountCodes.delete(String(id));
       await fetchDiscountCodes();
       alert('Discount code deleted successfully!');
     } catch (err) {
@@ -187,12 +142,7 @@ const DiscountCodeManager: React.FC<DiscountCodeManagerProps> = ({
 
   const handleToggleActive = async (id: number, currentStatus: boolean): Promise<void> => {
     try {
-      const { error } = await supabase
-        .from('DISCOUNT_CODES')
-        .update({ is_active: !currentStatus })
-        .eq('id', id);
-
-      if (error) throw error;
+      await mwakwaData.discountCodes.update(String(id), { is_active: !currentStatus });
       await fetchDiscountCodes();
     } catch (err) {
       console.error('Error toggling discount code status:', err);
