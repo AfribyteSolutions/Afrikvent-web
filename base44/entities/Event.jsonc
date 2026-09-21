@@ -93,6 +93,16 @@
       "type": "string",
       "format": "date-time"
     },
+    "cancellation_policy_id": {
+      "type": "string"
+    },
+    "cancellation_policy_snapshot": {
+      "type": "object"
+    },
+    "cancellation_policy_accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
     "legacy_supabase_id": {
       "type": "string"
     }
