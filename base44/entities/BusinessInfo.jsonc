@@ -1,0 +1,79 @@
+{
+  "type": "object",
+  "properties": {
+    "legal_name": {
+      "type": "string"
+    },
+    "trading_name": {
+      "type": "string"
+    },
+    "registration_number": {
+      "type": "string"
+    },
+    "tax_id": {
+      "type": "string"
+    },
+    "address_line1": {
+      "type": "string"
+    },
+    "address_line2": {
+      "type": "string"
+    },
+    "city": {
+      "type": "string"
+    },
+    "region": {
+      "type": "string"
+    },
+    "postal_code": {
+      "type": "string"
+    },
+    "country": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string"
+    },
+    "privacy_email": {
+      "type": "string"
+    },
+    "support_email": {
+      "type": "string"
+    },
+    "website": {
+      "type": "string"
+    },
+    "data_controller_name": {
+      "type": "string"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "legal_name"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "BusinessInfo"
+}
