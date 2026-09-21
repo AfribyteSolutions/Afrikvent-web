@@ -275,7 +275,7 @@ export default function HomePage() {
   );
 
   return (
-    <main className="w-full bg-white text-gray-900 min-h-screen">
+    <main className="w-full cms-brand-bg min-h-screen">
       {/* Hero Section with Video Slider */}
       {sectionEnabled("hero") && <section className="w-full h-screen relative">
         <VideoSlider 
@@ -360,7 +360,7 @@ export default function HomePage() {
 
           {sectionEnabled("promotion_banners") && <PromotionalBannerSection />}
 
-          {sectionEnabled("final_cta") && <section className="py-16 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+          {sectionEnabled("final_cta") && <section className="py-16 cms-cta-gradient text-white">
             <div className="container mx-auto px-4 text-center">
               <h2 className="text-3xl md:text-4xl font-bold mb-6">{sectionTitle("final_cta", "Ready to Find Your Next Event?")}</h2>
               <p className="text-xl mb-8 opacity-90">
