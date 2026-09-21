@@ -276,12 +276,22 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [generatedTickets, setGeneratedTickets] = useState<EnhancedTicket[]>([]);
   const [paidPaymentsEnabled, setPaidPaymentsEnabled] = useState(false);
+  const [eventPolicies, setEventPolicies] = useState<any>(null);
+  const [policiesAccepted, setPoliciesAccepted] = useState(false);
 
   useEffect(() => {
     mwakwaData.platformSettings.filter({}, undefined, 1, 0)
       .then((rows) => setPaidPaymentsEnabled(Boolean(rows?.[0]?.paid_payments_enabled)))
       .catch(() => setPaidPaymentsEnabled(false));
   }, []);
+
+  useEffect(() => {
+    if (!isOpen || !eventId) return;
+    setPoliciesAccepted(false);
+    mwakwaData.events.filter({ id: String(eventId) }, undefined, 1, 0)
+      .then((rows) => setEventPolicies(rows?.[0] || null))
+      .catch(() => setEventPolicies(null));
+  }, [isOpen, eventId]);
   
   // Discount code states
   const [discountCode, setDiscountCode] = useState('');
@@ -421,6 +431,10 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
 
     if (!isFreeTicket) {
       setDiscountError('This discount requires payment. Please use the payment options below.');
+      return;
+    }
+    if (!policiesAccepted) {
+      setDiscountError('Please accept the ticket, refund and cancellation terms before checkout.');
       return;
     }
 
@@ -685,6 +699,15 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                 </div>
               )}
 
+              {(step === 'method' || step === 'details') && eventPolicies && (
+                <div className="border border-gray-200 rounded-xl p-4 mb-5 text-sm">
+                  <h4 className="font-semibold text-gray-900 mb-2">Ticket policies</h4>
+                  {eventPolicies.refund_policy_snapshot && <div className="mb-3"><p className="font-medium">{eventPolicies.refund_policy_snapshot.name}</p><p className="text-gray-600">{eventPolicies.refund_policy_snapshot.buyer_disclosure || eventPolicies.refund_policy_snapshot.description}</p></div>}
+                  {eventPolicies.cancellation_policy_snapshot && <div><p className="font-medium">Cancellation & postponement</p><p className="text-gray-600">{eventPolicies.cancellation_policy_snapshot.buyer_disclosure || eventPolicies.cancellation_policy_snapshot.description}</p></div>}
+                  <label className="flex items-start gap-2 mt-4 font-medium"><input type="checkbox" className="mt-1" checked={policiesAccepted} onChange={e => setPoliciesAccepted(e.target.checked)} /><span>I accept these event-specific ticket terms and Mwakwa's applicable platform terms.</span></label>
+                </div>
+              )}
+
               {step === 'method' && (
                 <motion.div
                   initial={{ opacity: 0, x: 20 }}
@@ -757,7 +780,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                         {isFreeTicket && (
                           <button
                             onClick={handleFreeCheckout}
-                            disabled={isValidatingCode}
+                            disabled={isValidatingCode || !policiesAccepted}
                             className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-bold"
                           >
                             {isValidatingCode ? 'Generating...' : 'Get Free Tickets'}
