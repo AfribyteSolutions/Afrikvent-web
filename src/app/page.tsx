@@ -311,7 +311,7 @@ export default function HomePage() {
         </div>
       ) : (
         <>
-          {sectionEnabled("recommended") && (recommendedLoading ? (
+          {sectionEnabled("recommended") && <div data-cms-title={sectionTitle("recommended", "Recommended Events")}>{recommendedLoading ? (
             <CarouselSkeleton title={sectionTitle("recommended", "Recommended Events")} />
           ) : recommendedError ? (
             <CarouselError error={recommendedError} title={sectionTitle("recommended", "Recommended Events")} />
@@ -328,7 +328,7 @@ export default function HomePage() {
               title={sectionTitle("recommended", "Recommended Events")}
               message="No recommended events available at the moment."
             />
-          ))}
+          )}</div>}
 
           {sectionEnabled("sponsored") && (sponsoredLoading ? (
             <CarouselSkeleton title="Sponsored Events" />
