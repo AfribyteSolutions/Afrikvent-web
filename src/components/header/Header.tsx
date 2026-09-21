@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { ChevronDown, User as UserIcon, LogOut } from "lucide-react";
 
 type NavItem = { id?: string; label: string; url: string; is_enabled?: boolean };
-type BrandConfig = { brand_name?: string; logo_url?: string };
+type BrandConfig = { brand_name?: string; logo_url?: string; primary_color?: string; secondary_color?: string; background_color?: string; text_color?: string };
 
 const Header = () => {
   const router = useRouter();
