@@ -27,11 +27,11 @@ export const metadata: Metadata = {
   },
   description: "Discover, connect around, and access social events with Mwakwa.",
   applicationName: "Mwakwa",
-  alternates: { canonical: metadataBase },
+  alternates: { canonical: metadataBase.toString() },
   openGraph: {
     title: "Mwakwa",
     description: "Discover, connect around, and access social events with Mwakwa.",
-    url: metadataBase,
+    url: metadataBase.toString(),
     siteName: "Mwakwa",
     type: "website",
   },
