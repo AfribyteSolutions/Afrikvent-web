@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { mwakwaAuth, mwakwaData, MwakwaUser } from "@/lib/mwakwaBackend";
 
-type Tab = "site" | "brand" | "navigation" | "policies" | "overrides";
+type Tab = "site" | "brand" | "business" | "navigation" | "policies" | "overrides";
 type Row = Record<string, any>;
 
 const policyGroups = [
@@ -24,6 +24,7 @@ export default function CmsPage() {
   const [ready, setReady] = useState(false);
   const [tab, setTab] = useState<Tab>("site");
   const [brand, setBrand] = useState<Row | null>(null);
+  const [business, setBusiness] = useState<Row | null>(null);
   const [sections, setSections] = useState<Row[]>([]);
   const [nav, setNav] = useState<Row[]>([]);
   const [policies, setPolicies] = useState<Record<string, Row[]>>({});
@@ -33,14 +34,15 @@ export default function CmsPage() {
   const load = async () => {
     const me = await mwakwaAuth.me(); setUser(me); setReady(true);
     if (me?.role !== "admin") return;
-    const [brands, ss, ni, ov, ...ps] = await Promise.all([
+    const [brands, businesses, ss, ni, ov, ...ps] = await Promise.all([
       mwakwaData.brandSettings.list("-updated_date", 10, 0),
+      mwakwaData.businessInfo.list("-updated_date", 10, 0),
       mwakwaData.siteSections.list("sort_order", 100, 0),
       mwakwaData.navigationItems.list("sort_order", 100, 0),
       mwakwaData.eventPolicyOverrides.list("-created_date", 100, 0),
       ...policyGroups.map(g => g.entity.list("-updated_date", 50, 0)),
     ]);
-    setBrand((brands as Row[])[0] || null); setSections(ss as Row[]); setNav(ni as Row[]); setOverrides(ov as Row[]);
+    setBrand((brands as Row[])[0] || null); setBusiness((businesses as Row[])[0] || null); setSections(ss as Row[]); setNav(ni as Row[]); setOverrides(ov as Row[]);
     setPolicies(Object.fromEntries(policyGroups.map((g, i) => [g.key, ps[i] as Row[]])));
   };
   useEffect(() => { load().catch(e => setMessage(e?.message || "Could not load CMS")); }, []);
@@ -56,7 +58,7 @@ export default function CmsPage() {
     <div className="max-w-7xl mx-auto p-4 md:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6"><div><h1 className="text-3xl font-bold">Mwakwa Control Center</h1><p className="text-gray-600">Website, branding and commercial policy.</p></div><Link href="/" className="rounded-lg border px-4 py-2 bg-white">View site</Link></div>
       {message && <div className="mb-4 rounded-lg bg-white border px-4 py-3">{message}</div>}
-      <div className="flex gap-2 overflow-x-auto mb-6">{([['site','Site'],['brand','Brand'],['navigation','Navigation'],['policies','Commercial policies'],['overrides','Event approvals']] as [Tab,string][]).map(([k,l]) => <button key={k} onClick={() => setTab(k)} className={`whitespace-nowrap rounded-full px-4 py-2 ${tab===k?'cms-primary-bg text-white':'bg-white border'}`}>{l}</button>)}</div>
+      <div className="flex gap-2 overflow-x-auto mb-6">{([['site','Site'],['brand','Brand'],['business','Business info'],['navigation','Navigation'],['policies','Commercial policies'],['overrides','Event approvals']] as [Tab,string][]).map(([k,l]) => <button key={k} onClick={() => setTab(k)} className={`whitespace-nowrap rounded-full px-4 py-2 ${tab===k?'cms-primary-bg text-white':'bg-white border'}`}>{l}</button>)}</div>
 
       {tab === "site" && <div className="space-y-4">{sections.map((r, i) => <section key={r.id} className="bg-white rounded-xl border p-4 grid md:grid-cols-2 gap-4"><div className="md:col-span-2 flex justify-between"><strong>{r.section_key}</strong><Field label="Enabled" type="boolean" value={r.is_enabled} onChange={v => patch(sections,setSections,r.id,'is_enabled',v)} /></div><Field label="Title" value={r.title} onChange={v=>patch(sections,setSections,r.id,'title',v)} /><Field label="Subtitle" value={r.subtitle} onChange={v=>patch(sections,setSections,r.id,'subtitle',v)} /><Field label="Button text" value={r.button_text} onChange={v=>patch(sections,setSections,r.id,'button_text',v)} /><Field label="Button URL" value={r.button_url} onChange={v=>patch(sections,setSections,r.id,'button_url',v)} /><Field label="Desktop media URL" value={r.media_url} onChange={v=>patch(sections,setSections,r.id,'media_url',v)} /><Field label="Mobile media URL" value={r.mobile_media_url} onChange={v=>patch(sections,setSections,r.id,'mobile_media_url',v)} /><button className="md:col-span-2 justify-self-start rounded-lg cms-primary-bg text-white px-4 py-2" onClick={()=>save(mwakwaData.siteSections, sections[i])}>Save section</button></section>)}</div>}
 
