@@ -15,7 +15,6 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL((process.env.NEXT_PUBLIC_APP_URL || "https://mwakwa.com").replace(/\/$/, "")),
   title: {
     default: "Mwakwa",
     template: "%s | Mwakwa",
