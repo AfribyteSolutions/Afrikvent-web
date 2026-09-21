@@ -15,7 +15,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Afrikvent",
+  title: "Mwakwa",
   description: "Ticketing app for African events",
 };
 
