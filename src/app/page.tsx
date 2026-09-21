@@ -9,6 +9,7 @@ import UpcomingEvents from "@/components/event/upcomingevents/UpcomingEvents";
 import PromotionalBannerSection from "@/components/promotionbanner/PromotionBannerSection";
 import SearchResults from "@/components/event/SearchResults";
 import EventFilters, { FilterState } from "@/components/event/EventFilters";
+import { mwakwaData } from "@/lib/mwakwaBackend";
 
 // Desktop slides
 const slides = [
@@ -31,12 +32,22 @@ export default function HomePage() {
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSearchResults, setShowSearchResults] = useState(false);
+  const [siteSections, setSiteSections] = useState<Record<string, any>>({});
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     location: "",
     priceRange: "",
     dateRange: ""
   });
+
+  useEffect(() => {
+    mwakwaData.siteSections.filter({ page_slug: "home", is_enabled: true }, "sort_order", 100, 0)
+      .then((rows) => setSiteSections(Object.fromEntries(rows.map((row: any) => [row.section_key, row]))))
+      .catch(() => setSiteSections({}));
+  }, []);
+
+  const sectionEnabled = (key: string) => siteSections[key]?.is_enabled !== false;
+  const sectionTitle = (key: string, fallback: string) => siteSections[key]?.title || fallback;
 
   const {
     events: recommendedEvents,
@@ -261,7 +272,7 @@ export default function HomePage() {
   return (
     <main className="w-full bg-white text-gray-900 min-h-screen">
       {/* Hero Section with Video Slider */}
-      <section className="w-full h-screen">
+      {sectionEnabled("hero") && <section className="w-full h-screen">
         <VideoSlider 
           slides={slides}
           mobileVideoSrc={mobileVideoSrc} // Pass mobile video here
@@ -271,9 +282,9 @@ export default function HomePage() {
           onSearchQueryChange={setSearchQuery}
           isSearching={isSearching}
         />
-      </section>
+      </section>}
 
-      {/* Rest of the content remains the same */}
+      {/* CMS-controlled homepage blocks */}
       {showSearchResults ? (
         <div className="bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
@@ -291,10 +302,10 @@ export default function HomePage() {
         </div>
       ) : (
         <>
-          {recommendedLoading ? (
-            <CarouselSkeleton title="Recommended Events" />
+          {sectionEnabled("recommended") && (recommendedLoading ? (
+            <CarouselSkeleton title={sectionTitle("recommended", "Recommended Events")} />
           ) : recommendedError ? (
-            <CarouselError error={recommendedError} title="Recommended Events" />
+            <CarouselError error={recommendedError} title={sectionTitle("recommended", "Recommended Events")} />
           ) : recommendedEvents.length > 0 ? (
             <div className="bg-white">
               <RecommendedEvents
@@ -305,12 +316,12 @@ export default function HomePage() {
             </div>
           ) : (
             <EmptySection 
-              title="Recommended Events"
+              title={sectionTitle("recommended", "Recommended Events")}
               message="No recommended events available at the moment."
             />
-          )}
+          ))}
 
-          {sponsoredLoading ? (
+          {sectionEnabled("sponsored") && (sponsoredLoading ? (
             <CarouselSkeleton title="Sponsored Events" />
           ) : sponsoredError ? (
             <CarouselError error={sponsoredError} title="Sponsored Events" />
@@ -322,9 +333,9 @@ export default function HomePage() {
                 onSeeMore={handleSeeMore}
               />
             </div>
-          ) : null}
+          ) : null)}
 
-          {upcomingLoading ? (
+          {sectionEnabled("upcoming") && (upcomingLoading ? (
             <CarouselSkeleton title="Upcoming Events" />
           ) : upcomingError ? (
             <CarouselError error={upcomingError} title="Upcoming Events" />
@@ -336,22 +347,22 @@ export default function HomePage() {
                 onSeeMore={handleSeeMore}
               />
             </div>
-          ) : null}
+          ) : null)}
 
-          <section className="py-16 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+          {sectionEnabled("final_cta") && <section className="py-16 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
             <div className="container mx-auto px-4 text-center">
-              <h2 className="text-3xl md:text-4xl font-bold mb-6">Ready to Find Your Next Event?</h2>
+              <h2 className="text-3xl md:text-4xl font-bold mb-6">{sectionTitle("final_cta", "Ready to Find Your Next Event?")}</h2>
               <p className="text-xl mb-8 opacity-90">
-                Join thousands of event-goers who trust our platform to discover amazing experiences.
+                {siteSections.final_cta?.body || "Join event-goers discovering experiences through Mwakwa."}
               </p>
               <button
                 onClick={() => router.push("/events")}
                 className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
               >
-                Explore All Events
+                {siteSections.final_cta?.button_text || "Explore All Events"}
               </button>
             </div>
-          </section>
+          </section>}
         </>
       )}
     </main>
