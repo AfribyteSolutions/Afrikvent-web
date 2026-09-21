@@ -368,7 +368,7 @@ export default function HomePage() {
               </p>
               <button
                 onClick={() => router.push(siteSections.final_cta?.button_url || "/events")}
-                className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
+                className="bg-white cms-primary-text px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
               >
                 {siteSections.final_cta?.button_text || "Explore All Events"}
               </button>
