@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { mwakwaData } from "@/lib/mwakwaBackend";
 
 type NavItem = { id?: string; label: string; url: string; location?: string; is_enabled?: boolean };
-type BrandConfig = { brand_name?: string; logo_url?: string; footer_description?: string; copyright_text?: string; primary_color?: string };
+type BrandConfig = { brand_name?: string; logo_url?: string; footer_description?: string; copyright_text?: string };
 
 const Footer = () => {
   const [brand, setBrand] = useState<BrandConfig | null>(null);
