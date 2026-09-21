@@ -54,6 +54,10 @@ export const mwakwaData = {
   eventPolicyOverrides: base44.entities.EventPolicyOverride,
   cmsChangeRequests: base44.entities.CmsChangeRequest,
   businessInfo: base44.entities.BusinessInfo,
+  refundRequests: base44.entities.RefundRequest,
+  organizerBalances: base44.entities.OrganizerBalance,
+  organizerPayouts: base44.entities.OrganizerPayout,
+  financialLedgerEntries: base44.entities.FinancialLedgerEntry,
 };
 
 export const mwakwaFiles = {
