@@ -1,14 +1,13 @@
 // Updated CreateEventModal with proper currency handling, navigation, and fee disclaimer
 'use client';
 import React, { useState } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import type { User } from '@supabase/supabase-js';
+import { mwakwaData, mwakwaFiles, type MwakwaUser } from '@/lib/mwakwaBackend';
 
 interface CreateEventModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  user: User | null;
+  user: MwakwaUser | null;
 }
 
 interface EventFormData {
@@ -174,32 +173,11 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     }
   };
 
-  const uploadEventImage = async (eventId: number): Promise<string | null> => {
-    if (!formData.image || !user) return null;
-
+  const uploadEventImage = async (): Promise<string | null> => {
+    if (!formData.image) return null;
     try {
-      const fileExt = formData.image.name.split('.').pop();
-      const fileName = `event-${eventId}-${Math.random()}.${fileExt}`;
-      const filePath = `${user.id}/${fileName}`;
-
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('event-images')
-        .upload(filePath, formData.image, {
-          cacheControl: '3600',
-          upsert: false
-        });
-
-      if (uploadError) {
-        console.error('Image upload error:', uploadError);
-        return null;
-      }
-
-      const { data: publicUrlData } = supabase.storage
-        .from('event-images')
-        .getPublicUrl(filePath);
-
-      return publicUrlData.publicUrl;
-
+      const result = await mwakwaFiles.uploadPublic(formData.image);
+      return result.file_url;
     } catch (error) {
       console.error('Error uploading image:', error);
       return null;
@@ -216,71 +194,38 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     setError('');
   
     try {
-      // Combine date and time - Use proper ISO format
-      const eventDateTime = new Date(`${formData.date}T${formData.time}`).toISOString();
-      
-      // Create the event with currency information
-      const { data: eventData, error: eventError } = await supabase
-        .from('EVENTS')
-        .insert([{
-          title: formData.title,
-          description: formData.description,
-          event_date: eventDateTime,
-          start_time: formData.time,
-          location_name: formData.location,
-          address: formData.venue,
+      const imageUrl = formData.image ? await uploadEventImage() : null;
+      const eventData = await mwakwaData.events.create({
+        title: formData.title,
+        description: formData.description,
+        event_date: formData.date,
+        start_time: formData.time,
+        location_name: formData.location,
+        address: formData.venue,
+        organizer_id: user.id,
+        organizer_name: user.display_name || user.full_name || user.email,
+        event_status: formData.eventStatus,
+        currency: formData.currency,
+        currency_symbol: selectedCurrency.symbol,
+        images: imageUrl ? [imageUrl] : [],
+        is_featured: false,
+        is_sponsored: false,
+      });
+      const eventId = eventData.id;
+
+      for (const ticketType of formData.ticketTypes) {
+        await mwakwaData.ticketTypes.create({
+          event_id: eventId,
           organizer_id: user.id,
-          event_status: formData.eventStatus,
+          name: ticketType.name,
+          description: ticketType.description,
+          price: ticketType.price,
+          max_quantity: ticketType.quantity,
           currency: formData.currency,
           currency_symbol: selectedCurrency.symbol,
-          is_featured: false,
-          is_sponsored: false
-        }])
-        .select()
-        .single();
-  
-      if (eventError) {
-        throw new Error(eventError.message);
-      }
-  
-      const eventId = eventData.id;
-  
-      // Upload image if provided
-      let imageUrl: string | null = null;
-      if (formData.image) {
-        imageUrl = await uploadEventImage(eventId);
-      }
-  
-      // Update event with image URL if uploaded
-      if (imageUrl) {
-        const { error: updateError } = await supabase
-          .from('EVENTS')
-          .update({ images: [imageUrl] })
-          .eq('id', eventId);
-  
-        if (updateError) {
-          console.warn('Error updating event with image:', updateError);
-        }
-      }
-  
-      // Create ticket types with format field
-      for (const ticketType of formData.ticketTypes) {
-        const { error: ticketError } = await supabase
-          .from('TICKET_TYPES')
-          .insert([{
-            event_id: eventId,
-            name: ticketType.name,
-            description: ticketType.description,
-            price: ticketType.price,
-            max_quatity: ticketType.quantity,
-            currency: formData.currency,
-            currency_symbol: selectedCurrency.symbol,
-            format: ticketType.format // ✅ NOW SAVING FORMAT
-          }]);
-  
-        if (ticketError) {
-          console.error('Error creating ticket type:', ticketError);
-        }
+          format: ticketType.format,
+          is_active: true,
+        });
       }
   
       // Reset form
