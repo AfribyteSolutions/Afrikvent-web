@@ -10,11 +10,27 @@
     "ticket_id": {
       "type": "string"
     },
+    "event_id": {
+      "type": "string"
+    },
     "buyer_id": {
       "type": "string"
     },
     "organizer_id": {
       "type": "string"
+    },
+    "request_type": {
+      "type": "string",
+      "enum": [
+        "voluntary",
+        "event_cancelled",
+        "event_postponed",
+        "duplicate_payment",
+        "fraud",
+        "legal_or_provider",
+        "admin_exception"
+      ],
+      "default": "voluntary"
     },
     "amount": {
       "type": "number",
@@ -25,6 +41,33 @@
     },
     "reason": {
       "type": "string"
+    },
+    "eligibility": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "eligible",
+        "ineligible",
+        "manual_review"
+      ],
+      "default": "pending"
+    },
+    "eligibility_reason": {
+      "type": "string"
+    },
+    "liability_party": {
+      "type": "string",
+      "enum": [
+        "organizer",
+        "platform",
+        "processor",
+        "shared",
+        "unassigned"
+      ],
+      "default": "unassigned"
+    },
+    "policy_snapshot": {
+      "type": "object"
     },
     "status": {
       "type": "string",
@@ -44,6 +87,9 @@
     "processed_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "idempotency_key": {
+      "type": "string"
     }
   },
   "required": [
