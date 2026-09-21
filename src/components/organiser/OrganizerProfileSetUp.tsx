@@ -1,8 +1,7 @@
 // src/components/organiser/OrganiserProfileSetup.tsx
 'use client';
 import React, { useState, useRef } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
+import { mwakwaData, mwakwaFiles, type MwakwaUser as User } from '@/lib/mwakwaBackend';
 import { OrganizerProfile, SocialLinks } from '@/types/event';
 
 interface OrganiserProfileSetupProps {
@@ -74,22 +73,9 @@ export default function OrganiserProfileSetup({
     }
   };
 
-  const uploadFile = async (file: File, folder: string): Promise<string> => {
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}_${Date.now()}.${fileExt}`;
-    const filePath = `${folder}/${fileName}`;
-
-    const { data, error } = await supabase.storage
-      .from('kyc_documents')
-      .upload(filePath, file);
-
-    if (error) throw error;
-
-    const { data: urlData } = supabase.storage
-      .from('kyc_documents')
-      .getPublicUrl(filePath);
-
-    return urlData.publicUrl;
+  const uploadFile = async (file: File): Promise<string> => {
+    const result = await mwakwaFiles.uploadPrivate(file);
+    return result.file_uri;
   };
 
   const validateStep1 = () => {
@@ -152,16 +138,16 @@ export default function OrganiserProfileSetup({
 
       // Upload new files if provided
       if (files.passportPhoto) {
-        passportPhotoUrl = await uploadFile(files.passportPhoto, 'passport-photos');
+        passportPhotoUrl = await uploadFile(files.passportPhoto);
       }
       if (files.idFrontPhoto) {
-        idFrontPhotoUrl = await uploadFile(files.idFrontPhoto, 'id-photos');
+        idFrontPhotoUrl = await uploadFile(files.idFrontPhoto);
       }
       if (files.idBackPhoto) {
-        idBackPhotoUrl = await uploadFile(files.idBackPhoto, 'id-photos');
+        idBackPhotoUrl = await uploadFile(files.idBackPhoto);
       }
       if (files.selfieWithId) {
-        selfieWithIdUrl = await uploadFile(files.selfieWithId, 'selfie-photos');
+        selfieWithIdUrl = await uploadFile(files.selfieWithId);
       }
 
       const profileData = {
@@ -174,32 +160,18 @@ export default function OrganiserProfileSetup({
           twitter: formData.twitter,
           instagram: formData.instagram,
         },
-        passport_photo_url: passportPhotoUrl,
-        id_front_photo_url: idFrontPhotoUrl,
-        id_back_photo_url: idBackPhotoUrl,
-        selfie_with_id_url: selfieWithIdUrl,
-        kyc_status: 'approved', // Auto-approve for now
-        updated_at: new Date().toISOString(),
+        passport_photo_uri: passportPhotoUrl,
+        id_front_photo_uri: idFrontPhotoUrl,
+        id_back_photo_uri: idBackPhotoUrl,
+        selfie_with_id_uri: selfieWithIdUrl,
+        kyc_status: 'pending',
       };
 
-      let result;
-      if (existingProfile) {
-        // Update existing profile
-        result = await supabase
-          .from('ORGANIZER_KYC')
-          .update(profileData)
-          .eq('user_id', user.id);
+      if (existingProfile?.id) {
+        await mwakwaData.organizerProfiles.update(String(existingProfile.id), profileData);
       } else {
-        // Create new profile
-        result = await supabase
-          .from('ORGANIZER_KYC')
-          .insert([{
-            ...profileData,
-            created_at: new Date().toISOString(),
-          }]);
+        await mwakwaData.organizerProfiles.create(profileData);
       }
-
-      if (result.error) throw result.error;
 
       onSuccess();
     } catch (error) {
