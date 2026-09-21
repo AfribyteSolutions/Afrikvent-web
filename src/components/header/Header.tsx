@@ -2,15 +2,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { supabase } from "@/lib/supabaseClient";
-import type { User } from "@supabase/supabase-js";
+import { mwakwaAuth, type MwakwaUser } from "@/lib/mwakwaBackend";
 import AuthModal from "@/components/auth/AuthModal";
 import { useRouter } from "next/navigation";
 import { ChevronDown, User as UserIcon, LogOut } from "lucide-react";
 
 const Header = () => {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<MwakwaUser | null>(null);
   const [showSignIn, setShowSignIn] = useState(false);
   const [showSignUp, setShowSignUp] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -18,24 +17,13 @@ const Header = () => {
 
   useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUser(user);
+      setUser(await mwakwaAuth.me());
     };
     getUser();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-      }
-    );
-
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
   }, []);
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    await mwakwaAuth.logout("/");
     setUser(null);
     setIsMobileMenuOpen(false);
     setIsProfileDropdownOpen(false);
@@ -99,7 +87,7 @@ const Header = () => {
                   className="flex items-center space-x-2 px-3 py-1.5 rounded-full bg-gray-200 text-sm focus:outline-none"
                 >
                   <span className="w-7 h-7 rounded-full overflow-hidden">
-                    {user.user_metadata?.avatar_url ? (
+                    {user.avatar_url ? (
                       <Image
                         src={user.user_metadata.avatar_url}
                         alt="Profile Picture"
@@ -113,7 +101,7 @@ const Header = () => {
                       </div>
                     )}
                   </span>
-                  <span>{user.user_metadata?.name || user.email}</span>
+                  <span>{user.display_name || user.full_name || user.email}</span>
                   <ChevronDown className={`w-4 h-4 transition-transform ${isProfileDropdownOpen ? 'rotate-180' : 'rotate-0'}`} />
                 </button>
 
@@ -212,7 +200,7 @@ const Header = () => {
                   <div className="flex flex-col items-center space-y-4">
                     <span className="flex items-center space-x-2 text-gray-600 font-semibold text-lg">
                       <span className="w-8 h-8 rounded-full overflow-hidden">
-                        {user.user_metadata?.avatar_url ? (
+                        {user.avatar_url ? (
                           <Image
                             src={user.user_metadata.avatar_url}
                             alt="Profile"
@@ -226,7 +214,7 @@ const Header = () => {
                           </div>
                         )}
                       </span>
-                      <span>{user.user_metadata?.name || user.email}</span>
+                      <span>{user.display_name || user.full_name || user.email}</span>
                     </span>
                     <Link
                       href="/profile"
