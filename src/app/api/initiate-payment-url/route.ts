@@ -75,7 +75,7 @@ async function initiatePay({
     userId: user.user_id,
     externalId: user.user_id,
     message: "Making a payment transaction",
-    redirectUrl: `${(process.env.NEXT_PUBLIC_APP_URL || "https://mwakwa.com").replace(/\/$/, "")}/payment-success`,
+    redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL && /^https?:\/\//i.test(process.env.NEXT_PUBLIC_APP_URL) ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "") : "https://mwakwa.com"}/payment-success`,
   });
 
   const response = await fetch(url, { method: "POST", headers, body });
@@ -84,7 +84,7 @@ async function initiatePay({
 
   const data = (await response.json()) as FapshiResponse;
   if (data.transId) {
-    data.redirectUrl = `${(process.env.NEXT_PUBLIC_APP_URL || "https://mwakwa.com").replace(/\/$/, "")}/payment-success?transId=${data.transId}`;
+    data.redirectUrl = `${process.env.NEXT_PUBLIC_APP_URL && /^https?:\/\//i.test(process.env.NEXT_PUBLIC_APP_URL) ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "") : "https://mwakwa.com"}/payment-success?transId=${data.transId}`;
   }
 
   return data;
