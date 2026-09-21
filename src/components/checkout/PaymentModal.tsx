@@ -495,6 +495,10 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   };
 
   const handleMethodSelect = (method: PaymentMethod) => {
+    if (!policiesAccepted) {
+      setDiscountError('Please accept the ticket, refund and cancellation terms before selecting payment.');
+      return;
+    }
     setPaymentMethod(method);
     setStep('details');
   };
