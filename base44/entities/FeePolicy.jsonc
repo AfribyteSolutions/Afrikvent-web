@@ -19,6 +19,21 @@
       "minimum": 0,
       "default": 0
     },
+    "fee_charge_mode": {
+      "type": "string",
+      "enum": [
+        "organizer_deduction",
+        "buyer_addon",
+        "split"
+      ],
+      "default": "organizer_deduction"
+    },
+    "organizer_fee_share_percent": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100,
+      "default": 100
+    },
     "organizer_absorbs_processor_fee": {
       "type": "boolean",
       "default": true
