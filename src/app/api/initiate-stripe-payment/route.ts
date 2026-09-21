@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Use the environment variable or fallback to production URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://mwakwa.com';
+    const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://mwakwa.com').replace(/\/$/, '');
     
     console.log('Using base URL:', baseUrl);
 
