@@ -30,6 +30,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Mwakwa",
     description: "Discover, connect around, and access social events with Mwakwa.",
+    url: metadataBase,
     siteName: "Mwakwa",
     type: "website",
   },
