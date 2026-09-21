@@ -10,8 +10,6 @@ import PaymentModal from '@/components/checkout/PaymentModal';
 import PaymentSuccessScreen from '@/components/checkout/PaymentSuccessScreen';
 import AuthModal from '@/components/auth/AuthModal';
 import { getCurrencyInfo } from '@/utils/currency';
-import ViewerStream from '@/components/stream/ViewerStream';
-import WatchLiveButton from '@/components/stream/WatchLiveButton';
 
 type EventRow = Database['public']['Tables']['EVENTS']['Row'];
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
@@ -143,9 +141,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [showImageLightbox, setShowImageLightbox] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  // NEW: Stream-related state
-  const [showViewerStream, setShowViewerStream] = useState(false);
-  const [streamIsLive, setStreamIsLive] = useState(false);
 
   const eventId = parseInt(resolvedParams.id);
 
@@ -161,25 +156,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
     }
   }, [eventId]);
 
-  // NEW: Check stream status
-  useEffect(() => {
-    const checkStreamStatus = async () => {
-      try {
-        const response = await fetch(`/api/stream/status?eventId=${eventId}`);
-        const data = await response.json();
-        setStreamIsLive(data.isLive);
-      } catch (err) {
-        console.error('Error checking stream:', err);
-      }
-    };
-    
-    if (eventId) {
-      checkStreamStatus();
-      const interval = setInterval(checkStreamStatus, 30000); // Check every 30s
-      
-      return () => clearInterval(interval);
-    }
-  }, [eventId]);
 
   const fetchEventDetails = async () => {
     try {
@@ -774,10 +750,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
                 </div>
               </div>
             )}
-            <WatchLiveButton
-      eventId={event.id}
-      eventTitle={event.title}
-    />
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 Comments ({event.comments.length})
@@ -1124,15 +1096,6 @@ const EventDetailPage: React.FC<EventDetailPageProps> = ({ params }) => {
         onSuccess={handleAuthSuccess}
       />
 
-      {/* NEW: Viewer Stream Modal */}
-      {showViewerStream && (
-        <ViewerStream
-          eventId={event.id}
-          eventTitle={event.title}
-          onClose={() => setShowViewerStream(false)}
-        />
-      )}
-      
     </div>
   );
 };
