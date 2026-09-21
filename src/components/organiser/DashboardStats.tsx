@@ -1,9 +1,7 @@
 // src/components/organiser/DashboardStats.tsx
 'use client';
 import React, { useState, useEffect, ReactNode, useCallback } from 'react';
-import { supabase } from '@/lib/supabaseClient';
-import type { MwakwaUser as User } from '@/lib/mwakwaBackend';
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import { mwakwaData, type MwakwaUser as User } from '@/lib/mwakwaBackend';
 
 interface DashboardStatsProps {
     user: User | null;
@@ -22,14 +20,12 @@ interface StatsData {
 }
 
 interface TicketWithEvent {
-    total: number | null;
-    quantity: string | null;
-    ticket_status: string | null;
-    created_at: string;
+    total?: number | null;
+    quantity?: number | null;
+    ticket_status?: string | null;
+    created_date: string;
     event_id: string;
-    EVENTS: {
-        currency: string | null;
-    }[];
+    currency?: string | null;
 }
 
 const getSum = (data: Record<string, number>): number => {
@@ -60,31 +56,11 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
             const startOfCurrentMonth = new Date(today.getFullYear(), today.getMonth(), 1, 0, 0, 0, 0);
             const startOfPreviousMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1, 0, 0, 0, 0);
 
-            // 1. Fetch All Events
-            const { data: allEventsData, error: eventsError } = await supabase
-                .from('EVENTS')
-                .select('id, event_status, created_at')
-                .eq('organizer_id', user.id);
-
-            if (eventsError) throw eventsError;
-            const allEvents = allEventsData || [];
-
-            // 2. Fetch All Successful Tickets (paid/used/completed)
-            const { data: allTicketsData, error: ticketsError } = await supabase
-                .from('TICKETS')
-                .select(`
-                    total,
-                    quantity,
-                    ticket_status,
-                    created_at,
-                    event_id,
-                    EVENTS!inner(currency)
-                `)
-                .eq('EVENTS.organizer_id', user.id)
-                .in('ticket_status', ['paid', 'used', 'completed', 'success']);
-            
-            if (ticketsError) throw ticketsError;
-            const allSuccessTickets: TicketWithEvent[] = allTicketsData || [];
+            const allEvents = await mwakwaData.events.filter({ organizer_id: user.id });
+            const allTickets = await mwakwaData.tickets.filter({ organizer_id: user.id });
+            const allSuccessTickets = (allTickets as TicketWithEvent[]).filter((ticket) =>
+                ['confirmed', 'used'].includes(ticket.ticket_status || '')
+            );
 
             // --- Calculate Revenue and Tickets Sold ---
             
@@ -92,7 +68,7 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
             const calculateRevenue = (tickets: TicketWithEvent[]) => {
                 const revenueByCurrency: Record<string, number> = {};
                 tickets.forEach(ticket => {
-                    const currency = ticket.EVENTS[0]?.currency || 'XOF';
+                    const currency = ticket.currency || 'XAF';
                     const total = Number(ticket.total) || 0;
                     revenueByCurrency[currency] = (revenueByCurrency[currency] || 0) + total;
                 });
@@ -103,8 +79,8 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
             const calculateTicketsSold = (tickets: TicketWithEvent[]) => {
                 const ticketsByCurrency: Record<string, number> = {};
                 tickets.forEach(ticket => {
-                    const currency = ticket.EVENTS[0]?.currency || 'XOF';
-                    const quantity = parseInt(String(ticket.quantity || '1'), 10);
+                    const currency = ticket.currency || 'XAF';
+                    const quantity = Number(ticket.quantity || 1);
                     ticketsByCurrency[currency] = (ticketsByCurrency[currency] || 0) + quantity;
                 });
                 return ticketsByCurrency;
@@ -116,10 +92,10 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
 
             // --- Current Month ---
             const currentMonthEvents = allEvents.filter(event =>
-                new Date(event.created_at) >= startOfCurrentMonth
+                new Date(event.created_date) >= startOfCurrentMonth
             );
             const currentMonthTickets = allSuccessTickets.filter(ticket =>
-                new Date(ticket.created_at) >= startOfCurrentMonth
+                new Date(ticket.created_date) >= startOfCurrentMonth
             );
             const currentTotalEvents = currentMonthEvents.length;
             const currentActiveEvents = currentMonthEvents.filter(event =>
@@ -130,11 +106,11 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
 
             // --- Previous Month ---
             const previousMonthEvents = allEvents.filter(event => {
-                const eventDate = new Date(event.created_at);
+                const eventDate = new Date(event.created_date);
                 return eventDate >= startOfPreviousMonth && eventDate < startOfCurrentMonth;
             });
             const previousMonthTickets = allSuccessTickets.filter(ticket => {
-                const ticketDate = new Date(ticket.created_at);
+                const ticketDate = new Date(ticket.created_date);
                 return ticketDate >= startOfPreviousMonth && ticketDate < startOfCurrentMonth;
             });
             const previousTotalEvents = previousMonthEvents.length;
@@ -180,90 +156,14 @@ const DashboardStats: React.FC<DashboardStatsProps> = ({ user }) => {
         // Initial fetch
         fetchDashboardStats();
 
-        // Set up real-time subscriptions
-        let ticketsChannel: RealtimeChannel;
-        let eventsChannel: RealtimeChannel;
-        let paymentsChannel: RealtimeChannel;
+        const unsubTickets = mwakwaData.tickets.subscribe(() => fetchDashboardStats());
+        const unsubEvents = mwakwaData.events.subscribe(() => fetchDashboardStats());
+        const unsubPayments = mwakwaData.payments.subscribe(() => fetchDashboardStats());
 
-        const setupRealtimeSubscriptions = async () => {
-            // Subscribe to TICKETS table changes
-            ticketsChannel = supabase
-                .channel('dashboard-tickets-realtime')
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*', // INSERT, UPDATE, DELETE
-                        schema: 'public',
-                        table: 'TICKETS'
-                    },
-                    (payload) => {
-                        console.log('Ticket change detected:', payload);
-                        fetchDashboardStats();
-                    }
-                )
-                .subscribe((status) => {
-                    console.log('Tickets subscription status:', status);
-                });
-
-            // Subscribe to EVENTS table changes
-            eventsChannel = supabase
-                .channel('dashboard-events-realtime')
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'EVENTS',
-                        filter: `organizer_id=eq.${user.id}`
-                    },
-                    (payload) => {
-                        console.log('Event change detected:', payload);
-                        fetchDashboardStats();
-                    }
-                )
-                .subscribe((status) => {
-                    console.log('Events subscription status:', status);
-                });
-
-            // Subscribe to PAYMENTS table changes (optional but recommended)
-            paymentsChannel = supabase
-                .channel('dashboard-payments-realtime')
-                .on(
-                    'postgres_changes',
-                    {
-                        event: '*',
-                        schema: 'public',
-                        table: 'PAYMENTS',
-                        filter: `user_id=eq.${user.id}`
-                    },
-                    (payload) => {
-                        console.log('Payment change detected:', payload);
-                        // Only refresh if payment status changed to success/completed
-                        const newRecord = payload.new as { payment_status?: string } | null;
-                        if (newRecord && newRecord.payment_status === 'completed') {
-                            fetchDashboardStats();
-                        }
-                    }
-                )
-                .subscribe((status) => {
-                    console.log('Payments subscription status:', status);
-                });
-        };
-
-        setupRealtimeSubscriptions();
-
-        // Cleanup function
         return () => {
-            console.log('Cleaning up real-time subscriptions...');
-            if (ticketsChannel) {
-                supabase.removeChannel(ticketsChannel);
-            }
-            if (eventsChannel) {
-                supabase.removeChannel(eventsChannel);
-            }
-            if (paymentsChannel) {
-                supabase.removeChannel(paymentsChannel);
-            }
+            unsubTickets();
+            unsubEvents();
+            unsubPayments();
         };
     }, [user, fetchDashboardStats]);
 
