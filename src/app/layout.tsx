@@ -15,8 +15,21 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Mwakwa",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "https://mwakwa.com"),
+  title: {
+    default: "Mwakwa",
+    template: "%s | Mwakwa",
+  },
   description: "Discover, connect around, and access social events with Mwakwa.",
+  applicationName: "Mwakwa",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "Mwakwa",
+    description: "Discover, connect around, and access social events with Mwakwa.",
+    url: "/",
+    siteName: "Mwakwa",
+    type: "website",
+  },
 };
 
 export default function RootLayout({
