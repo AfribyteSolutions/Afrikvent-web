@@ -16,7 +16,7 @@ const montserrat = Montserrat({
 
 export const metadata: Metadata = {
   title: "Mwakwa",
-  description: "Ticketing app for African events",
+  description: "Discover, connect around, and access social events with Mwakwa.",
 };
 
 export default function RootLayout({
