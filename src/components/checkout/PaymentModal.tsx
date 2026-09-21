@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CreditCard, Smartphone, ArrowLeft, Globe, Download, Share2, MoreHorizontal, CheckCircle } from 'lucide-react';
 import CheckoutButton from '@/components/CheckOutButton';
@@ -275,6 +275,13 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const [provider, setProvider] = useState<'mtn' | 'vodafone' | 'airteltigo'>('mtn');
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [generatedTickets, setGeneratedTickets] = useState<EnhancedTicket[]>([]);
+  const [paidPaymentsEnabled, setPaidPaymentsEnabled] = useState(false);
+
+  useEffect(() => {
+    mwakwaData.brandSettings.filter({}, undefined, 1, 0)
+      .then((rows) => setPaidPaymentsEnabled(Boolean(rows?.[0]?.paid_payments_enabled)))
+      .catch(() => setPaidPaymentsEnabled(false));
+  }, []);
   
   // Discount code states
   const [discountCode, setDiscountCode] = useState('');
