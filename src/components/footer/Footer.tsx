@@ -2,7 +2,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
-import { mwakwaData } from "@/lib/mwakwaBackend";
+import { mwakwaAuth, mwakwaData } from "@/lib/mwakwaBackend";
 
 type NavItem = { id?: string; label: string; url: string; location?: string; is_enabled?: boolean; requires_auth?: boolean };
 type BrandConfig = { brand_name?: string; logo_url?: string; footer_description?: string; copyright_text?: string };
@@ -11,12 +11,14 @@ const Footer = () => {
   const [brand, setBrand] = useState<BrandConfig | null>(null);
   const [links, setLinks] = useState<NavItem[] | null>(null);
   const [linksLoaded, setLinksLoaded] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
   useEffect(() => {
+    mwakwaAuth.me().then((u) => setSignedIn(!!u));
     Promise.all([mwakwaData.brandSettings.filter({}, undefined, 1, 0), mwakwaData.navigationItems.list("sort_order", 100, 0)])
       .then(([brands, items]) => { setBrand((brands?.[0] || null) as BrandConfig | null); setLinks(items as unknown as NavItem[]); }).catch(() => { setLinks(null); }).finally(() => setLinksLoaded(true));
   }, []);
-  const platformLinks = links?.filter((x) => x.is_enabled !== false && x.location === "footer_platform") ?? null;
-  const supportLinks = links?.filter((x) => x.is_enabled !== false && (x.location === "footer_support" || x.location === "footer_legal")) ?? null;
+  const platformLinks = links?.filter((x) => x.is_enabled !== false && (!x.requires_auth || signedIn) && x.location === "footer_platform") ?? null;
+  const supportLinks = links?.filter((x) => x.is_enabled !== false && (!x.requires_auth || signedIn) && (x.location === "footer_support" || x.location === "footer_legal")) ?? null;
   return (
     <footer className="bg-white border-t border-gray-100 py-8 sm:py-12 px-4 sm:px-6">
       <div className="max-w-6xl mx-auto">
