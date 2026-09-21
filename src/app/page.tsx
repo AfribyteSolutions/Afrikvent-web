@@ -317,6 +317,7 @@ export default function HomePage() {
             <CarouselError error={recommendedError} title={sectionTitle("recommended", "Recommended Events")} />
           ) : recommendedEvents.length > 0 ? (
             <div className="bg-white">
+              {siteSections.recommended?.title && siteSections.recommended.title !== "Recommended Events" && <h2 className="sr-only">{siteSections.recommended.title}</h2>}
               <RecommendedEvents
                 events={recommendedEvents}
                 onEventClick={handleEventClick}
@@ -336,6 +337,7 @@ export default function HomePage() {
             <CarouselError error={sponsoredError} title={sectionTitle("sponsored", "Sponsored Events")} />
           ) : sponsoredEvents.length > 0 ? (
             <div className="bg-white">
+              {siteSections.sponsored?.title && siteSections.sponsored.title !== "Sponsored Events" && <h2 className="sr-only">{siteSections.sponsored.title}</h2>}
               <SponsoredEvents
                 events={sponsoredEvents}
                 onEventClick={handleEventClick}
@@ -350,6 +352,7 @@ export default function HomePage() {
             <CarouselError error={upcomingError} title={sectionTitle("upcoming", "Upcoming Events")} />
           ) : upcomingEvents.length > 0 ? (
             <div className="bg-white">
+              {siteSections.upcoming?.title && siteSections.upcoming.title !== "Upcoming Events" && <h2 className="sr-only">{siteSections.upcoming.title}</h2>}
               <UpcomingEvents
                 events={upcomingEvents}
                 onEventClick={handleEventClick}
