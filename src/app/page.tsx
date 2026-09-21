@@ -311,7 +311,7 @@ export default function HomePage() {
         </div>
       ) : (
         <>
-          {sectionEnabled("recommended") && <div>{siteSections.recommended?.title && siteSections.recommended.title !== "Recommended Events" && <div className="max-w-7xl mx-auto px-4 pt-10"><h2 className="text-2xl md:text-4xl font-bold">{siteSections.recommended.title}</h2></div>}{recommendedLoading ? (
+          {sectionEnabled("recommended") && <div>{recommendedLoading ? (
             <CarouselSkeleton title={sectionTitle("recommended", "Recommended Events")} />
           ) : recommendedError ? (
             <CarouselError error={recommendedError} title={sectionTitle("recommended", "Recommended Events")} />
@@ -330,7 +330,7 @@ export default function HomePage() {
             />
           )}</div>}
 
-          {sectionEnabled("sponsored") && <div>{siteSections.sponsored?.title && siteSections.sponsored.title !== "Sponsored Events" && <div className="max-w-7xl mx-auto px-4 pt-10"><h2 className="text-2xl md:text-4xl font-bold">{siteSections.sponsored.title}</h2></div>}{sponsoredLoading ? (
+          {sectionEnabled("sponsored") && <div>{sponsoredLoading ? (
             <CarouselSkeleton title={sectionTitle("sponsored", "Sponsored Events")} />
           ) : sponsoredError ? (
             <CarouselError error={sponsoredError} title={sectionTitle("sponsored", "Sponsored Events")} />
@@ -344,7 +344,7 @@ export default function HomePage() {
             </div>
           ) : null}</div>}
 
-          {sectionEnabled("upcoming") && <div>{siteSections.upcoming?.title && siteSections.upcoming.title !== "Upcoming Events" && <div className="max-w-7xl mx-auto px-4 pt-10"><h2 className="text-2xl md:text-4xl font-bold">{siteSections.upcoming.title}</h2></div>}{upcomingLoading ? (
+          {sectionEnabled("upcoming") && <div>{upcomingLoading ? (
             <CarouselSkeleton title={sectionTitle("upcoming", "Upcoming Events")} />
           ) : upcomingError ? (
             <CarouselError error={upcomingError} title={sectionTitle("upcoming", "Upcoming Events")} />
