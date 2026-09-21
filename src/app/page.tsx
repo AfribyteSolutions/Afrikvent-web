@@ -361,7 +361,7 @@ export default function HomePage() {
                 {siteSections.final_cta?.body || "Join event-goers discovering experiences through Mwakwa."}
               </p>
               <button
-                onClick={() => router.push("/events")}
+                onClick={() => router.push(siteSections.final_cta?.button_url || "/events")}
                 className="bg-white text-blue-600 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition-colors"
               >
                 {siteSections.final_cta?.button_text || "Explore All Events"}
