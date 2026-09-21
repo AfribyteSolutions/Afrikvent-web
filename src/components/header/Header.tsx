@@ -7,7 +7,7 @@ import AuthModal from "@/components/auth/AuthModal";
 import { useRouter } from "next/navigation";
 import { ChevronDown, User as UserIcon, LogOut } from "lucide-react";
 
-type NavItem = { id?: string; label: string; url: string };
+type NavItem = { id?: string; label: string; url: string; is_enabled?: boolean };
 type BrandConfig = { brand_name?: string; logo_url?: string };
 
 const Header = () => {
@@ -27,7 +27,7 @@ const Header = () => {
     };
     getUser();
     Promise.all([
-      mwakwaData.navigationItems.filter({ location: "header", is_enabled: true }, "sort_order", 50, 0),
+      mwakwaData.navigationItems.filter({ location: "header" }, "sort_order", 50, 0),
       mwakwaData.brandSettings.filter({}, undefined, 1, 0),
     ]).then(([nav, brands]) => { setNavItems(nav as unknown as NavItem[]); setBrand((brands?.[0] || null) as BrandConfig | null); }).catch(() => {});
   }, []);
@@ -66,7 +66,7 @@ const Header = () => {
           <nav className="hidden md:flex items-center space-x-6 text-black">
             {(navItems ?? [
               { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
-            ]).map((item: NavItem) => (
+            ]).filter((item: NavItem) => item.is_enabled !== false).map((item: NavItem) => (
               <Link key={item.id || item.url} href={item.url} className="hover:text-[#0052cc]">{item.label}</Link>
             ))}
           </nav>
@@ -179,7 +179,7 @@ const Header = () => {
                 <div className="flex flex-col items-center space-y-8">
                   {(navItems ?? [
                     { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
-                  ]).map((item: NavItem) => (
+                  ]).filter((item: NavItem) => item.is_enabled !== false).map((item: NavItem) => (
                     <Link key={item.id || item.url} href={item.url} onClick={closeMobileMenu} className="text-gray-700 hover:text-[#0052cc] font-medium text-2xl py-3">
                       {item.label}
                     </Link>
