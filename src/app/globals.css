@@ -10,6 +10,7 @@
 .cms-brand-bg { background-color: var(--mwakwa-background); color: var(--mwakwa-text); }
 .cms-primary-bg { background-color: var(--mwakwa-primary); }
 .cms-primary-text { color: var(--mwakwa-primary); }
+.hover\:cms-primary-text:hover { color: var(--mwakwa-primary); }
 .cms-cta-gradient { background: linear-gradient(90deg, var(--mwakwa-primary), var(--mwakwa-secondary)); }
 
 /* ✅ Montserrat will be provided from next/font in layout.tsx */
