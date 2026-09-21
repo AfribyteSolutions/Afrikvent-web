@@ -18,6 +18,7 @@ const Header = () => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [navItems, setNavItems] = useState<NavItem[] | null>(null);
+  const [navLoaded, setNavLoaded] = useState(false);
   const [brand, setBrand] = useState<BrandConfig | null>(null);
   const isAdmin = user?.role === "admin";
 
@@ -29,7 +30,7 @@ const Header = () => {
     Promise.all([
       mwakwaData.navigationItems.filter({ location: "header" }, "sort_order", 50, 0),
       mwakwaData.brandSettings.filter({}, undefined, 1, 0),
-    ]).then(([nav, brands]) => { setNavItems(nav as unknown as NavItem[]); setBrand((brands?.[0] || null) as BrandConfig | null); }).catch(() => { setNavItems(null); });
+    ]).then(([nav, brands]) => { setNavItems(nav as unknown as NavItem[]); setBrand((brands?.[0] || null) as BrandConfig | null); }).catch(() => { setNavItems(null); }).finally(() => setNavLoaded(true));
   }, []);
 
   useEffect(() => {
@@ -74,7 +75,7 @@ const Header = () => {
         <div className="flex items-center justify-between relative">
           {/* Left Nav (desktop) */}
           <nav className="hidden md:flex items-center space-x-6 text-black">
-            {(navItems ?? [
+            {(navLoaded ? (navItems ?? []) : [
               { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
             ]).filter((item: NavItem) => item.is_enabled !== false).map((item: NavItem) => (
               <Link key={item.id || item.url} href={item.url} className="hover:cms-primary-text">{item.label}</Link>
@@ -187,7 +188,7 @@ const Header = () => {
             <div className="h-full flex flex-col">
               <div className="flex-1 flex flex-col justify-center px-4">
                 <div className="flex flex-col items-center space-y-8">
-                  {(navItems ?? [
+                  {(navLoaded ? (navItems ?? []) : [
                     { label: "Home", url: "/" }, { label: "Events", url: "/events" }, { label: "Organiser Space", url: "/organiser" }
                   ]).filter((item: NavItem) => item.is_enabled !== false).map((item: NavItem) => (
                     <Link key={item.id || item.url} href={item.url} onClick={closeMobileMenu} className="text-gray-700 hover:cms-primary-text font-medium text-2xl py-3">
