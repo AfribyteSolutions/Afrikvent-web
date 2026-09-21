@@ -82,7 +82,7 @@ const Header = () => {
             <Link href="/">
               <Image
                 src="/images/logo.png"
-                alt="Afrikvent Logo"
+                alt="Mwakwa Logo"
                 width={110}
                 height={35}
                 className="mx-auto"
