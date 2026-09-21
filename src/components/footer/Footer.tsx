@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { mwakwaData } from "@/lib/mwakwaBackend";
 
-type NavItem = { id?: string; label: string; url: string; location?: string; is_enabled?: boolean };
+type NavItem = { id?: string; label: string; url: string; location?: string; is_enabled?: boolean; requires_auth?: boolean };
 type BrandConfig = { brand_name?: string; logo_url?: string; footer_description?: string; copyright_text?: string };
 
 const Footer = () => {
