@@ -20,14 +20,12 @@ interface EventsListProps {
   limit?: number;
   showCreateButton?: boolean;
   user: User | null;
-  onGoLive?: (event: DatabaseEvent) => void;
 }
 
 const EventsList: React.FC<EventsListProps> = ({ 
   limit, 
   showCreateButton = true,
-  user,
-  onGoLive
+  user
 }) => {
   const router = useRouter();
   const [filterStatus, setFilterStatus] = useState<string>('all');
@@ -296,16 +294,6 @@ const EventsList: React.FC<EventsListProps> = ({
     setOpenDropdownId(openDropdownId === eventId ? null : eventId);
   };
 
-  const handleGoLiveClick = (event: EventWithStats, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (onGoLive) {
-      // Convert to DatabaseEvent by removing the extra stats fields
-      const { ticketsSold, totalTickets, revenue, ...dbEvent } = event;
-      onGoLive(dbEvent as DatabaseEvent);
-    }
-    setOpenDropdownId(null);
-  };
-
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -437,20 +425,6 @@ const EventsList: React.FC<EventsListProps> = ({
                         className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-50 animate-fade-in"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        {onGoLive && (event.event_status === 'active' || event.event_status === 'published') && (
-                          <>
-                            <button
-                              onClick={(e) => handleGoLiveClick(event, e)}
-                              className="w-full px-4 py-3 text-left text-sm text-white bg-red-600 hover:bg-red-700 flex items-center gap-3 touch-manipulation active:bg-red-800"
-                            >
-                              <svg className="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                                <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
-                              </svg>
-                              <span className="font-bold">Go Live</span>
-                            </button>
-                            <div className="my-1 border-t border-gray-200"></div>
-                          </>
-                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
