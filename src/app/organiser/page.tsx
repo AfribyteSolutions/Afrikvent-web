@@ -9,13 +9,7 @@ import CreateEventModal from "@/components/organiser/CreateEventModal";
 import TicketManagement from "@/components/organiser/TicketManagement";
 import AnalyticsOverview from "@/components/organiser/AnalyticsOverview";
 import OrganiserProfileSetup from "@/components/organiser/OrganizerProfileSetUp";
-import dynamic from "next/dynamic";
-import { DatabaseEvent, OrganizerProfile } from "@/types/event";
-
-const OrganizerStream = dynamic(
-  () => import("@/components/stream/OrganizerStream"),
-  { ssr: false }
-);
+import { OrganizerProfile } from "@/types/event";
 
 
 
@@ -30,8 +24,6 @@ export default function OrganiserPage() {
   const [organizerProfile, setOrganizerProfile] = useState<OrganizerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(true);
-  const [showOrganizerStream, setShowOrganizerStream] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<DatabaseEvent | null>(null);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -108,11 +100,6 @@ export default function OrganiserPage() {
     setShowCreateEvent(true);
   };
 
-  const handleGoLive = (event: DatabaseEvent) => {
-    setSelectedEvent(event);
-    setShowOrganizerStream(true);
-  };
-
   const tabs = [
     { id: 'overview' as TabType, name: 'Overview', icon: '📊' },
     { id: 'events' as TabType, name: 'My Events', icon: '🎪' },
@@ -131,14 +118,13 @@ export default function OrganiserPage() {
                 limit={5} 
                 showCreateButton={false} 
                 user={user}
-                onGoLive={handleGoLive}
               />
               <AnalyticsOverview user={user} />
             </div>
           </div>
         );
       case 'events':
-        return <EventsList user={user} onGoLive={handleGoLive} />;
+        return <EventsList user={user} />;
       case 'tickets':
         return <TicketManagement user={user} />;
       case 'analytics':
@@ -357,17 +343,6 @@ export default function OrganiserPage() {
         existingProfile={organizerProfile || undefined}
       />
 
-      {showOrganizerStream && selectedEvent && user && (
-        <OrganizerStream
-          eventId={selectedEvent.id}
-          userId={user.id}
-          eventTitle={selectedEvent.title}
-          onClose={() => {
-            setShowOrganizerStream(false);
-            setSelectedEvent(null);
-          }}
-        />
-      )}
     </div>
   );
 }
