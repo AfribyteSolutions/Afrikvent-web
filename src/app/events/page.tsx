@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { mwakwaAuth, mwakwaData } from "@/lib/mwakwaBackend";
 import EventCard from "@/components/event/eventcard/EventCard";
 import { TicketsSection } from "@/components/tickets/TicketSection";
 import EventFilters, { FilterState } from "@/components/event/EventFilters";
@@ -40,20 +40,8 @@ export default function MyEvents() {
   // Get current user
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) {
-        console.error("Error getting user:", error);
-        return;
-      }
-      if (data?.user) {
-        setCurrentUser({
-          id: data.user.id,
-          name: (data.user.user_metadata?.name as string) || data.user.email || "User",
-          email: data.user.email || "",
-          phone: (data.user.user_metadata?.phone as string) || undefined,
-          avatar: (data.user.user_metadata?.avatar as string) || undefined,
-        });
-      }
+      const user = await mwakwaAuth.me();
+      if (user) setCurrentUser({ id: user.id, name: user.display_name || user.full_name || user.email || 'User', email: user.email || '', phone: user.phone || undefined, avatar: user.avatar_url || undefined });
     };
     getCurrentUser();
   }, []);
@@ -64,83 +52,24 @@ export default function MyEvents() {
       try {
         setLoading(true);
 
-        const { data: eventsData, error: eventsError } = await supabase
-          .from("EVENTS")
-          .select(`
-            *,
-            TICKET_TYPES(*),
-            USERS!EVENTS_organizer_id_fkey(name, email)
-          `)
-          .eq("event_status", "published")
-          .gte("event_date", new Date().toISOString().split('T')[0])
-          .order("event_date", { ascending: true });
-
-        if (eventsError) {
-          console.error("Events error:", eventsError);
-          throw eventsError;
-        }
-
-        interface EventWithRelations extends EventRow {
-          TICKET_TYPES: TicketTypeRow[];
-          USERS: { name: string; email: string }[];
-        }
-
-        const transformedEvents: TransformedEvent[] = await Promise.all(
-          (eventsData || []).map(async (row: EventWithRelations) => {
-            const userName = row.USERS && row.USERS.length > 0 
-              ? row.USERS[0].name 
-              : 'Event Organizer';
-
-            let organizationName = null;
-            try {
-              const { data: kycData } = await supabase
-                .from('ORGANIZER_KYC')
-                .select('organization_name')
-                .eq('user_id', row.organizer_id)
-                .single();
-              
-              organizationName = kycData?.organization_name || null;
-            } catch (error) {
-              console.log('No organization data found for organizer:', row.organizer_id);
-            }
-
-            const organizerName = organizationName || userName;
-
-            const minPrice = row.TICKET_TYPES && row.TICKET_TYPES.length > 0
-              ? Math.min(...row.TICKET_TYPES.map(ticket => ticket.price || 0))
-              : 0;
-
-            const primaryImage = row.images && row.images.length > 0 ? row.images[0] : '/placeholder-event.jpg';
-
-            const ticketOptions = row.TICKET_TYPES?.map(ticket => ({
-              type: 'Regular' as const,
-              price: String(ticket.price || 0),
-              currency: 'CFA',
-              currency_symbol: 'CFA',
-              availability: 'Available'
-            })) || [];
-
-            return {
-              id: row.id.toString(),
-              title: row.title,
-              date: row.event_date || 'TBD',
-              time: row.start_time || 'TBD',
-              venue: row.location_name || 'TBD',
-              location: row.address || row.location_name || 'Location TBD',
-              image: primaryImage,
-              organizer: organizerName || 'Event Organizer',
-              organizer_name: organizerName || 'Event Organizer',
-              organization_name: organizationName || undefined,
-              description: row.description || 'No description available',
-              ticketOptions: ticketOptions,
-              tags: [],
-              isSponsored: row.is_sponsored || false,
-              price: minPrice > 0 ? String(minPrice) : 'Free',
-              currency: 'CFA',
-              currency_symbol: 'CFA',
-            };
-          })
-        );
+        const today = new Date().toISOString().split('T')[0];
+        const eventsData = (await mwakwaData.events.filter({ event_status: 'published' }, 'event_date')).filter(row => !row.event_date || row.event_date >= today);
+        const transformedEvents: TransformedEvent[] = await Promise.all(eventsData.map(async (row) => {
+          const ticketTypes = await mwakwaData.ticketTypes.filter({ event_id: row.id, is_active: true });
+          const profiles = await mwakwaData.organizerProfiles.filter({ user_id: row.organizer_id }, undefined, 1, 0);
+          const organizationName = profiles[0]?.organization_name || null;
+          const organizerName = organizationName || row.organizer_name || 'Event Organizer';
+          const minPrice = ticketTypes.length ? Math.min(...ticketTypes.map(ticket => Number(ticket.price || 0))) : 0;
+          return {
+            id: String(row.id), title: row.title, date: row.event_date || 'TBD', time: row.start_time || 'TBD',
+            venue: row.location_name || 'TBD', location: row.address || row.location_name || 'Location TBD',
+            image: row.images?.[0] || '/placeholder-event.jpg', organizer: organizerName, organizer_name: organizerName,
+            organization_name: organizationName || undefined, description: row.description || 'No description available',
+            ticketOptions: ticketTypes.map(ticket => ({ type: 'Regular' as const, price: String(ticket.price || 0), currency: row.currency || 'XAF', currency_symbol: row.currency_symbol || 'CFA', availability: 'Available' })),
+            tags: [], isSponsored: row.is_sponsored || false, price: minPrice > 0 ? String(minPrice) : 'Free',
+            currency: row.currency || 'XAF', currency_symbol: row.currency_symbol || 'CFA'
+          };
+        }));
 
         setAllEvents(transformedEvents);
         setFilteredEvents(transformedEvents);
@@ -220,62 +149,18 @@ export default function MyEvents() {
         setError(null);
 
         console.log('=== FETCHING TICKETS ===');
-        
-        const { data: ticketsData, error: ticketsError } = await supabase
-          .from("TICKETS")
-          .select(`
-            *,
-            TICKET_TYPES(
-              *,
-              EVENTS(*)
-            )
-          `)
-          .eq("user_id", currentUser.id)
-          .order("created_at", { ascending: false });
-
-        if (ticketsError) {
-          console.error("Tickets error:", ticketsError);
-          throw ticketsError;
-        }
-
-        console.log('Raw tickets fetched:', ticketsData?.length);
-
-        interface TicketWithRelations extends TicketRow {
-          TICKET_TYPES: TicketTypeRow & { 
-            EVENTS: EventRow 
+        const ticketsData = await mwakwaData.tickets.filter({ user_id: currentUser.id }, '-created_date');
+        const transformedTickets: UserTicket[] = await Promise.all(ticketsData.map(async (ticket) => {
+          const ticketType = ticket.ticket_type_id ? await mwakwaData.ticketTypes.get(String(ticket.ticket_type_id)).catch(() => null) : null;
+          const event = await mwakwaData.events.get(String(ticket.event_id)).catch(() => null);
+          const ticketFormat = ticketType?.format === 'online' ? 'online' as const : 'in-person' as const;
+          return {
+            id: String(ticket.id), eventId: String(event?.id || ticket.event_id || '0'), eventTitle: event?.title || 'Unknown Event',
+            eventDate: event?.event_date || '', eventTime: event?.start_time || '', eventLocation: event?.location_name || '',
+            ticketType: ticketType?.name || 'General', ticketFormat, quantity: Number(ticket.quantity || 1), totalPrice: Number(ticket.total || 0),
+            purchaseDate: ticket.created_date, status: (ticket.ticket_status as UserTicket['status']) || 'confirmed', userId: ticket.user_id || '', qrCodeData: ticket.qr_code_data || undefined
           };
-        }
-
-        // Transform ALL tickets - let TicketSection handle deduplication
-        const transformedTickets: UserTicket[] = (ticketsData || []).map(
-          (ticket: TicketWithRelations) => {
-            const ticketType = ticket.TICKET_TYPES;
-            const event = ticketType?.EVENTS;
-
-            // Extract and normalize the ticket format
-            const rawFormat = ticketType?.format;
-            const ticketFormat = (typeof rawFormat === 'string' && rawFormat.toLowerCase().trim() === 'online')
-              ? 'online' as const
-              : 'in-person' as const;
-
-            return {
-              id: ticket.id.toString(),
-              eventId: event?.id.toString() || "0",
-              eventTitle: event?.title || "Unknown Event",
-              eventDate: event?.event_date || "",
-              eventTime: event?.start_time || "",
-              eventLocation: event?.location_name || "",
-              ticketType: ticketType?.name || "General",
-              ticketFormat: ticketFormat, // ✅ ADD THIS LINE
-              quantity: parseInt(ticket.quantity || "1"),
-              totalPrice: ticket.total || 0,
-              purchaseDate: ticket.created_at,
-              status: (ticket.ticket_status as UserTicket["status"]) || "confirmed",
-              userId: ticket.user_id || "",
-              qrCodeData: ticket.qr_code_data || undefined,
-            };
-          }
-        );
+        }));
 
         console.log(`Sending ${transformedTickets.length} tickets to TicketSection (will deduplicate there)`);
         setUserTickets(transformedTickets);
