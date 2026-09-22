@@ -2,6 +2,7 @@
 'use client';
 import React, { useState, useRef } from 'react';
 import { mwakwaData, mwakwaFiles, type MwakwaUser as User } from '@/lib/mwakwaBackend';
+import { base44 } from '@/api/base44Client';
 import { OrganizerProfile, SocialLinks } from '@/types/event';
 
 interface OrganiserProfileSetupProps {
