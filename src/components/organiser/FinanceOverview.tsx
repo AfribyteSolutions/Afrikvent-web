@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { mwakwaData, type MwakwaUser } from "@/lib/mwakwaBackend";
 
-type Row=Record<string, unknown>;
+type Row={ id?:string; currency?:string; available_amount?:number; pending_amount?:number; held_amount?:number; negative_amount?:number; payouts_frozen?:boolean; freeze_reason?:string; period_start?:string; period_end?:string; status?:string; reserve_held?:number; net_amount?:number; request_type?:string; amount?:number; liability_party?:string; dispute_type?:string; amount_at_risk?:number; hold_amount?:number; };
 const money=(n:unknown,c:unknown="XAF")=>{const v=Number(n||0);try{return new Intl.NumberFormat("en",{style:"currency",currency:String(c||"XAF"),maximumFractionDigits:0}).format(v)}catch{return `${String(c||"XAF")} ${v.toLocaleString()}`}};
 export default function FinanceOverview({user}:{user:MwakwaUser|null}){
  const [balance,setBalance]=useState<Row|null>(null),[payouts,setPayouts]=useState<Row[]>([]),[refunds,setRefunds]=useState<Row[]>([]),[disputes,setDisputes]=useState<Row[]>([]),[loading,setLoading]=useState(true);
