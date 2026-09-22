@@ -184,7 +184,7 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     }
   };
 
-  type PolicyOption = { id: string; is_active?: boolean; is_default?: boolean; name?: string; buyer_disclosure?: string; description?: string; [key: string]: unknown };
+  type PolicyOption = { id: string; is_active?: boolean; is_default?: boolean; name?: string; buyer_disclosure?: string; description?: string; organizer_liability?: boolean; refund_window_hours?: number; refund_percentage?: number; [key: string]: unknown };
   const [cancellationPolicies, setCancellationPolicies] = useState<PolicyOption[]>([]);
   const [selectedCancellationPolicyId, setSelectedCancellationPolicyId] = useState('');
   const [refundPolicies, setRefundPolicies] = useState<PolicyOption[]>([]);
