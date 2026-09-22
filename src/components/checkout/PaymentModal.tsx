@@ -12,6 +12,8 @@ import { mwakwaData } from '@/lib/mwakwaBackend';
 import { base44 } from '@/api/base44Client';
 
 type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
+type PolicySnapshot = { name?: string; buyer_disclosure?: string; description?: string };
+type EventPolicyState = { refund_policy_snapshot?: PolicySnapshot | null; cancellation_policy_snapshot?: PolicySnapshot | null };
 
 interface QRCodeProps {
   value: string;
@@ -276,7 +278,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   const [showCountryDropdown, setShowCountryDropdown] = useState(false);
   const [generatedTickets, setGeneratedTickets] = useState<EnhancedTicket[]>([]);
   const [paidPaymentsEnabled, setPaidPaymentsEnabled] = useState(false);
-  const [eventPolicies, setEventPolicies] = useState<any>(null);
+  const [eventPolicies, setEventPolicies] = useState<EventPolicyState | null>(null);
   const [policiesAccepted, setPoliciesAccepted] = useState(false);
 
   useEffect(() => {
@@ -708,7 +710,7 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                   <h4 className="font-semibold text-gray-900 mb-2">Ticket policies</h4>
                   {eventPolicies.refund_policy_snapshot && <div className="mb-3"><p className="font-medium">{eventPolicies.refund_policy_snapshot.name}</p><p className="text-gray-600">{eventPolicies.refund_policy_snapshot.buyer_disclosure || eventPolicies.refund_policy_snapshot.description}</p></div>}
                   {eventPolicies.cancellation_policy_snapshot && <div><p className="font-medium">Cancellation & postponement</p><p className="text-gray-600">{eventPolicies.cancellation_policy_snapshot.buyer_disclosure || eventPolicies.cancellation_policy_snapshot.description}</p></div>}
-                  <label className="flex items-start gap-2 mt-4 font-medium"><input type="checkbox" className="mt-1" checked={policiesAccepted} onChange={e => setPoliciesAccepted(e.target.checked)} /><span>I accept these event-specific ticket terms and Mwakwa's applicable platform terms.</span></label>
+                  <label className="flex items-start gap-2 mt-4 font-medium"><input type="checkbox" className="mt-1" checked={policiesAccepted} onChange={e => setPoliciesAccepted(e.target.checked)} /><span>I accept these event-specific ticket terms and Mwakwa&apos;s applicable platform terms.</span></label>
                 </div>
               )}
 
