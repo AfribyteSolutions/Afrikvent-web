@@ -8,11 +8,12 @@ import CreateEventModal from "@/components/organiser/CreateEventModal";
 import TicketManagement from "@/components/organiser/TicketManagement";
 import AnalyticsOverview from "@/components/organiser/AnalyticsOverview";
 import OrganiserProfileSetup from "@/components/organiser/OrganizerProfileSetUp";
+import FinanceOverview from "@/components/organiser/FinanceOverview";
 import { OrganizerProfile } from "@/types/event";
 
 
 
-type TabType = 'overview' | 'events' | 'tickets' | 'analytics';
+type TabType = 'overview' | 'events' | 'tickets' | 'finance' | 'analytics';
 
 export default function OrganiserPage() {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
@@ -78,6 +79,7 @@ export default function OrganiserPage() {
     { id: 'overview' as TabType, name: 'Overview', icon: '📊' },
     { id: 'events' as TabType, name: 'My Events', icon: '🎪' },
     { id: 'tickets' as TabType, name: 'Tickets', icon: '🎫' },
+    { id: 'finance' as TabType, name: 'Finance', icon: '💳' },
     { id: 'analytics' as TabType, name: 'Analytics', icon: '📈' }
   ];
 
@@ -101,6 +103,8 @@ export default function OrganiserPage() {
         return <EventsList user={user} />;
       case 'tickets':
         return <TicketManagement user={user} />;
+      case 'finance':
+        return <FinanceOverview user={user} />;
       case 'analytics':
         return <AnalyticsOverview user={user} detailed={true} />;
       default:
