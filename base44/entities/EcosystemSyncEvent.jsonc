@@ -1,0 +1,78 @@
+{
+  "type": "object",
+  "properties": {
+    "source_app": {
+      "type": "string",
+      "default": "mwakwa"
+    },
+    "target_app": {
+      "type": "string",
+      "enum": [
+        "africount",
+        "afrimarketing",
+        "afribyte_control_center",
+        "afriai"
+      ]
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "source_entity": {
+      "type": "string"
+    },
+    "source_id": {
+      "type": "string"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "sent",
+        "acknowledged",
+        "failed",
+        "dead_letter"
+      ],
+      "default": "pending"
+    },
+    "attempt_count": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 0
+    },
+    "idempotency_key": {
+      "type": "string"
+    },
+    "last_error": {
+      "type": "string"
+    },
+    "next_attempt_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "target_app",
+    "event_type",
+    "source_entity",
+    "source_id",
+    "idempotency_key"
+  ],
+  "rls": {
+    "create": false,
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": false,
+    "delete": false
+  },
+  "name": "EcosystemSyncEvent"
+}

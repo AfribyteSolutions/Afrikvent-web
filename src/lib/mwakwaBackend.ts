@@ -63,6 +63,7 @@ export const mwakwaData = {
   checkoutQuotes: base44.entities.CheckoutQuote,
   organizerAgreementAcceptances: base44.entities.OrganizerAgreementAcceptance,
   auditLogs: base44.entities.PlatformAuditLog,
+  ecosystemSyncEvents: base44.entities.EcosystemSyncEvent,
 };
 
 export const mwakwaFiles = {
