@@ -9,7 +9,12 @@ Deno.serve(async (req) => {
   if(!user) return Response.json({error:"Unauthorized"},{status:401});
   const {provider, tickets, phone_number, discount_code}=await req.json();
   if(!["fapshi","stripe"].includes(provider)||!Array.isArray(tickets)||!tickets.length) return Response.json({error:"Invalid payment request"},{status:400});
-  const svc=base44.asServiceRole; let subtotal=0; let event:any=null; const items:any[]=[];
+  const svc=base44.asServiceRole;
+  const settings=(await svc.entities.PlatformSettings.list(undefined,1,0))[0];
+  if(!settings?.paid_payments_enabled) return Response.json({error:"Paid checkout is not active",code:"PAYMENTS_DISABLED"},{status:503});
+  const providerConfigs=await svc.entities.PaymentProviderConfig.filter({provider,is_enabled:true,accept_payments:true});
+  if(!providerConfigs.length) return Response.json({error:`${provider} payments are not enabled`,code:"PROVIDER_DISABLED"},{status:503});
+  let subtotal=0; let event:any=null; const items:any[]=[];
   for(const item of tickets){
    const tt=await svc.entities.TicketType.get(String(item.ticket_id)); if(!tt||!tt.is_active) return Response.json({error:"Ticket type unavailable"},{status:400});
    const qty=Math.max(1,Number(item.quantity||1)); const available=Math.max(0,Number(tt.max_quantity||0)-Number(tt.sold_quantity||0));
