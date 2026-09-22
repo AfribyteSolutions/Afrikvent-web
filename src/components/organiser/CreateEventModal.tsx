@@ -184,9 +184,10 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     }
   };
 
-  const [cancellationPolicies, setCancellationPolicies] = useState<any[]>([]);
+  type PolicyOption = { id: string; is_active?: boolean; is_default?: boolean; name?: string; buyer_disclosure?: string; description?: string; [key: string]: unknown };
+  const [cancellationPolicies, setCancellationPolicies] = useState<PolicyOption[]>([]);
   const [selectedCancellationPolicyId, setSelectedCancellationPolicyId] = useState('');
-  const [refundPolicies, setRefundPolicies] = useState<any[]>([]);
+  const [refundPolicies, setRefundPolicies] = useState<PolicyOption[]>([]);
   const [selectedRefundPolicyId, setSelectedRefundPolicyId] = useState('');
 
   useEffect(() => {
@@ -194,13 +195,13 @@ const CreateEventModal: React.FC<CreateEventModalProps> = ({
     Promise.all([
       mwakwaData.cancellationPolicies.list('sort_order', 50, 0),
       mwakwaData.refundPolicies.list('sort_order', 50, 0),
-    ]).then(([cancellationRows, refundRows]: any[]) => {
-      const activeCancellation = cancellationRows.filter((r: any) => r.is_active !== false);
-      const activeRefunds = refundRows.filter((r: any) => r.is_active !== false);
+    ]).then(([cancellationRows, refundRows]) => {
+      const activeCancellation = (cancellationRows as PolicyOption[]).filter((r) => r.is_active !== false);
+      const activeRefunds = (refundRows as PolicyOption[]).filter((r) => r.is_active !== false);
       setCancellationPolicies(activeCancellation);
       setRefundPolicies(activeRefunds);
-      const preferredCancellation = activeCancellation.find((r: any) => r.is_default) || activeCancellation[0];
-      const preferredRefund = activeRefunds.find((r: any) => r.is_default) || activeRefunds[0];
+      const preferredCancellation = activeCancellation.find((r) => r.is_default) || activeCancellation[0];
+      const preferredRefund = activeRefunds.find((r) => r.is_default) || activeRefunds[0];
       setSelectedCancellationPolicyId(prev => prev || preferredCancellation?.id || '');
       setSelectedRefundPolicyId(prev => prev || preferredRefund?.id || '');
     }).catch(() => { setCancellationPolicies([]); setRefundPolicies([]); });
