@@ -37,6 +37,7 @@ export const mwakwaData = {
   payments: base44.entities.Payment,
   orders: base44.entities.Order,
   organizerProfiles: base44.entities.OrganizerProfile,
+  organizerMembers: base44.entities.OrganizerMember,
   comments: base44.entities.EventComment,
   savedEvents: base44.entities.SavedEvent,
   discountCodes: base44.entities.DiscountCode,
