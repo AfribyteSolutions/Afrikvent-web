@@ -61,6 +61,7 @@ export const mwakwaData = {
   policyVersions: base44.entities.PolicyVersion,
   disputes: base44.entities.Dispute,
   checkoutQuotes: base44.entities.CheckoutQuote,
+  organizerAgreementAcceptances: base44.entities.OrganizerAgreementAcceptance,
 };
 
 export const mwakwaFiles = {

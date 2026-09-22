@@ -1,0 +1,59 @@
+{
+  "type": "object",
+  "properties": {
+    "organizer_id": {
+      "type": "string"
+    },
+    "agreement_slug": {
+      "type": "string"
+    },
+    "agreement_version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "agreement_snapshot": {
+      "type": "object"
+    },
+    "accepted_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "accepted_ip_reference": {
+      "type": "string"
+    },
+    "user_agent": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "organizer_id",
+    "agreement_slug",
+    "agreement_version",
+    "agreement_snapshot",
+    "accepted_at"
+  ],
+  "rls": {
+    "create": {
+      "data.organizer_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": false,
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "OrganizerAgreementAcceptance"
+}
