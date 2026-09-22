@@ -1,0 +1,115 @@
+{
+  "type": "object",
+  "properties": {
+    "order_id": {
+      "type": "string"
+    },
+    "payment_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "buyer_id": {
+      "type": "string"
+    },
+    "organizer_id": {
+      "type": "string"
+    },
+    "dispute_type": {
+      "type": "string",
+      "enum": [
+        "buyer_complaint",
+        "chargeback",
+        "event_issue",
+        "fraud",
+        "refund_dispute",
+        "other"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "under_review",
+        "awaiting_buyer",
+        "awaiting_organizer",
+        "resolved_buyer",
+        "resolved_organizer",
+        "closed"
+      ],
+      "default": "open"
+    },
+    "amount_at_risk": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "currency": {
+      "type": "string",
+      "default": "XAF"
+    },
+    "hold_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "reason": {
+      "type": "string"
+    },
+    "resolution": {
+      "type": "string"
+    },
+    "opened_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "assigned_to": {
+      "type": "string"
+    },
+    "metadata": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "order_id",
+    "buyer_id",
+    "organizer_id",
+    "dispute_type"
+  ],
+  "rls": {
+    "create": {
+      "data.buyer_id": "{{user.id}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.buyer_id": "{{user.id}}"
+        },
+        {
+          "data.organizer_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "name": "Dispute"
+}
