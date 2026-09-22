@@ -167,11 +167,7 @@ export default function OrganiserProfileSetup({
         kyc_status: 'pending',
       };
 
-      if (existingProfile?.id) {
-        await mwakwaData.organizerProfiles.update(String(existingProfile.id), profileData);
-      } else {
-        await mwakwaData.organizerProfiles.create(profileData);
-      }
+      await base44.functions.invoke('submit-organizer-profile', profileData);
 
       onSuccess();
     } catch (error) {
