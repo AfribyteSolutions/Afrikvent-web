@@ -10,6 +10,7 @@ import {
 
 import { base44 } from "@/api/base44Client";
 import { EnhancedTicket } from "@/types/ticket";
+import { mwakwaData } from "@/lib/mwakwaBackend";
 
 interface FunctionResponseData {
   checkout_url?: string;
