@@ -1,6 +1,6 @@
 // Updated CreateEventModal with proper currency handling, navigation, and fee disclaimer
 'use client';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { mwakwaData, mwakwaFiles, type MwakwaUser } from '@/lib/mwakwaBackend';
 
 interface CreateEventModalProps {
