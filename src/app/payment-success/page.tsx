@@ -46,7 +46,6 @@ function PaymentSuccessContent() {
     const momoRef = searchParams.get('momo_ref'); // new
     const provider = searchParams.get('provider'); // new e.g. "momo" or "stripe"
 
-    console.log('✅ Payment Success Page - Params:', { sessionId, momoRef, provider });
 
     if (!sessionId && !momoRef) {
       setError('Missing payment reference.');
@@ -66,11 +65,9 @@ function PaymentSuccessContent() {
         const body = isMomo
           ? { provider: 'fapshi', trans_id: momoRef, order_id: searchParams.get('order_id') }
           : { provider: 'stripe', session_id: sessionId, order_id: searchParams.get('order_id') };
-        console.log(`🔎 Attempt ${retries + 1}: Verifying payment`, body);
         const response = await base44.functions.invoke('verify-payment', body);
         const data = ((response as { data?: Record<string, unknown> }).data || response) as Record<string, unknown>;
 
-        console.log('API verification response:', data);
 
         if (data.success === true && Array.isArray(data.tickets) && data.tickets.length > 0) {
           const transformed: EnhancedTicket[] = data.tickets.map((t: TicketData) => ({
@@ -96,7 +93,6 @@ function PaymentSuccessContent() {
         }
 
         if (['not_found', 'pending', 'no_tickets'].includes(String(data.status || ''))) {
-          console.log('⏳ Payment still processing, retrying...');
         } else if (data.status === 'failed') {
           setError('Payment failed. Please contact support.');
           setIsLoading(false);

@@ -597,16 +597,13 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
   };
 
   const handleTicketDownload = async (ticket: EnhancedTicket) => {
-    console.log('Downloading ticket:', ticket.orderId);
     alert(`Downloading ticket ${ticket.orderId}...`);
   };
 
   const handleTicketShare = async (ticket: EnhancedTicket) => {
-    console.log('Sharing ticket:', ticket.orderId);
   };
 
   const handleTicketView = (ticket: EnhancedTicket) => {
-    console.log('Viewing ticket details:', ticket.orderId);
     alert(`Viewing details for ${ticket.orderId}`);
   };
 
@@ -1008,7 +1005,6 @@ const EnhancedPaymentModal: React.FC<EnhancedPaymentModalProps> = ({
                       customerEmail={user?.email || ''}
                       quantity={quantity}
                       onSuccess={() => {
-                        console.log('Stripe payment initiated successfully');
                       }}
                       onError={handlePaymentError}
                       disabled={!user?.email}

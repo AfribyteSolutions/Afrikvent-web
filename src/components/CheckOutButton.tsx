@@ -98,7 +98,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         ]
       };
   
-      console.log("Invoking Edge Function with body:", functionBody);
   
       const response = await base44.functions.invoke('initiate-payment', { provider: 'fapshi', ...functionBody });
       const result = (response as { data?: FunctionResponseData }).data || response as FunctionResponseData;
@@ -128,7 +127,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
       
       sessionStorage.setItem('momo_payment_data', JSON.stringify(paymentData));
   
-      console.log("Opening Fapshi payment in new tab, payment reference:", paymentRef);
       
       const paymentWindow = window.open(checkoutUrl, '_blank', 'width=600,height=800');
       
@@ -187,7 +185,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
 
       const response = await base44.functions.invoke('initiate-payment', { provider: 'stripe', user_id: userId, email: userEmail, tickets });
       const result = (response as { data?: FunctionResponseData }).data || response as FunctionResponseData;
-      console.log("Stripe payment result:", result);
 
       if (result?.error) {
         throw new Error(result.error);
@@ -199,7 +196,6 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
         throw new Error("No checkout URL received from Stripe");
       }
 
-      console.log("Redirecting to Stripe checkout:", checkoutUrl);
       
       if (result.session_id) {
         sessionStorage.setItem('stripe_session_id', result.session_id);

@@ -40,7 +40,6 @@ const TICKET_TEMPLATES = [
 ];
 
 const enhanceTicket = (ticket: UserTicket): EnhancedTicket => {
-  console.log(`enhanceTicket for ticket ${ticket.id}: ticketFormat="${ticket.ticketFormat}" (type: ${typeof ticket.ticketFormat})`);
 
   const eventDateIso = ticket.eventDate || new Date().toISOString();
   const orderId = `ORD-${ticket.id.toString().padStart(6, "0")}`;
@@ -130,14 +129,12 @@ const deduplicateTickets = (tickets: UserTicket[]): UserTicket[] => {
   const deduplicated = tickets.filter((ticket) => {
     const key = ticket.id.toString();
     if (seenIds.has(key)) {
-      console.log(`Duplicate ticket ID found: ${key}, skipping`);
       return false;
     }
     seenIds.add(key);
     return true;
   });
 
-  console.log(`TicketSection deduplication: ${tickets.length} → ${deduplicated.length} tickets`);
   return deduplicated;
 };
 
@@ -218,7 +215,6 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
   }, [userId, shouldFetchFromDb]);
 
   const enhancedTickets = useMemo(() => {
-    console.log('=== ENHANCING TICKETS ===');
   console.log('Raw userTickets:', userTickets.map(t => ({
     id: t.id,
     ticketFormat: t.ticketFormat,
@@ -252,12 +248,10 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
   }, []);
 
   const handleDownload = async (ticket: EnhancedTicket) => {
-    console.log("Downloading ticket:", ticket.orderId);
     alert(`Downloading ticket ${ticket.orderId} for ${ticket.eventTitle}`);
   };
 
   const handleShare = async (ticket: EnhancedTicket) => {
-    console.log("Sharing ticket:", ticket.orderId);
     if (navigator.share) {
       try {
         await navigator.share({
@@ -266,7 +260,6 @@ export const TicketsSection: React.FC<TicketsSectionProps> = ({
           url: window.location.href,
         });
       } catch (err) {
-        console.log("Share cancelled or failed", err);
       }
     } else {
       const shareText = `I'm going to ${ticket.eventTitle} on ${new Date(ticket.eventDate).toLocaleDateString()}! 🎫`;

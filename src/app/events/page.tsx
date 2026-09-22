@@ -148,7 +148,6 @@ export default function MyEvents() {
         setLoading(true);
         setError(null);
 
-        console.log('=== FETCHING TICKETS ===');
         const ticketsData = await mwakwaData.tickets.filter({ user_id: currentUser.id }, '-created_date');
         const transformedTickets: UserTicket[] = await Promise.all(ticketsData.map(async (ticket) => {
           const ticketType = ticket.ticket_type_id ? await mwakwaData.ticketTypes.get(String(ticket.ticket_type_id)).catch(() => null) : null;
@@ -162,7 +161,6 @@ export default function MyEvents() {
           };
         }));
 
-        console.log(`Sending ${transformedTickets.length} tickets to TicketSection (will deduplicate there)`);
         setUserTickets(transformedTickets);
         
       } catch (err) {
@@ -187,7 +185,6 @@ export default function MyEvents() {
   };
 
   const handleTicketSubTabChange = (subTab: 'active' | 'expired') => {
-    console.log('Ticket sub-tab changed to:', subTab);
   };
 
   const handleFilterChange = (newFilters: FilterState) => {

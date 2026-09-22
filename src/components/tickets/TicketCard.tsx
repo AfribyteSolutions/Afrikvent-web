@@ -67,7 +67,6 @@ export const TicketCard: React.FC<TicketCardProps> = ({
   user,
   className = '',
 }) => {
-  console.log(`TicketCard ${ticket.id}: ticketFormat="${ticket.ticketFormat}" (type: ${typeof ticket.ticketFormat})`);
   const ticketRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -118,7 +117,6 @@ const getEventTime = (time?: string): string => {
         await onDownload(ticket);
       } else {
         // Fallback download implementation
-        console.log('Download ticket:', ticket.orderId);
         // You can implement html2canvas here for actual image generation
         alert(`Ticket ${ticket.orderId} download started`);
       }
@@ -176,7 +174,6 @@ const getEventTime = (time?: string): string => {
     if (onView) {
       onView(ticket);
     } else {
-      console.log('Viewing ticket details:', ticket.id);
     }
   };
 

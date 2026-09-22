@@ -85,7 +85,6 @@ const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
       if (result.error) throw new Error(String(result.error));
       if (!result.checkout_url) throw new Error("No checkout URL received from server");
 
-      console.log("🔗 Redirecting to Stripe Checkout:", result.checkout_url);
 
       // Show brief success state before redirecting
       setSuccess(true);
