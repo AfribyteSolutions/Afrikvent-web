@@ -65,6 +65,7 @@ export const mwakwaData = {
   auditLogs: base44.entities.PlatformAuditLog,
   ecosystemSyncEvents: base44.entities.EcosystemSyncEvent,
   riskFlags: base44.entities.RiskFlag,
+  paymentProviderConfigs: base44.entities.PaymentProviderConfig,
 };
 
 export const mwakwaFiles = {
