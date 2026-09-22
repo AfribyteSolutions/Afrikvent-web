@@ -1,0 +1,20 @@
+"use client";
+import { useEffect, useState } from "react";
+import { mwakwaData, type MwakwaUser } from "@/lib/mwakwaBackend";
+
+type Row=Record<string,any>;
+const money=(n:any,c="XAF")=>{const v=Number(n||0);try{return new Intl.NumberFormat("en",{style:"currency",currency:c,maximumFractionDigits:0}).format(v)}catch{return `${c} ${v.toLocaleString()}`}};
+export default function FinanceOverview({user}:{user:MwakwaUser|null}){
+ const [balance,setBalance]=useState<Row|null>(null),[payouts,setPayouts]=useState<Row[]>([]),[refunds,setRefunds]=useState<Row[]>([]),[disputes,setDisputes]=useState<Row[]>([]),[loading,setLoading]=useState(true);
+ useEffect(()=>{if(!user)return;Promise.all([mwakwaData.organizerBalances.filter({organizer_id:user.id},undefined,20,0),mwakwaData.organizerPayouts.filter({organizer_id:user.id},"-created_date",20,0),mwakwaData.refundRequests.filter({organizer_id:user.id},"-created_date",20,0),mwakwaData.disputes.filter({organizer_id:user.id},"-created_date",20,0)]).then(([b,p,r,d])=>{setBalance(b?.[0]||null);setPayouts(p||[]);setRefunds(r||[]);setDisputes(d||[])}).finally(()=>setLoading(false));},[user]);
+ if(loading)return <div className="bg-white border rounded-xl p-6">Loading finance data…</div>;
+ const c=balance?.currency||"XAF";
+ return <div className="space-y-6">
+  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">{[["Available",balance?.available_amount],["Pending",balance?.pending_amount],["Reserve / held",balance?.held_amount],["Amount owed",balance?.negative_amount]].map(([l,v])=><div key={String(l)} className="bg-white border rounded-xl p-5"><p className="text-sm text-gray-500">{l}</p><p className="text-2xl font-bold mt-1">{money(v,c)}</p></div>)}</div>
+  {balance?.payouts_frozen&&<div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-800"><b>Payouts are currently on hold.</b> {balance.freeze_reason||"Resolve outstanding liabilities or contact Mwakwa support."}</div>}
+  <section className="bg-white border rounded-xl p-5"><h2 className="text-xl font-semibold mb-1">Payouts</h2><p className="text-sm text-gray-500 mb-4">Mwakwa currently uses weekly payouts with a rolling reserve under the active platform policy.</p>{!payouts.length?<p className="text-gray-500">No payouts yet.</p>:<div className="overflow-x-auto"><table className="w-full text-sm"><thead><tr className="text-left border-b"><th className="py-2">Period</th><th>Status</th><th>Reserve</th><th>Net payout</th></tr></thead><tbody>{payouts.map(p=><tr key={p.id} className="border-b"><td className="py-3">{p.period_start||"—"} – {p.period_end||"—"}</td><td>{p.status}</td><td>{money(p.reserve_held,p.currency)}</td><td className="font-medium">{money(p.net_amount,p.currency)}</td></tr>)}</tbody></table></div>}</section>
+  <div className="grid lg:grid-cols-2 gap-6"><section className="bg-white border rounded-xl p-5"><h2 className="text-xl font-semibold mb-4">Refunds</h2>{!refunds.length?<p className="text-gray-500">No refund requests.</p>:refunds.map(r=><div key={r.id} className="border-b py-3 last:border-0"><div className="flex justify-between gap-3"><span className="font-medium">{r.request_type?.replaceAll("_"," ")}</span><span>{money(r.amount,r.currency)}</span></div><p className="text-sm text-gray-500">{r.status} · liability: {r.liability_party||"unassigned"}</p></div>)}</section>
+  <section className="bg-white border rounded-xl p-5"><h2 className="text-xl font-semibold mb-4">Disputes</h2>{!disputes.length?<p className="text-gray-500">No disputes.</p>:disputes.map(d=><div key={d.id} className="border-b py-3 last:border-0"><div className="flex justify-between gap-3"><span className="font-medium">{d.dispute_type?.replaceAll("_"," ")}</span><span>{money(d.amount_at_risk,d.currency)}</span></div><p className="text-sm text-gray-500">{d.status}{d.hold_amount?` · ${money(d.hold_amount,d.currency)} held`:""}</p></div>)}</section></div>
+  <p className="text-xs text-gray-500">Balances shown here are Mwakwa ledger balances. Payment-provider settlement becomes active only after provider configuration is enabled.</p>
+ </div>;
+}
