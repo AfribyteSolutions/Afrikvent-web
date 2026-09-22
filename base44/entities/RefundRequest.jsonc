@@ -119,16 +119,9 @@
       ]
     },
     "update": {
-      "$or": [
-        {
-          "data.organizer_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "user_condition": {
+        "role": "admin"
+      }
     },
     "delete": {
       "user_condition": {
