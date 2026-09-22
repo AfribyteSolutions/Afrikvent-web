@@ -5,7 +5,9 @@ import Link from "next/link";
 import { mwakwaAuth, mwakwaData, MwakwaUser } from "@/lib/mwakwaBackend";
 
 type Tab = "site" | "brand" | "business" | "navigation" | "policies" | "overrides";
-type Row = Record<string, any>;
+type Row = Record<string, unknown> & { id: string; name?: string; section_key?: string; is_enabled?: boolean; title?: string; subtitle?: string; button_text?: string; button_url?: string; media_url?: string; mobile_media_url?: string; brand_name?: string; primary_domain?: string; logo_url?: string; favicon_url?: string; primary_color?: string; secondary_color?: string; background_color?: string; text_color?: string; footer_description?: string; copyright_text?: string; legal_name?: string; trading_name?: string; registration_number?: string; tax_id?: string; address_line1?: string; address_line2?: string; city?: string; region?: string; postal_code?: string; country?: string; email?: string; phone?: string; privacy_email?: string; support_email?: string; website?: string; data_controller_name?: string; label?: string; url?: string; location?: string; requires_auth?: boolean; event_id?: string; policy_type?: string; status?: string; reason?: string; requested_config?: unknown; }; 
+type EntityLike = { update: (id: string, data: Record<string, unknown>) => Promise<unknown> }; 
+type FieldValue = string | number | boolean | null | undefined;
 
 const policyGroups = [
   { key: "fee", title: "Fees", entity: mwakwaData.feePolicies },
@@ -14,7 +16,7 @@ const policyGroups = [
   { key: "cancellation", title: "Cancelled & postponed events", entity: mwakwaData.cancellationPolicies },
 ] as const;
 
-function Field({ label, value, onChange, type = "text" }: { label: string; value: any; onChange: (v: any) => void; type?: string }) {
+function Field({ label, value, onChange, type = "text" }: { label: string; value: FieldValue; onChange: (v: FieldValue) => void; type?: string }) {
   if (type === "boolean") return <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={!!value} onChange={e => onChange(e.target.checked)} />{label}</label>;
   return <label className="block text-sm"><span className="block mb-1 font-medium">{label}</span><input className="w-full rounded-lg border px-3 py-2" type={type} value={value ?? ""} onChange={e => onChange(type === "number" ? Number(e.target.value) : e.target.value)} /></label>;
 }
@@ -47,8 +49,8 @@ export default function CmsPage() {
   };
   useEffect(() => { load().catch(e => setMessage(e?.message || "Could not load CMS")); }, []);
 
-  const save = async (entity: any, row: Row) => { const { id, created_date, updated_date, created_by_id, ...data } = row; await entity.update(id, data); setMessage("Saved"); };
-  const patch = (rows: Row[], setRows: (v: Row[]) => void, id: string, key: string, value: any) => setRows(rows.map(r => r.id === id ? { ...r, [key]: value } : r));
+  const save = async (entity: EntityLike, row: Row) => { const data = Object.fromEntries(Object.entries(row).filter(([key]) => !['id','created_date','updated_date','created_by_id'].includes(key))); await entity.update(row.id, data); setMessage("Saved"); };
+  const patch = (rows: Row[], setRows: (v: Row[]) => void, id: string, key: string, value: FieldValue) => setRows(rows.map(r => r.id === id ? { ...r, [key]: value } : r));
   const activePolicies = useMemo(() => policyGroups.map(g => ({ ...g, rows: policies[g.key] || [] })), [policies]);
 
   if (!ready) return <main className="p-8">Loading CMS…</main>;
@@ -70,7 +72,7 @@ export default function CmsPage() {
 
       {tab === "policies" && <div className="space-y-6">{activePolicies.map(group=><section key={group.key}><h2 className="text-xl font-bold mb-2">{group.title}</h2>{group.rows.length===0?<div className="bg-white border rounded-xl p-4 text-gray-600">No policy configured yet.</div>:group.rows.map((r,idx)=><div key={r.id} className="bg-white border rounded-xl p-4 mb-3 grid md:grid-cols-3 gap-3"><Field label="Name" value={r.name} onChange={v=>setPolicies({...policies,[group.key]:group.rows.map(x=>x.id===r.id?{...x,name:v}:x)})}/>{Object.entries(r).filter(([k,v])=>!['id','name','created_date','updated_date','created_by_id'].includes(k)&&['string','number','boolean'].includes(typeof v)).map(([k,v])=><Field key={k} label={k.replaceAll('_',' ')} type={typeof v==='boolean'?'boolean':typeof v==='number'?'number':'text'} value={v} onChange={nv=>setPolicies({...policies,[group.key]:group.rows.map(x=>x.id===r.id?{...x,[k]:nv}:x)})}/>)}<button className="md:col-span-3 justify-self-start rounded-lg cms-primary-bg text-white px-4 py-2" onClick={()=>save(group.entity,group.rows[idx])}>Save policy</button></div>)}</section>)}</div>}
 
-      {tab === "overrides" && <div className="space-y-3"><p className="text-gray-600">Organizer event-specific commercial exceptions require platform review here before they can take effect.</p>{overrides.length===0?<div className="bg-white border rounded-xl p-4">No event policy requests.</div>:overrides.map((r,i)=><section key={r.id} className="bg-white border rounded-xl p-4"><div className="grid md:grid-cols-4 gap-3"><div><b>Event</b><div>{r.event_id}</div></div><div><b>Policy</b><div>{r.policy_type}</div></div><div><b>Status</b><div>{r.status}</div></div><div><b>Reason</b><div>{r.reason||'—'}</div></div></div><pre className="mt-3 bg-gray-50 p-3 rounded-lg overflow-auto text-xs">{JSON.stringify(r.requested_config||{},null,2)}</pre><div className="flex gap-2 mt-3"><button className="rounded-lg bg-green-700 text-white px-4 py-2" onClick={async()=>{const next={...r,status:'approved',reviewed_by:user.id,reviewed_at:new Date().toISOString()}; await save(mwakwaData.eventPolicyOverrides,next); setOverrides(overrides.map(x=>x.id===r.id?next:x));}}>Approve</button><button className="rounded-lg bg-red-700 text-white px-4 py-2" onClick={async()=>{const next={...r,status:'rejected',reviewed_by:user.id,reviewed_at:new Date().toISOString()}; await save(mwakwaData.eventPolicyOverrides,next); setOverrides(overrides.map(x=>x.id===r.id?next:x));}}>Reject</button></div></section>)}</div>}
+      {tab === "overrides" && <div className="space-y-3"><p className="text-gray-600">Organizer event-specific commercial exceptions require platform review here before they can take effect.</p>{overrides.length===0?<div className="bg-white border rounded-xl p-4">No event policy requests.</div>:overrides.map((r)=><section key={r.id} className="bg-white border rounded-xl p-4"><div className="grid md:grid-cols-4 gap-3"><div><b>Event</b><div>{r.event_id}</div></div><div><b>Policy</b><div>{r.policy_type}</div></div><div><b>Status</b><div>{r.status}</div></div><div><b>Reason</b><div>{r.reason||'—'}</div></div></div><pre className="mt-3 bg-gray-50 p-3 rounded-lg overflow-auto text-xs">{JSON.stringify(r.requested_config||{},null,2)}</pre><div className="flex gap-2 mt-3"><button className="rounded-lg bg-green-700 text-white px-4 py-2" onClick={async()=>{const next={...r,status:'approved',reviewed_by:user.id,reviewed_at:new Date().toISOString()}; await save(mwakwaData.eventPolicyOverrides,next); setOverrides(overrides.map(x=>x.id===r.id?next:x));}}>Approve</button><button className="rounded-lg bg-red-700 text-white px-4 py-2" onClick={async()=>{const next={...r,status:'rejected',reviewed_by:user.id,reviewed_at:new Date().toISOString()}; await save(mwakwaData.eventPolicyOverrides,next); setOverrides(overrides.map(x=>x.id===r.id?next:x));}}>Reject</button></div></section>)}</div>}
     </div>
   </main>;
 }
