@@ -8,6 +8,7 @@ export default function FinanceOverview({user}:{user:MwakwaUser|null}){
  const [balance,setBalance]=useState<Row|null>(null),[payouts,setPayouts]=useState<Row[]>([]),[refunds,setRefunds]=useState<Row[]>([]),[disputes,setDisputes]=useState<Row[]>([]),[loading,setLoading]=useState(true);
  useEffect(()=>{if(!user){setLoading(false);return}setLoading(true);Promise.all([mwakwaData.organizerBalances.filter({organizer_id:user.id},undefined,20,0),mwakwaData.organizerPayouts.filter({organizer_id:user.id},"-created_date",20,0),mwakwaData.refundRequests.filter({organizer_id:user.id},"-created_date",20,0),mwakwaData.disputes.filter({organizer_id:user.id},"-created_date",20,0)]).then(([b,p,r,d])=>{setBalance(b?.[0]||null);setPayouts(p||[]);setRefunds(r||[]);setDisputes(d||[])}).catch(error=>console.error("Finance load failed",error)).finally(()=>setLoading(false));},[user]);
  if(loading)return <div className="bg-white border rounded-xl p-6">Loading finance data…</div>;
+ if(!user)return <div className="bg-white border rounded-xl p-6 text-gray-500">Sign in to view finance data.</div>;
  const c=balance?.currency||"XAF";
  return <div className="space-y-6">
   <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">{[["Available",balance?.available_amount],["Pending",balance?.pending_amount],["Reserve / held",balance?.held_amount],["Amount owed",balance?.negative_amount]].map(([l,v])=><div key={String(l)} className="bg-white border rounded-xl p-5"><p className="text-sm text-gray-500">{String(l)}</p><p className="text-2xl font-bold mt-1">{money(v,c)}</p></div>)}</div>
