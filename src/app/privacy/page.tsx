@@ -5,7 +5,7 @@ import Header from "@/components/header/Header";
 import Footer from "@/components/footer/Footer";
 import { mwakwaData } from "@/lib/mwakwaBackend";
 
-type Business = Record<string, any>;
+type Business = Record<string, unknown>;
 type Page = { title?: string; body?: string };
 
 function renderBody(body = "") {
