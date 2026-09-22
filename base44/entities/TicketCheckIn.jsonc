@@ -62,18 +62,7 @@
     "result"
   ],
   "rls": {
-    "create": {
-      "$or": [
-        {
-          "data.organizer_id": "{{user.id}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
-    },
+    "create": false,
     "read": {
       "$or": [
         {
