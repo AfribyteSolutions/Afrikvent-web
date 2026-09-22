@@ -29,6 +29,30 @@
     },
     "device_reference": {
       "type": "string"
+    },
+    "client_checkin_id": {
+      "type": "string"
+    },
+    "client_scanned_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "sync_mode": {
+      "type": "string",
+      "enum": [
+        "online",
+        "offline_sync"
+      ],
+      "default": "online"
+    },
+    "reconciliation_status": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "duplicate",
+        "rejected"
+      ],
+      "default": "accepted"
     }
   },
   "required": [
