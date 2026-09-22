@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Loader2, CreditCard, CheckCircle, AlertCircle } from "lucide-react";
 import { base44 } from "@/api/base44Client";
+import { mwakwaData } from "@/lib/mwakwaBackend";
 
 interface StripeCheckoutButtonProps {
   ticketId: number;
@@ -48,8 +49,14 @@ const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
   const handleStripeCheckout = async () => {
     if (loading || disabled) return;
 
+    const settings = await mwakwaData.platformSettings.filter({}, undefined, 1, 0);
+    if (!Boolean(settings?.[0]?.paid_payments_enabled)) {
+      setError("Paid checkout is not active yet.");
+      return;
+    }
+
     setLoading(true);
-    setSuccess(false);
+    setSuccess(false;
     setError(null);
 
     try {
