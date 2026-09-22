@@ -56,7 +56,7 @@ const StripeCheckoutButton: React.FC<StripeCheckoutButtonProps> = ({
     }
 
     setLoading(true);
-    setSuccess(false;
+    setSuccess(false);
     setError(null);
 
     try {
