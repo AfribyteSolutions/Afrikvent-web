@@ -1,9 +1,9 @@
 // src/components/organiser/OrganiserProfileSetup.tsx
 'use client';
 import React, { useState, useRef } from 'react';
-import { mwakwaData, mwakwaFiles, type MwakwaUser as User } from '@/lib/mwakwaBackend';
+import { mwakwaFiles, type MwakwaUser as User } from '@/lib/mwakwaBackend';
 import { base44 } from '@/api/base44Client';
-import { OrganizerProfile, SocialLinks } from '@/types/event';
+import { OrganizerProfile } from '@/types/event';
 
 interface OrganiserProfileSetupProps {
   isOpen: boolean;
