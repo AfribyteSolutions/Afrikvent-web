@@ -15,6 +15,11 @@ interface TicketSale {
   purchaseDate: string;
   status: 'paid' | 'pending' | 'cancelled' | 'refunded' | 'used';
   paymentMethod: string;
+  orderId?: string;
+  paymentId?: string;
+  eventId?: string;
+  organizerId?: string;
+  currency?: string;
 }
 
 interface TicketManagementProps {
@@ -49,7 +54,7 @@ const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
       const transformedTickets: TicketSale[] = await Promise.all(ticketsData.map(async (ticket) => {
         const event = eventMap.get(String(ticket.event_id));
         const ticketType = ticket.ticket_type_id ? await mwakwaData.ticketTypes.get(String(ticket.ticket_type_id)).catch(() => null) : null;
-        const payments = await mwakwaData.payments.filter({ ticket_id: ticket.id }, '-created_date', 1, 0);
+        const payment = ticket.payment_id ? await mwakwaData.payments.get(String(ticket.payment_id)).catch(() => null) : null;
         return {
           id: Number(ticket.id),
           eventTitle: event?.title || 'Unknown Event',
@@ -61,7 +66,12 @@ const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
           totalAmount: Number(ticket.total || 0),
           purchaseDate: ticket.created_date,
           status: (ticket.ticket_status === 'confirmed' ? 'paid' : ticket.ticket_status) as TicketSale['status'],
-          paymentMethod: payments[0]?.payment_method || 'Unknown'
+          paymentMethod: payment?.payment_method || 'Unknown',
+          orderId: ticket.order_id ? String(ticket.order_id) : undefined,
+          paymentId: ticket.payment_id ? String(ticket.payment_id) : undefined,
+          eventId: ticket.event_id ? String(ticket.event_id) : undefined,
+          organizerId: ticket.organizer_id ? String(ticket.organizer_id) : undefined,
+          currency: ticket.currency || 'XAF'
         };
       }));
 
@@ -150,15 +160,37 @@ const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
   const pendingSales = filteredSales.filter(sale => sale.status === 'pending').length;
 
   const handleRefund = async (saleId: number) => {
+    const sale = ticketSales.find(item => item.id === saleId);
+    if (!sale?.orderId || !sale.paymentId || !sale.eventId || !sale.organizerId) {
+      alert('This ticket cannot enter the refund workflow because its payment record is incomplete.');
+      return;
+    }
     try {
-      await mwakwaData.tickets.update(String(saleId), { ticket_status: 'refunded' });
-
-      // Refresh data
-      fetchTicketSales();
-      alert('Refund processed successfully');
+      const existing = await mwakwaData.refundRequests.filter({ ticket_id: String(saleId) }, '-created_date', 10, 0);
+      if (existing.some(request => ['requested','approved','processing','completed'].includes(String(request.status)))) {
+        alert('A refund request already exists for this ticket.');
+        return;
+      }
+      await mwakwaData.refundRequests.create({
+        order_id: sale.orderId,
+        payment_id: sale.paymentId,
+        ticket_id: String(saleId),
+        event_id: sale.eventId,
+        buyer_id: user?.id || '',
+        organizer_id: sale.organizerId,
+        request_type: 'admin_exception',
+        amount: sale.totalAmount,
+        currency: sale.currency || 'XAF',
+        reason: 'Organizer requested refund review',
+        eligibility: 'manual_review',
+        liability_party: 'unassigned',
+        status: 'requested',
+        idempotency_key: `organizer-refund:${saleId}`
+      });
+      alert('Refund review requested. The ticket remains valid until the refund is approved and completed.');
     } catch (error) {
-      console.error('Error processing refund:', error);
-      alert('Failed to process refund');
+      console.error('Error requesting refund:', error);
+      alert('Failed to create refund request');
     }
   };
 
