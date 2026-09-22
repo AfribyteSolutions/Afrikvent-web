@@ -2,6 +2,7 @@
 'use client';
 import React, { useState, useEffect } from 'react';
 import { mwakwaData, type MwakwaUser as User } from '@/lib/mwakwaBackend';
+import { base44 } from '@/api/base44Client';
 
 interface TicketSale {
   id: number;
@@ -161,33 +162,11 @@ const TicketManagement: React.FC<TicketManagementProps> = ({ user }) => {
 
   const handleRefund = async (saleId: number) => {
     const sale = ticketSales.find(item => item.id === saleId);
-    if (!sale?.orderId || !sale.paymentId || !sale.eventId || !sale.organizerId) {
-      alert('This ticket cannot enter the refund workflow because its payment record is incomplete.');
-      return;
-    }
+    if (!sale) return;
     try {
-      const existing = await mwakwaData.refundRequests.filter({ ticket_id: String(saleId) }, '-created_date', 10, 0);
-      if (existing.some(request => ['requested','approved','processing','completed'].includes(String(request.status)))) {
-        alert('A refund request already exists for this ticket.');
-        return;
-      }
-      await mwakwaData.refundRequests.create({
-        order_id: sale.orderId,
-        payment_id: sale.paymentId,
-        ticket_id: String(saleId),
-        event_id: sale.eventId,
-        buyer_id: user?.id || '',
-        organizer_id: sale.organizerId,
-        request_type: 'admin_exception',
-        amount: sale.totalAmount,
-        currency: sale.currency || 'XAF',
-        reason: 'Organizer requested refund review',
-        eligibility: 'manual_review',
-        liability_party: 'unassigned',
-        status: 'requested',
-        idempotency_key: `organizer-refund:${saleId}`
-      });
-      alert('Refund review requested. The ticket remains valid until the refund is approved and completed.');
+      const response = await base44.functions.invoke('request-organizer-refund', { ticket_id: String(saleId), reason: 'Organizer requested refund review' });
+      if (response.data?.duplicate) alert('A refund request already exists for this ticket.');
+      else alert('Refund review requested. The ticket remains valid until the refund is approved and completed.');
     } catch (error) {
       console.error('Error requesting refund:', error);
       alert('Failed to create refund request');
