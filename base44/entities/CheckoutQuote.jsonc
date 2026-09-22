@@ -1,0 +1,97 @@
+{
+  "type": "object",
+  "properties": {
+    "buyer_id": {
+      "type": "string"
+    },
+    "event_id": {
+      "type": "string"
+    },
+    "organizer_id": {
+      "type": "string"
+    },
+    "ticket_type_id": {
+      "type": "string"
+    },
+    "quantity": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "currency": {
+      "type": "string",
+      "default": "XAF"
+    },
+    "subtotal": {
+      "type": "number",
+      "minimum": 0
+    },
+    "discount_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "platform_fee_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "buyer_processing_fee_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "organizer_fee_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "reserve_amount": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0
+    },
+    "organizer_net_amount": {
+      "type": "number"
+    },
+    "buyer_total": {
+      "type": "number",
+      "minimum": 0
+    },
+    "fee_policy_snapshot": {
+      "type": "object"
+    },
+    "payout_policy_snapshot": {
+      "type": "object"
+    },
+    "refund_policy_snapshot": {
+      "type": "object"
+    },
+    "cancellation_policy_snapshot": {
+      "type": "object"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "idempotency_key": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "buyer_id",
+    "event_id",
+    "organizer_id",
+    "ticket_type_id",
+    "quantity",
+    "buyer_total"
+  ],
+  "rls": {
+    "create": false,
+    "read": {
+      "data.buyer_id": "{{user.id}}"
+    },
+    "update": false,
+    "delete": false
+  },
+  "name": "CheckoutQuote"
+}
