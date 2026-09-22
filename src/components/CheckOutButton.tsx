@@ -215,6 +215,12 @@ const CheckoutButton: React.FC<CheckoutButtonProps> = ({
   const handleCheckout = async () => {
     if (loading || disabled) return;
 
+    const settings = await mwakwaData.platformSettings.filter({}, undefined, 1, 0);
+    if (!Boolean(settings?.[0]?.paid_payments_enabled)) {
+      setError("Paid checkout is not active yet.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
