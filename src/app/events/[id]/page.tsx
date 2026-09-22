@@ -15,8 +15,11 @@ type TicketTypeRow = Database['public']['Tables']['TICKET_TYPES']['Row'];
 type CommentRow = Database['public']['Tables']['EVENT_COMMENTS']['Row'];
 type UserRow = Database['public']['Tables']['USERS']['Row'];
 
+type PolicySnapshot = { name?: string; buyer_disclosure?: string; description?: string };
 interface EventWithDetails extends EventRow {
   USERS: UserRow | null;
+  refund_policy_snapshot?: PolicySnapshot | null;
+  cancellation_policy_snapshot?: PolicySnapshot | null;
   organization_name?: string;
   ticketTypes: TicketTypeRow[];
   comments: (CommentRow & { USERS: UserRow | null })[];
