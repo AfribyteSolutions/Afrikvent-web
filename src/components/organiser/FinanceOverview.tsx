@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 import { mwakwaData, type MwakwaUser } from "@/lib/mwakwaBackend";
 
-type Row=Record<string,any>;
-const money=(n:any,c="XAF")=>{const v=Number(n||0);try{return new Intl.NumberFormat("en",{style:"currency",currency:c,maximumFractionDigits:0}).format(v)}catch{return `${c} ${v.toLocaleString()}`}};
+type Row=Record<string, unknown>;
+const money=(n:unknown,c="XAF")=>{const v=Number(n||0);try{return new Intl.NumberFormat("en",{style:"currency",currency:c,maximumFractionDigits:0}).format(v)}catch{return `${c} ${v.toLocaleString()}`}};
 export default function FinanceOverview({user}:{user:MwakwaUser|null}){
  const [balance,setBalance]=useState<Row|null>(null),[payouts,setPayouts]=useState<Row[]>([]),[refunds,setRefunds]=useState<Row[]>([]),[disputes,setDisputes]=useState<Row[]>([]),[loading,setLoading]=useState(true);
  useEffect(()=>{if(!user)return;Promise.all([mwakwaData.organizerBalances.filter({organizer_id:user.id},undefined,20,0),mwakwaData.organizerPayouts.filter({organizer_id:user.id},"-created_date",20,0),mwakwaData.refundRequests.filter({organizer_id:user.id},"-created_date",20,0),mwakwaData.disputes.filter({organizer_id:user.id},"-created_date",20,0)]).then(([b,p,r,d])=>{setBalance(b?.[0]||null);setPayouts(p||[]);setRefunds(r||[]);setDisputes(d||[])}).finally(()=>setLoading(false));},[user]);
