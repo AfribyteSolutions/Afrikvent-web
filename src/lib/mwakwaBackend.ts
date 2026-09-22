@@ -64,6 +64,7 @@ export const mwakwaData = {
   organizerAgreementAcceptances: base44.entities.OrganizerAgreementAcceptance,
   auditLogs: base44.entities.PlatformAuditLog,
   ecosystemSyncEvents: base44.entities.EcosystemSyncEvent,
+  riskFlags: base44.entities.RiskFlag,
 };
 
 export const mwakwaFiles = {
