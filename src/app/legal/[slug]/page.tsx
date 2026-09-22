@@ -6,7 +6,7 @@ import Header from "@/components/header/Header";
 import Footer from "@/components/footer/Footer";
 import { mwakwaData } from "@/lib/mwakwaBackend";
 
-type Row = Record<string, unknown>;
+type Row = { body?: string; legal_name?: string; address_line1?: string; address_line2?: string; city?: string; region?: string; postal_code?: string; country?: string; support_email?: string; email?: string; phone?: string; registration_number?: string; };
 function renderBody(body = "") { return body.split("\n").map((line,i)=> line.startsWith("# ") ? <h1 key={i} className="text-3xl md:text-4xl font-bold mt-2 mb-6">{line.slice(2)}</h1> : line.startsWith("## ") ? <h2 key={i} className="text-xl font-semibold mt-8 mb-3">{line.slice(3)}</h2> : !line.trim() ? <div key={i} className="h-2"/> : <p key={i} className="text-gray-700 leading-7 mb-3">{line}</p>); }
 export default function LegalPage(){
  const params=useParams(); const slug=String(params?.slug||""); const [page,setPage]=useState<Row|null>(null); const [business,setBusiness]=useState<Row|null>(null); const [loaded,setLoaded]=useState(false);
