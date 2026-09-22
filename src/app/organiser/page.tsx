@@ -22,7 +22,6 @@ export default function OrganiserPage() {
   const [user, setUser] = useState<MwakwaUser | null>(null);
   const [userProfile, setUserProfile] = useState<{ name: string; email: string } | null>(null);
   const [organizerProfile, setOrganizerProfile] = useState<OrganizerProfile | null>(null);
-  const [loading, setLoading] = useState(true);
   const [profileLoading, setProfileLoading] = useState(true);
 
   useEffect(() => {
@@ -36,7 +35,6 @@ export default function OrganiserPage() {
         });
         await fetchOrganizerProfile(currentUser.id);
       }
-      setLoading(false);
     };
 
     getCurrentUser();
