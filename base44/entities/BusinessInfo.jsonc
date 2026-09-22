@@ -13,6 +13,9 @@
     "tax_id": {
       "type": "string"
     },
+    "public_registration_number": {
+      "type": "string"
+    },
     "address_line1": {
       "type": "string"
     },
